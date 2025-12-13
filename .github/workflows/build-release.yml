@@ -1,0 +1,286 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+env:
+  FLUTTER_VERSION: '3.24.0'
+
+jobs:
+  # ============================================
+  # Build Windows Application
+  # ============================================
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+      
+      - name: Get dependencies
+        run: flutter pub get
+      
+      - name: Build Windows Release
+        run: flutter build windows --release
+      
+      - name: Create Windows Installer Package
+        run: |
+          # Create distribution folder
+          mkdir -p dist/windows
+          
+          # Copy build output
+          Copy-Item -Path "build/windows/x64/runner/Release/*" -Destination "dist/windows/" -Recurse
+          
+          # Create ZIP archive
+          Compress-Archive -Path "dist/windows/*" -DestinationPath "FlutterIPTV-Windows-x64.zip"
+        shell: pwsh
+      
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: FlutterIPTV-Windows-x64.zip
+          retention-days: 5
+
+  # ============================================
+  # Build Android Mobile APK
+  # ============================================
+  build-android-mobile:
+    name: Build Android Mobile
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+      
+      - name: Get dependencies
+        run: flutter pub get
+      
+      - name: Build Android APK (Split by ABI)
+        run: flutter build apk --release --split-per-abi
+      
+      - name: Rename APKs for Mobile
+        run: |
+          mkdir -p dist/android-mobile
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk dist/android-mobile/FlutterIPTV-Android-Mobile-armeabi-v7a.apk
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk dist/android-mobile/FlutterIPTV-Android-Mobile-arm64-v8a.apk
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk dist/android-mobile/FlutterIPTV-Android-Mobile-x86_64.apk
+      
+      - name: Build Universal APK
+        run: flutter build apk --release
+      
+      - name: Copy Universal APK
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk dist/android-mobile/FlutterIPTV-Android-Mobile-universal.apk
+      
+      - name: Upload Android Mobile Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-mobile-release
+          path: dist/android-mobile/
+          retention-days: 5
+
+  # ============================================
+  # Build Android TV APK
+  # ============================================
+  build-android-tv:
+    name: Build Android TV
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+      
+      - name: Get dependencies
+        run: flutter pub get
+      
+      - name: Build Android TV APK
+        run: |
+          # Build with TV flag enabled
+          flutter build apk --release --dart-define=IS_TV=true --split-per-abi
+      
+      - name: Rename APKs for TV
+        run: |
+          mkdir -p dist/android-tv
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk dist/android-tv/FlutterIPTV-AndroidTV-armeabi-v7a.apk
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk dist/android-tv/FlutterIPTV-AndroidTV-arm64-v8a.apk
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk dist/android-tv/FlutterIPTV-AndroidTV-x86_64.apk
+      
+      - name: Build Universal TV APK
+        run: flutter build apk --release --dart-define=IS_TV=true
+      
+      - name: Copy Universal TV APK
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk dist/android-tv/FlutterIPTV-AndroidTV-universal.apk
+      
+      - name: Upload Android TV Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-tv-release
+          path: dist/android-tv/
+          retention-days: 5
+
+  # ============================================
+  # Create GitHub Release
+  # ============================================
+  create-release:
+    name: Create Release
+    needs: [build-windows, build-android-mobile, build-android-tv]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-release
+          path: ./release-assets/
+      
+      - name: Download Android Mobile Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: android-mobile-release
+          path: ./release-assets/android-mobile/
+      
+      - name: Download Android TV Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: android-tv-release
+          path: ./release-assets/android-tv/
+      
+      - name: Get version from tag or input
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "TAG=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+            echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          cat << 'EOF' > release_notes.md
+          ## 📺 FlutterIPTV ${{ steps.version.outputs.VERSION }}
+          
+          ### 📥 Downloads
+          
+          #### Windows
+          | File | Description |
+          |------|-------------|
+          | `FlutterIPTV-Windows-x64.zip` | Windows 64-bit portable application |
+          
+          #### Android Mobile
+          | File | Description |
+          |------|-------------|
+          | `FlutterIPTV-Android-Mobile-arm64-v8a.apk` | 64-bit ARM devices (recommended for most modern phones) |
+          | `FlutterIPTV-Android-Mobile-armeabi-v7a.apk` | 32-bit ARM devices (older phones) |
+          | `FlutterIPTV-Android-Mobile-x86_64.apk` | x86_64 emulators |
+          | `FlutterIPTV-Android-Mobile-universal.apk` | Universal (larger file, works on all devices) |
+          
+          #### Android TV
+          | File | Description |
+          |------|-------------|
+          | `FlutterIPTV-AndroidTV-arm64-v8a.apk` | 64-bit ARM TV devices (Fire TV Stick 4K, Shield TV, etc.) |
+          | `FlutterIPTV-AndroidTV-armeabi-v7a.apk` | 32-bit ARM TV devices (older Fire TV) |
+          | `FlutterIPTV-AndroidTV-x86_64.apk` | x86_64 TV emulators |
+          | `FlutterIPTV-AndroidTV-universal.apk` | Universal TV (larger file, works on all TV devices) |
+          
+          ### ✨ Features
+          - M3U/M3U8 playlist support
+          - High-quality video playback (HLS, DASH, RTMP)
+          - Channel grouping and favorites
+          - Full D-Pad navigation for Android TV
+          - Dark theme optimized for TV viewing
+          
+          ### 📋 Installation
+          
+          **Windows:**
+          1. Download and extract `FlutterIPTV-Windows-x64.zip`
+          2. Run `flutter_iptv.exe`
+          
+          **Android Mobile:**
+          1. Download the appropriate APK for your device
+          2. Enable "Install from unknown sources" if prompted
+          3. Install and open the app
+          
+          **Android TV:**
+          1. Download the appropriate APK for your TV
+          2. Install via USB, ADB, or file manager app
+          3. Launch from the TV app drawer
+          
+          ---
+          
+          > 💡 **Tip:** For ARM64 devices, use the `arm64-v8a` version for better performance.
+          EOF
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.TAG }}
+          name: FlutterIPTV ${{ steps.version.outputs.VERSION }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          files: |
+            release-assets/FlutterIPTV-Windows-x64.zip
+            release-assets/android-mobile/FlutterIPTV-Android-Mobile-arm64-v8a.apk
+            release-assets/android-mobile/FlutterIPTV-Android-Mobile-armeabi-v7a.apk
+            release-assets/android-mobile/FlutterIPTV-Android-Mobile-x86_64.apk
+            release-assets/android-mobile/FlutterIPTV-Android-Mobile-universal.apk
+            release-assets/android-tv/FlutterIPTV-AndroidTV-arm64-v8a.apk
+            release-assets/android-tv/FlutterIPTV-AndroidTV-armeabi-v7a.apk
+            release-assets/android-tv/FlutterIPTV-AndroidTV-x86_64.apk
+            release-assets/android-tv/FlutterIPTV-AndroidTV-universal.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
