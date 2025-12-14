@@ -15,6 +15,7 @@ class ChannelCard extends StatelessWidget {
   final bool isPlaying;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
+  final VoidCallback? onFavoriteToggle;
   final bool autofocus;
   final FocusNode? focusNode;
 
@@ -28,6 +29,7 @@ class ChannelCard extends StatelessWidget {
     this.isPlaying = false,
     this.onTap,
     this.onLongPress,
+    this.onFavoriteToggle,
     this.autofocus = false,
     this.focusNode,
   });
@@ -158,24 +160,34 @@ class ChannelCard extends StatelessWidget {
                         ),
                       ),
 
-                    // Favorite indicator
-                    if (isFavorite)
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.5),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.favorite,
-                            color: AppTheme.accentColor,
-                            size: 16,
+                    // Favorite indicator/button
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: onFavoriteToggle,
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.5),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              isFavorite
+                                  ? Icons.favorite
+                                  : Icons.favorite_border_rounded,
+                              color: isFavorite
+                                  ? AppTheme.accentColor
+                                  : Colors.white.withOpacity(0.7),
+                              size: 16,
+                            ),
                           ),
                         ),
                       ),
+                    ),
                   ],
                 ),
               ),

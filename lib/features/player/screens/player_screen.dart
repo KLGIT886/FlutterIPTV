@@ -130,6 +130,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return KeyEventResult.handled;
     }
 
+    // Settings / Menu
+    if (key == LogicalKeyboardKey.settings ||
+        key == LogicalKeyboardKey.contextMenu) {
+      _showSettingsSheet(context);
+      return KeyEventResult.handled;
+    }
+
+    // Back (explicit handling for some remotes)
+    if (key == LogicalKeyboardKey.backspace) {
+      playerProvider.stop();
+      Navigator.of(context).pop();
+      return KeyEventResult.handled;
+    }
+
     return KeyEventResult.ignored;
   }
 

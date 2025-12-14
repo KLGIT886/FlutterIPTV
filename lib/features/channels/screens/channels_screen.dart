@@ -348,7 +348,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                     (context, index) {
                       final channel = channels[index];
                       final isFavorite = context
-                          .read<FavoritesProvider>()
+                          .watch<FavoritesProvider>()
                           .isFavorite(channel.id ?? 0);
 
                       return ChannelCard(
@@ -357,6 +357,11 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                         groupName: channel.groupName,
                         isFavorite: isFavorite,
                         autofocus: index == 0,
+                        onFavoriteToggle: () {
+                          context
+                              .read<FavoritesProvider>()
+                              .toggleFavorite(channel);
+                        },
                         onTap: () {
                           Navigator.pushNamed(
                             context,

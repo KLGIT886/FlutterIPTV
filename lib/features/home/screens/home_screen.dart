@@ -639,7 +639,10 @@ class _HomeScreenState extends State<HomeScreen> {
           logoUrl: channel.logoUrl,
           groupName: channel.groupName,
           isFavorite:
-              context.read<FavoritesProvider>().isFavorite(channel.id ?? 0),
+              context.watch<FavoritesProvider>().isFavorite(channel.id ?? 0),
+          onFavoriteToggle: () {
+            context.read<FavoritesProvider>().toggleFavorite(channel);
+          },
           onTap: () {
             // Ensure we set the current channel in provider before navigating
             // This is crucial for favorites to work

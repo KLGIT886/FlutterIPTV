@@ -20,6 +20,18 @@ class PlaylistProvider extends ChangeNotifier {
 
   bool get hasPlaylists => _playlists.isNotEmpty;
 
+  String _sortBy = 'name ASC';
+  String get sortBy => _sortBy;
+
+  void toggleSortOrder() {
+    if (_sortBy == 'name ASC') {
+      _sortBy = 'created_at DESC';
+    } else {
+      _sortBy = 'name ASC';
+    }
+    loadPlaylists();
+  }
+
   // Load all playlists from database
   Future<void> loadPlaylists() async {
     _isLoading = true;
@@ -29,7 +41,7 @@ class PlaylistProvider extends ChangeNotifier {
     try {
       final results = await ServiceLocator.database.query(
         'playlists',
-        orderBy: 'created_at DESC',
+        orderBy: _sortBy,
       );
 
       _playlists = results.map((r) => Playlist.fromMap(r)).toList();

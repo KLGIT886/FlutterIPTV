@@ -327,6 +327,9 @@ class _SearchScreenState extends State<SearchScreen> {
                 groupName: channel.groupName,
                 isFavorite: isFavorite,
                 autofocus: index == 0 && PlatformDetector.useDPadNavigation,
+                onFavoriteToggle: () {
+                  context.read<FavoritesProvider>().toggleFavorite(channel);
+                },
                 onTap: () {
                   Navigator.pushNamed(
                     context,
