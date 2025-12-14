@@ -119,6 +119,7 @@ Download the latest version from the [Releases Page](https://github.com/shnulaa/
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## ⚠️ Disclaimer
+
+This application is **only a player** and does not provide any default playlists or content. Users must provide their own content. The developers are not responsible for how the application is used or the content played through it.
