@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/tv_focusable.dart';
+import '../../channels/providers/channel_provider.dart';
 import '../providers/playlist_provider.dart';
 
 class PlaylistManagerScreen extends StatefulWidget {
@@ -499,6 +500,9 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
     final playlist = await provider.addPlaylistFromUrl(name, url);
 
     if (playlist != null && mounted) {
+      // Refresh channels
+      context.read<ChannelProvider>().loadAllChannels();
+
       _nameController.clear();
       _urlController.clear();
 
@@ -517,6 +521,10 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
     final success = await provider.refreshPlaylist(playlist);
 
     if (mounted) {
+      if (success) {
+        context.read<ChannelProvider>().loadAllChannels();
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -559,6 +567,9 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
                 await provider.deletePlaylist(playlist.id);
 
                 if (mounted) {
+                  // Refresh channels
+                  context.read<ChannelProvider>().loadAllChannels();
+
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Playlist deleted'),
@@ -596,6 +607,9 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
           await provider.addPlaylistFromFile(fileName, filePath);
 
           if (mounted) {
+            // Refresh channels
+            context.read<ChannelProvider>().loadAllChannels();
+
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Playlist imported successfully')),
             );
