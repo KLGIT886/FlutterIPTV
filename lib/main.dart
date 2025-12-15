@@ -18,39 +18,88 @@ import 'features/favorites/providers/favorites_provider.dart';
 import 'features/settings/providers/settings_provider.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  // Catch all Flutter errors
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    debugPrint('Flutter Error: ${details.exception}');
+    debugPrint('Stack trace: ${details.stack}');
+  };
 
-  // Initialize MediaKit
-  MediaKit.ensureInitialized();
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Windows Database Engine immediately
-  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-    sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
+    // Initialize MediaKit
+    MediaKit.ensureInitialized();
+
+    // Initialize Windows/Linux/macOS Database Engine
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
+    }
+
+    // Initialize critical services (Prefs) immediately for SettingsProvider
+    // Database will be initialized in SplashScreen
+    await ServiceLocator.initPrefs();
+
+    // Set preferred orientations for mobile
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+
+    // Set system UI overlay style
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarColor: Colors.black,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
+
+    runApp(const FlutterIPTVApp());
+  } catch (e, stackTrace) {
+    debugPrint('Fatal error during app initialization: $e');
+    debugPrint('Stack trace: $stackTrace');
+
+    // Show an error dialog for Windows
+    runApp(MaterialApp(
+      home: Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 64),
+                const SizedBox(height: 16),
+                const Text(
+                  'Application Failed to Start',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Error: $e',
+                  style: const TextStyle(color: Colors.white70, fontSize: 14),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                SelectableText(
+                  stackTrace.toString(),
+                  style: const TextStyle(color: Colors.white54, fontSize: 10),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ));
   }
-
-  // Initialize critical services (Prefs) immediately for SettingsProvider
-  // Database will be initialized in SplashScreen
-  await ServiceLocator.initPrefs();
-
-  // Set preferred orientations for mobile
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
-
-  // Set system UI overlay style
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: Colors.black,
-      systemNavigationBarIconBrightness: Brightness.light,
-    ),
-  );
-
-  runApp(const FlutterIPTVApp());
 }
 
 class FlutterIPTVApp extends StatelessWidget {

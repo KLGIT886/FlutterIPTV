@@ -33,22 +33,82 @@ jobs:
           channel: 'stable'
           cache: true
       
+      - name: Enable Windows Desktop Support
+        run: flutter config --enable-windows-desktop
+      
       - name: Get dependencies
         run: flutter pub get
-      
-      - name: Enable Windows Desktop Support
-        run: flutter create . --platforms=windows --project-name flutter_iptv
       
       - name: Build Windows Release
         run: flutter build windows --release
       
-      - name: Create Windows Installer Package
+      - name: Download SQLite3 DLL
+        run: |
+          # Try to download SQLite3 DLL from official source
+          # SQLite version format: 3.51.1 = 3510100
+          $success = $false
+          
+          # Try sqlite.org first (2025 directory for latest versions)
+          $urls = @(
+            "https://www.sqlite.org/2025/sqlite-dll-win-x64-3510100.zip",
+            "https://www.sqlite.org/2024/sqlite-dll-win-x64-3470200.zip",
+            "https://www.sqlite.org/2024/sqlite-dll-win-x64-3460100.zip"
+          )
+          
+          foreach ($url in $urls) {
+            try {
+              Write-Host "Trying: $url"
+              Invoke-WebRequest -Uri $url -OutFile "sqlite3.zip" -TimeoutSec 30
+              if (Test-Path "sqlite3.zip") {
+                Expand-Archive -Path "sqlite3.zip" -DestinationPath "sqlite3_temp" -Force
+                if (Test-Path "sqlite3_temp/sqlite3.dll") {
+                  Copy-Item -Path "sqlite3_temp/sqlite3.dll" -Destination "build/windows/x64/runner/Release/" -Force
+                  Write-Host "Successfully downloaded sqlite3.dll from: $url"
+                  $success = $true
+                  break
+                }
+              }
+            } catch {
+              Write-Host "Failed to download from: $url - $_"
+              continue
+            }
+          }
+          
+          if (-not $success) {
+            Write-Error "Failed to download sqlite3.dll from any source!"
+            exit 1
+          }
+        shell: pwsh
+      
+      - name: Create Windows Distribution Package
         run: |
           # Create distribution folder
-          mkdir -p dist/windows
+          New-Item -ItemType Directory -Force -Path "dist/windows"
           
-          # Copy build output
-          Copy-Item -Path "build/windows/x64/runner/Release/*" -Destination "dist/windows/" -Recurse
+          # Copy the entire Release folder contents (includes all DLLs and data folder)
+          Copy-Item -Path "build/windows/x64/runner/Release/*" -Destination "dist/windows/" -Recurse -Force
+          
+          # Verify critical files exist
+          if (!(Test-Path "dist/windows/flutter_iptv.exe")) {
+            Write-Error "flutter_iptv.exe not found!"
+            exit 1
+          }
+          if (!(Test-Path "dist/windows/flutter_windows.dll")) {
+            Write-Error "flutter_windows.dll not found!"
+            exit 1
+          }
+          if (!(Test-Path "dist/windows/data")) {
+            Write-Error "data folder not found!"
+            exit 1
+          }
+          if (!(Test-Path "dist/windows/sqlite3.dll")) {
+            Write-Error "sqlite3.dll not found!"
+            exit 1
+          }
+          
+          # List contents for debugging
+          Write-Host "Windows package contents:"
+          Get-ChildItem -Path "dist/windows/" -Recurse | ForEach-Object { Write-Host $_.FullName }
           
           # Create ZIP archive
           Compress-Archive -Path "dist/windows/*" -DestinationPath "flutteriptv-Windows-x64.zip" -Force
