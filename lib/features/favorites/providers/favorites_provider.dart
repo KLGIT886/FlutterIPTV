@@ -6,6 +6,7 @@ class FavoritesProvider extends ChangeNotifier {
   List<Channel> _favorites = [];
   bool _isLoading = false;
   String? _error;
+  int? _activePlaylistId;
 
   // Getters
   List<Channel> get favorites => _favorites;
@@ -14,29 +15,63 @@ class FavoritesProvider extends ChangeNotifier {
 
   int get count => _favorites.length;
 
-  // Load favorites from database
+  // Set active playlist ID
+  void setActivePlaylistId(int playlistId) {
+    if (_activePlaylistId != playlistId) {
+      _activePlaylistId = playlistId;
+      debugPrint('设置激活的播放列表ID: $playlistId');
+    }
+  }
+
+  // Load favorites from database for current active playlist
   Future<void> loadFavorites() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
+      // 首先获取当前激活的播放列表ID（如果未设置）
+      if (_activePlaylistId == null) {
+        final playlistResult = await ServiceLocator.database.query(
+          'playlists',
+          where: 'is_active = ?',
+          whereArgs: [1],
+          limit: 1,
+        );
+
+        if (playlistResult.isNotEmpty) {
+          _activePlaylistId = playlistResult.first['id'] as int;
+          debugPrint('自动获取激活的播放列表ID: $_activePlaylistId');
+        } else {
+          debugPrint('没有找到激活的播放列表');
+          _favorites = [];
+          _isLoading = false;
+          notifyListeners();
+          return;
+        }
+      }
+
+      debugPrint('加载播放列表 $_activePlaylistId 的收藏夹');
+
+      // 只加载当前激活播放列表的收藏夹
       final results = await ServiceLocator.database.rawQuery('''
         SELECT c.* FROM channels c
         INNER JOIN favorites f ON c.id = f.channel_id
-        WHERE c.is_active = 1
+        WHERE c.is_active = 1 AND c.playlist_id = ?
         ORDER BY f.position ASC, f.created_at DESC
-      ''');
+      ''', [_activePlaylistId]);
 
       _favorites = results.map((r) {
         final channel = Channel.fromMap(r);
         return channel.copyWith(isFavorite: true);
       }).toList();
 
+      debugPrint('加载了 ${_favorites.length} 个收藏频道');
       _error = null;
     } catch (e) {
       _error = 'Failed to load favorites: $e';
       _favorites = [];
+      debugPrint('加载收藏夹失败: $e');
     }
 
     _isLoading = false;

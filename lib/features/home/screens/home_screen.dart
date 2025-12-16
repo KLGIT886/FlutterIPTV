@@ -37,7 +37,16 @@ class _HomeScreenState extends State<HomeScreen> {
     final favoritesProvider = context.read<FavoritesProvider>();
 
     if (playlistProvider.hasPlaylists) {
-      await channelProvider.loadAllChannels();
+      // Load channels for the active playlist instead of all channels
+      final activePlaylist = playlistProvider.activePlaylist;
+      if (activePlaylist != null && activePlaylist.id != null) {
+        debugPrint('DEBUG: 加载激活播放列表的频道: ${activePlaylist.name}');
+        await channelProvider.loadChannels(activePlaylist.id!);
+      } else {
+        // Fallback to all channels if no active playlist
+        debugPrint('DEBUG: 没有激活的播放列表，加载所有频道');
+        await channelProvider.loadAllChannels();
+      }
       await favoritesProvider.loadFavorites();
     }
   }

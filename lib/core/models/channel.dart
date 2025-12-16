@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 /// Represents an IPTV channel
 class Channel {
   final int? id;
@@ -29,12 +31,17 @@ class Channel {
   }) : createdAt = createdAt ?? DateTime.now();
 
   factory Channel.fromMap(Map<String, dynamic> map) {
+    final logoUrl = map['logo_url'] as String?;
+
+    // Debug logging for channel creation from database
+    debugPrint('DEBUG: 从数据库创建频道 - 名称: ${map['name']}, 台标: $logoUrl');
+
     return Channel(
       id: map['id'] as int?,
       playlistId: map['playlist_id'] as int,
       name: map['name'] as String,
       url: map['url'] as String,
-      logoUrl: map['logo_url'] as String?,
+      logoUrl: logoUrl,
       groupName: map['group_name'] as String?,
       epgId: map['epg_id'] as String?,
       isActive: (map['is_active'] as int?) == 1,

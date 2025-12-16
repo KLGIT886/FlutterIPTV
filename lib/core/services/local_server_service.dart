@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 
 /// A simple local HTTP server for receiving playlist data from mobile devices
 class LocalServerService {
   HttpServer? _server;
   String? _localIp;
-  int _port = 8899;
+  final int _port = 8899;
 
   // Callbacks
   Function(String url, String name)? onUrlReceived;
@@ -33,7 +35,7 @@ class LocalServerService {
 
       return true;
     } catch (e) {
-      print('Failed to start local server: $e');
+      debugPrint('Failed to start local server: $e');
       return false;
     }
   }
@@ -89,48 +91,69 @@ class LocalServerService {
   /// Handle playlist submission from mobile
   Future<void> _handleSubmission(HttpRequest request) async {
     try {
+      debugPrint('DEBUG: 收到来自 ${request.requestedUri} 的提交请求');
+
       final content = await utf8.decoder.bind(request).join();
+      debugPrint('DEBUG: 请求内容长度: ${content.length}');
+
       final data = json.decode(content) as Map<String, dynamic>;
 
       final type = data['type'] as String?;
       final name = data['name'] as String? ?? 'Imported Playlist';
 
+      debugPrint('DEBUG: 请求类型: $type, 名称: $name');
+
       if (type == 'url') {
         final url = data['url'] as String?;
+        debugPrint(
+            'DEBUG: URL内容: ${url?.substring(0, math.min(100, url.length))}...');
+
         if (url != null && url.isNotEmpty) {
+          debugPrint('DEBUG: 调用URL接收回调...');
           onUrlReceived?.call(url, name);
+
           request.response.headers.contentType = ContentType.json;
           request.response
               .write(json.encode({'success': true, 'message': 'URL received'}));
         } else {
+          debugPrint('DEBUG: URL为空或无效');
           request.response.statusCode = 400;
           request.response.write(
               json.encode({'success': false, 'message': 'URL is required'}));
         }
       } else if (type == 'content') {
         final fileContent = data['content'] as String?;
+        debugPrint('DEBUG: 文件内容长度: ${fileContent?.length}');
+
         if (fileContent != null && fileContent.isNotEmpty) {
+          debugPrint('DEBUG: 调用内容接收回调...');
           onContentReceived?.call(fileContent, name);
+
           request.response.headers.contentType = ContentType.json;
           request.response.write(
               json.encode({'success': true, 'message': 'Content received'}));
         } else {
+          debugPrint('DEBUG: 文件内容为空');
           request.response.statusCode = 400;
           request.response.write(json
               .encode({'success': false, 'message': 'Content is required'}));
         }
       } else {
+        debugPrint('DEBUG: 无效的请求类型: $type');
         request.response.statusCode = 400;
         request.response
             .write(json.encode({'success': false, 'message': 'Invalid type'}));
       }
     } catch (e) {
+      debugPrint('DEBUG: 处理提交请求时出错: $e');
+      debugPrint('DEBUG: 错误堆栈: ${StackTrace.current}');
       request.response.statusCode = 400;
       request.response.write(
           json.encode({'success': false, 'message': 'Invalid request: $e'}));
     }
 
     await request.response.close();
+    debugPrint('DEBUG: 请求处理完成');
   }
 
   /// Get the local IP address
@@ -182,11 +205,11 @@ class LocalServerService {
         if (ip == null) continue;
 
         // Bonus for standard LAN ranges
-        if (ip.startsWith('192.168.'))
+        if (ip.startsWith('192.168.')) {
           score += 20;
-        else if (ip.startsWith('10.'))
+        } else if (ip.startsWith('10.')) {
           score += 10;
-        else if (ip.startsWith('172.')) {
+        } else if (ip.startsWith('172.')) {
           // Check Class B private range 172.16.0.0 - 172.31.255.255
           try {
             final secondPart = int.parse(ip.split('.')[1]);
@@ -194,7 +217,7 @@ class LocalServerService {
           } catch (_) {}
         }
 
-        print('Interface: ${interface.name}, IP: $ip, Score: $score');
+        debugPrint('Interface: ${interface.name}, IP: $ip, Score: $score');
 
         if (score > bestScore) {
           bestScore = score;
@@ -212,7 +235,7 @@ class LocalServerService {
 
       return null;
     } catch (e) {
-      print('Error getting local IP: $e');
+      debugPrint('Error getting local IP: $e');
       return null;
     }
   }

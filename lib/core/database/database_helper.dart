@@ -3,6 +3,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter/foundation.dart';
 
 class DatabaseHelper {
   static Database? _database;
@@ -114,7 +115,7 @@ class DatabaseHelper {
             'ALTER TABLE playlists ADD COLUMN channel_count INTEGER DEFAULT 0');
       } catch (e) {
         // Ignore if column already exists
-        print('Migration error (ignored): $e');
+        debugPrint('Migration error (ignored): $e');
       }
     }
   }

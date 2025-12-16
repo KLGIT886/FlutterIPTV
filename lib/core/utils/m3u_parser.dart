@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/channel.dart';
 
@@ -13,8 +14,13 @@ class M3UParser {
   /// Parse M3U content from a URL
   static Future<List<Channel>> parseFromUrl(String url, int playlistId) async {
     try {
+      debugPrint('DEBUG: 开始从URL获取播放列表内容: $url');
+
       // Use Dio for better handling of large files and redirects
       final dio = Dio();
+      dio.options.connectTimeout = const Duration(seconds: 30);
+      dio.options.receiveTimeout = const Duration(seconds: 30);
+
       final response = await dio.get(
         url,
         options: Options(
@@ -23,8 +29,15 @@ class M3UParser {
         ),
       );
 
-      return parse(response.data.toString(), playlistId);
+      debugPrint('DEBUG: 成功获取播放列表内容，状态码: ${response.statusCode}');
+      debugPrint('DEBUG: 内容大小: ${response.data.toString().length} 字符');
+
+      final channels = parse(response.data.toString(), playlistId);
+      debugPrint('DEBUG: URL解析完成，共解析出 ${channels.length} 个频道');
+
+      return channels;
     } catch (e) {
+      debugPrint('DEBUG: 从URL获取播放列表时出错: $e');
       throw Exception('Error fetching playlist from URL: $e');
     }
   }
@@ -33,23 +46,44 @@ class M3UParser {
   static Future<List<Channel>> parseFromFile(
       String filePath, int playlistId) async {
     try {
+      debugPrint('DEBUG: 开始从本地文件读取播放列表: $filePath');
       final file = File(filePath);
+
+      if (!await file.exists()) {
+        debugPrint('DEBUG: 文件不存在: $filePath');
+        throw Exception('File does not exist: $filePath');
+      }
+
       final content = await file.readAsString();
-      return parse(content, playlistId);
+      debugPrint('DEBUG: 成功读取本地文件，内容大小: ${content.length} 字符');
+
+      final channels = parse(content, playlistId);
+      debugPrint('DEBUG: 本地文件解析完成，共解析出 ${channels.length} 个频道');
+
+      return channels;
     } catch (e) {
+      debugPrint('DEBUG: 读取本地播放列表文件时出错: $e');
       throw Exception('Error reading playlist file: $e');
     }
   }
 
   /// Parse M3U content string
   static List<Channel> parse(String content, int playlistId) {
+    debugPrint('DEBUG: 开始解析M3U内容，播放列表ID: $playlistId');
+
     final List<Channel> channels = [];
     final lines = LineSplitter.split(content).toList();
 
-    if (lines.isEmpty) return channels;
+    debugPrint('DEBUG: 内容总行数: ${lines.length}');
+
+    if (lines.isEmpty) {
+      debugPrint('DEBUG: 内容为空，返回空频道列表');
+      return channels;
+    }
 
     // Check for valid M3U header
     if (!lines.first.trim().startsWith(_extM3U)) {
+      debugPrint('DEBUG: 警告 - 缺少M3U头部标记，尝试继续解析');
       // Try parsing anyway, some files don't have the header
     }
 
@@ -57,6 +91,8 @@ class M3UParser {
     String? currentLogo;
     String? currentGroup;
     String? currentEpgId;
+    int invalidUrlCount = 0;
+    int validChannelCount = 0;
 
     for (int i = 0; i < lines.length; i++) {
       final line = lines[i].trim();
@@ -78,15 +114,29 @@ class M3UParser {
         continue;
       } else if (line.isNotEmpty && !line.startsWith('#')) {
         // This is a URL line
-        if (currentName != null && _isValidUrl(line)) {
-          channels.add(Channel(
-            playlistId: playlistId,
-            name: currentName,
-            url: line.split('\$').first.trim(),
-            logoUrl: currentLogo,
-            groupName: currentGroup ?? 'Uncategorized',
-            epgId: currentEpgId,
-          ));
+        if (currentName != null) {
+          if (_isValidUrl(line)) {
+            final channel = Channel(
+              playlistId: playlistId,
+              name: currentName,
+              url: line.split('\$').first.trim(),
+              logoUrl: currentLogo,
+              groupName: currentGroup ?? 'Uncategorized',
+              epgId: currentEpgId,
+            );
+
+            // Debug logging for channel creation
+            debugPrint(
+                'DEBUG: 创建频道 - 名称: ${channel.name}, 台标: ${channel.logoUrl ?? "无"}');
+
+            channels.add(channel);
+            validChannelCount++;
+          } else {
+            invalidUrlCount++;
+            debugPrint('DEBUG: 无效的URL在第${i + 1}行: $line');
+          }
+        } else {
+          debugPrint('DEBUG: 找到URL但没有对应的频道名称在第${i + 1}行: $line');
         }
 
         // Reset for next entry
@@ -97,6 +147,8 @@ class M3UParser {
       }
     }
 
+    debugPrint(
+        'DEBUG: 解析完成 - 有效频道: $validChannelCount, 无效URL: $invalidUrlCount');
     return channels;
   }
 
@@ -123,6 +175,11 @@ class M3UParser {
     logo = attributes['tvg-logo'] ?? attributes['logo'];
     group = attributes['group-title'] ?? attributes['tvg-group'];
     epgId = attributes['tvg-id'] ?? attributes['tvg-name'];
+
+    // Debug logging for logo parsing
+    if (logo != null && logo.isNotEmpty) {
+      debugPrint('DEBUG: 解析到台标URL: $logo, 频道: $name');
+    }
 
     return {
       'name': name,
@@ -157,13 +214,22 @@ class M3UParser {
   static bool _isValidUrl(String url) {
     try {
       final uri = Uri.parse(url);
-      return uri.hasScheme &&
+      final isValid = uri.hasScheme &&
           (uri.scheme == 'http' ||
               uri.scheme == 'https' ||
               uri.scheme == 'rtmp' ||
               uri.scheme == 'rtsp' ||
-              uri.scheme == 'mms');
-    } catch (_) {
+              uri.scheme == 'mms' ||
+              uri.scheme == 'mmsh' ||
+              uri.scheme == 'mmst');
+
+      if (!isValid) {
+        debugPrint('DEBUG: URL验证失败 - Scheme: ${uri.scheme}, Host: ${uri.host}');
+      }
+
+      return isValid;
+    } catch (e) {
+      debugPrint('DEBUG: URL解析错误: $url, 错误: $e');
       return false;
     }
   }

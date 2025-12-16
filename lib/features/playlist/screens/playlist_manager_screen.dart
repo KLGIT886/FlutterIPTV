@@ -8,8 +8,9 @@ import 'package:flutter_iptv/features/playlist/widgets/qr_import_dialog.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/tv_focusable.dart';
 import '../../../core/i18n/app_strings.dart';
-import '../../channels/providers/channel_provider.dart';
 import '../providers/playlist_provider.dart';
+import '../../channels/providers/channel_provider.dart';
+import '../../favorites/providers/favorites_provider.dart';
 
 class PlaylistManagerScreen extends StatefulWidget {
   const PlaylistManagerScreen({super.key});
@@ -468,7 +469,16 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
 
   Widget _buildPlaylistCard(PlaylistProvider provider, dynamic playlist) {
     return TVFocusable(
-      onSelect: () => provider.setActivePlaylist(playlist),
+      onSelect: () {
+        provider.setActivePlaylist(
+          playlist,
+          onPlaylistChanged: (playlistId) {
+            // Load channels for the selected playlist
+            context.read<ChannelProvider>().loadChannels(playlistId);
+          },
+          favoritesProvider: context.read<FavoritesProvider>(),
+        );
+      },
       focusScale: 1.02,
       showFocusBorder: false,
       builder: (context, isFocused, child) {
@@ -660,8 +670,10 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
     final playlist = await provider.addPlaylistFromUrl(name, url);
 
     if (playlist != null && mounted) {
-      // Refresh channels
-      context.read<ChannelProvider>().loadAllChannels();
+      // Set the new playlist as active and load its channels
+      provider.setActivePlaylist(playlist,
+          favoritesProvider: context.read<FavoritesProvider>());
+      await context.read<ChannelProvider>().loadChannels(playlist.id!);
 
       _nameController.clear();
       _urlController.clear();
@@ -787,11 +799,16 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
             result.files.single.name.replaceAll(RegExp(r'\.m3u8?'), '');
 
         try {
-          await provider.addPlaylistFromFile(fileName, filePath);
+          final playlist =
+              await provider.addPlaylistFromFile(fileName, filePath);
 
           if (mounted) {
-            // Refresh channels
-            context.read<ChannelProvider>().loadAllChannels();
+            // Set the new playlist as active and load its channels
+            if (playlist != null) {
+              provider.setActivePlaylist(playlist,
+                  favoritesProvider: context.read<FavoritesProvider>());
+              await context.read<ChannelProvider>().loadChannels(playlist.id!);
+            }
 
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(

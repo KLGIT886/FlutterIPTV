@@ -82,6 +82,12 @@ class Playlist {
   /// Check if this is a local playlist (file-based)
   bool get isLocal => filePath != null && filePath!.isNotEmpty;
 
+  /// Check if this is a temporary playlist (imported via QR)
+  bool get isTemporary =>
+      filePath != null &&
+      filePath!.contains('temp') &&
+      filePath!.contains('playlist_');
+
   /// Get the source path (URL or file path)
   String get sourcePath => url ?? filePath ?? '';
 

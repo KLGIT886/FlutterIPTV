@@ -38,10 +38,19 @@ class ChannelProvider extends ChangeNotifier {
         orderBy: 'id ASC',
       );
 
-      _channels = results.map((r) => Channel.fromMap(r)).toList();
+      debugPrint('DEBUG: 从数据库加载 ${results.length} 个频道，播放列表ID: $playlistId');
+
+      _channels = results.map((r) {
+        final channel = Channel.fromMap(r);
+        debugPrint(
+            'DEBUG: 加载频道 - 名称: ${channel.name}, 台标: ${channel.logoUrl ?? "无"}');
+        return channel;
+      }).toList();
+
       _updateGroups();
       _error = null;
     } catch (e) {
+      debugPrint('DEBUG: 加载频道时出错: $e');
       _error = 'Failed to load channels: $e';
       _channels = [];
       _groups = [];
@@ -65,10 +74,19 @@ class ChannelProvider extends ChangeNotifier {
         ORDER BY c.id ASC
       ''');
 
-      _channels = results.map((r) => Channel.fromMap(r)).toList();
+      debugPrint('DEBUG: 从数据库加载所有 ${results.length} 个频道');
+
+      _channels = results.map((r) {
+        final channel = Channel.fromMap(r);
+        debugPrint(
+            'DEBUG: 加载频道 - 名称: ${channel.name}, 台标: ${channel.logoUrl ?? "无"}');
+        return channel;
+      }).toList();
+
       _updateGroups();
       _error = null;
     } catch (e) {
+      debugPrint('DEBUG: 加载所有频道时出错: $e');
       _error = 'Failed to load channels: $e';
       _channels = [];
       _groups = [];
