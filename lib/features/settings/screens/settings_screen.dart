@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/tv_focusable.dart';
 import '../../../core/platform/platform_detector.dart';
 import '../../../core/i18n/app_strings.dart';
+import '../../../core/services/service_locator.dart';
 import '../providers/settings_provider.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -187,11 +188,24 @@ class SettingsScreen extends StatelessWidget {
               // About Section
               _buildSectionHeader(AppStrings.of(context)?.about ?? 'About'),
               _buildSettingsCard([
-                _buildInfoTile(
+                FutureBuilder<String>(
+                  future: _getCurrentVersion(),
+                  builder: (context, snapshot) {
+                    return _buildInfoTile(
+                      context,
+                      title: AppStrings.of(context)?.version ?? 'Version',
+                      value: snapshot.data ?? 'Loading...',
+                      icon: Icons.info_outline_rounded,
+                    );
+                  },
+                ),
+                _buildDivider(),
+                _buildActionTile(
                   context,
-                  title: AppStrings.of(context)?.version ?? 'Version',
-                  value: '1.0.0',
-                  icon: Icons.info_outline_rounded,
+                  title: '检查更新',
+                  subtitle: '检查是否有新版本可用',
+                  icon: Icons.system_update_rounded,
+                  onTap: () => _checkForUpdates(context),
                 ),
                 _buildDivider(),
                 _buildInfoTile(
@@ -850,5 +864,19 @@ class SettingsScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  // 获取当前应用版本
+  Future<String> _getCurrentVersion() async {
+    try {
+      return await ServiceLocator.updateService.getCurrentVersion();
+    } catch (e) {
+      return '1.1.11'; // 默认版本
+    }
+  }
+
+  // 检查更新
+  void _checkForUpdates(BuildContext context) {
+    ServiceLocator.updateManager.manualCheckForUpdate(context);
   }
 }

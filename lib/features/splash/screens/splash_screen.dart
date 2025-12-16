@@ -25,7 +25,7 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<Offset> _textSlide;
 
   // ignore: unused_field
-  bool _isInitialized = false;
+  final bool _isInitialized = false;
 
   @override
   void initState() {
@@ -66,6 +66,9 @@ class _SplashScreenState extends State<SplashScreen>
       if (mounted) {
         final playlistProvider = context.read<PlaylistProvider>();
         await playlistProvider.loadPlaylists();
+
+        // Check for updates in background (don't block UI)
+        _checkForUpdatesInBackground();
       }
     } catch (e) {
       debugPrint('Initialization failed: $e');
@@ -77,6 +80,18 @@ class _SplashScreenState extends State<SplashScreen>
     if (mounted) {
       Navigator.of(context).pushReplacementNamed(AppRouter.home);
     }
+  }
+
+  // Check for updates in background without blocking the UI
+  void _checkForUpdatesInBackground() {
+    // Don't await this, let it run in background
+    Future.microtask(() async {
+      try {
+        await ServiceLocator.updateManager.checkAndShowUpdateDialog(context);
+      } catch (e) {
+        debugPrint('Background update check failed: $e');
+      }
+    });
   }
 
   @override
