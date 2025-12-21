@@ -5,11 +5,25 @@ import 'package:flutter/foundation.dart';
 
 import '../models/channel.dart';
 
+/// Result of M3U parsing containing channels and metadata
+class M3UParseResult {
+  final List<Channel> channels;
+  final String? epgUrl;
+  
+  M3UParseResult({required this.channels, this.epgUrl});
+}
+
 /// Parser for M3U/M3U8 playlist files
 class M3UParser {
   static const String _extM3U = '#EXTM3U';
   static const String _extInf = '#EXTINF:';
   static const String _extGrp = '#EXTGRP:';
+
+  /// Parse result containing channels and metadata
+  static M3UParseResult? _lastParseResult;
+  
+  /// Get the last parse result (for accessing EPG URL)
+  static M3UParseResult? get lastParseResult => _lastParseResult;
 
   /// Parse M3U content from a URL
   static Future<List<Channel>> parseFromUrl(String url, int playlistId) async {
@@ -73,6 +87,7 @@ class M3UParser {
 
     final List<Channel> channels = [];
     final lines = LineSplitter.split(content).toList();
+    String? epgUrl;
 
     debugPrint('DEBUG: 内容总行数: ${lines.length}');
 
@@ -81,8 +96,23 @@ class M3UParser {
       return channels;
     }
 
-    // Check for valid M3U header
-    if (!lines.first.trim().startsWith(_extM3U)) {
+    // Check for valid M3U header and extract EPG URL from first few lines
+    bool foundHeader = false;
+    for (int i = 0; i < lines.length && i < 10; i++) {
+      final line = lines[i].trim();
+      if (line.startsWith(_extM3U)) {
+        foundHeader = true;
+        // Extract x-tvg-url from this line
+        final extractedUrl = _extractEpgUrl(line);
+        if (extractedUrl != null) {
+          epgUrl = extractedUrl;
+          debugPrint('DEBUG: 从M3U头部提取到EPG URL: $epgUrl');
+          break;
+        }
+      }
+    }
+    
+    if (!foundHeader) {
       debugPrint('DEBUG: 警告 - 缺少M3U头部标记，尝试继续解析');
       // Try parsing anyway, some files don't have the header
     }
@@ -149,7 +179,35 @@ class M3UParser {
 
     debugPrint(
         'DEBUG: 解析完成 - 有效频道: $validChannelCount, 无效URL: $invalidUrlCount');
+    
+    // Save parse result with EPG URL
+    _lastParseResult = M3UParseResult(channels: channels, epgUrl: epgUrl);
+    
     return channels;
+  }
+  
+  /// Extract EPG URL from M3U header line
+  /// Supports: x-tvg-url="url" or url-tvg="url"
+  static String? _extractEpgUrl(String headerLine) {
+    // Match x-tvg-url="..." or url-tvg="..."
+    final patterns = [
+      RegExp(r'x-tvg-url="([^"]+)"', caseSensitive: false),
+      RegExp(r'url-tvg="([^"]+)"', caseSensitive: false),
+      RegExp(r"x-tvg-url='([^']+)'", caseSensitive: false),
+      RegExp(r"url-tvg='([^']+)'", caseSensitive: false),
+    ];
+    
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(headerLine);
+      if (match != null && match.groupCount >= 1) {
+        final urls = match.group(1);
+        if (urls != null && urls.isNotEmpty) {
+          // If multiple URLs separated by comma, return the first one
+          return urls.split(',').first.trim();
+        }
+      }
+    }
+    return null;
   }
 
   /// Parse EXTINF line and extract metadata

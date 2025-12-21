@@ -18,6 +18,7 @@ import 'features/player/providers/player_provider.dart';
 import 'features/playlist/providers/playlist_provider.dart';
 import 'features/favorites/providers/favorites_provider.dart';
 import 'features/settings/providers/settings_provider.dart';
+import 'features/epg/providers/epg_provider.dart';
 import 'core/widgets/window_title_bar.dart';
 
 void main() async {
@@ -139,6 +140,7 @@ class FlutterIPTVApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ChannelProvider()),
         ChangeNotifierProvider(create: (_) => PlayerProvider()),
         ChangeNotifierProvider(create: (_) => FavoritesProvider()),
+        ChangeNotifierProvider(create: (_) => EpgProvider()),
       ],
       child: Consumer<SettingsProvider>(
         builder: (context, settings, _) {

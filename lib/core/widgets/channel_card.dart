@@ -12,6 +12,7 @@ class ChannelCard extends StatelessWidget {
   final String? logoUrl;
   final String? groupName;
   final String? currentProgram;
+  final String? nextProgram;
   final bool isFavorite;
   final bool isPlaying;
   final bool isUnavailable;
@@ -28,6 +29,7 @@ class ChannelCard extends StatelessWidget {
     this.logoUrl,
     this.groupName,
     this.currentProgram,
+    this.nextProgram,
     this.isFavorite = false,
     this.isPlaying = false,
     this.isUnavailable = false,
@@ -160,7 +162,30 @@ class ChannelCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (groupName != null) ...[
+                    if (currentProgram != null && currentProgram!.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          const Icon(Icons.play_circle_filled, color: AppTheme.primaryColor, size: 10),
+                          const SizedBox(width: 3),
+                          Expanded(
+                            child: Text(currentProgram!, style: const TextStyle(color: AppTheme.primaryColor, fontSize: 10), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ),
+                        ],
+                      ),
+                    ],
+                    if (nextProgram != null && nextProgram!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          const Icon(Icons.schedule, color: AppTheme.textMuted, size: 10),
+                          const SizedBox(width: 3),
+                          Expanded(
+                            child: Text(nextProgram!, style: const TextStyle(color: AppTheme.textMuted, fontSize: 9), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ),
+                        ],
+                      ),
+                    ] else if (currentProgram == null && groupName != null) ...[
                       const SizedBox(height: 2),
                       Text(groupName!, style: const TextStyle(color: AppTheme.textMuted, fontSize: 10), maxLines: 1, overflow: TextOverflow.ellipsis),
                     ],

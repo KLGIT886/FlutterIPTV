@@ -227,4 +227,30 @@ class MainActivity: FlutterFragmentActivity() {
         val screenSize = screenLayout and Configuration.SCREENLAYOUT_SIZE_MASK
         return screenSize >= Configuration.SCREENLAYOUT_SIZE_LARGE
     }
+    
+    /**
+     * Get EPG info for a channel from Flutter via MethodChannel
+     */
+    fun getEpgInfo(channelName: String, callback: (Map<String, Any?>?) -> Unit) {
+        playerMethodChannel?.invokeMethod(
+            "getEpgInfo",
+            mapOf("channelName" to channelName, "epgId" to null),
+            object : MethodChannel.Result {
+                override fun success(result: Any?) {
+                    @Suppress("UNCHECKED_CAST")
+                    callback(result as? Map<String, Any?>)
+                }
+                
+                override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
+                    Log.e(TAG, "getEpgInfo error: $errorCode - $errorMessage")
+                    callback(null)
+                }
+                
+                override fun notImplemented() {
+                    Log.w(TAG, "getEpgInfo not implemented")
+                    callback(null)
+                }
+            }
+        )
+    }
 }

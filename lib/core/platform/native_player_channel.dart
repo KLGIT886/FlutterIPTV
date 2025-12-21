@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'platform_detector.dart';
+import '../services/epg_service.dart';
 
 /// Service to launch native Android player via MethodChannel
 class NativePlayerChannel {
@@ -19,8 +20,27 @@ class NativePlayerChannel {
         debugPrint('NativePlayerChannel: Player closed from native');
         _onPlayerClosedCallback?.call();
         _onPlayerClosedCallback = null;
+      } else if (call.method == 'getEpgInfo') {
+        // Native player requests EPG info for a channel
+        final channelName = call.arguments['channelName'] as String?;
+        final epgId = call.arguments['epgId'] as String?;
+        return _getEpgInfo(epgId, channelName);
       }
     });
+  }
+
+  static Map<String, dynamic>? _getEpgInfo(String? epgId, String? channelName) {
+    final epgService = EpgService();
+    final currentProgram = epgService.getCurrentProgram(epgId, channelName);
+    final nextProgram = epgService.getNextProgram(epgId, channelName);
+    
+    if (currentProgram == null && nextProgram == null) return null;
+    
+    return {
+      'currentTitle': currentProgram?.title,
+      'currentRemaining': currentProgram?.remainingMinutes,
+      'nextTitle': nextProgram?.title,
+    };
   }
 
   /// Check if native player is available (Android TV only)

@@ -13,6 +13,7 @@ import '../../../core/platform/native_player_channel.dart';
 import '../providers/player_provider.dart';
 import '../../favorites/providers/favorites_provider.dart';
 import '../../channels/providers/channel_provider.dart';
+import '../../epg/providers/epg_provider.dart';
 
 class PlayerScreen extends StatefulWidget {
   final String channelUrl;
@@ -685,6 +686,84 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // EPG 当前节目和下一个节目
+              Consumer<EpgProvider>(
+                builder: (context, epgProvider, _) {
+                  final channel = provider.currentChannel;
+                  final currentProgram = epgProvider.getCurrentProgram(channel?.epgId, channel?.name);
+                  final nextProgram = epgProvider.getNextProgram(channel?.epgId, channel?.name);
+                  
+                  if (currentProgram != null || nextProgram != null) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0x33000000),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (currentProgram != null)
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primaryColor,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text('正在播放', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      currentProgram.title,
+                                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${currentProgram.remainingMinutes}分钟后结束',
+                                    style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 11),
+                                  ),
+                                ],
+                              ),
+                            if (nextProgram != null) ...[
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0x66FFFFFF),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text('即将播放', style: TextStyle(color: Colors.white, fontSize: 10)),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      nextProgram.title,
+                                      style: const TextStyle(color: Color(0xCCFFFFFF), fontSize: 12),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+              
               // Control buttons row (moved above progress bar)
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,

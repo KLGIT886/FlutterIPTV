@@ -15,6 +15,7 @@ import '../../../core/models/channel.dart';
 import '../providers/channel_provider.dart';
 import '../widgets/channel_test_dialog.dart';
 import '../../favorites/providers/favorites_provider.dart';
+import '../../epg/providers/epg_provider.dart';
 
 class ChannelsScreen extends StatefulWidget {
   final String? groupName;
@@ -388,6 +389,11 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                           .watch<FavoritesProvider>()
                           .isFavorite(channel.id ?? 0);
                       final isUnavailable = ChannelProvider.isUnavailableChannel(channel.groupName);
+                      
+                      // 获取 EPG 当前节目和下一个节目
+                      final epgProvider = context.watch<EpgProvider>();
+                      final currentProgram = epgProvider.getCurrentProgram(channel.epgId, channel.name);
+                      final nextProgram = epgProvider.getNextProgram(channel.epgId, channel.name);
 
                       return ChannelCard(
                         name: channel.name,
@@ -395,6 +401,8 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                         groupName: isUnavailable 
                             ? ChannelProvider.extractOriginalGroup(channel.groupName)
                             : channel.groupName,
+                        currentProgram: currentProgram?.title,
+                        nextProgram: nextProgram?.title,
                         isFavorite: isFavorite,
                         isUnavailable: isUnavailable,
                         autofocus: index == 0,

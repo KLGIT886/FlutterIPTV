@@ -7,6 +7,7 @@ import '../../../core/models/channel.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/utils/m3u_parser.dart';
 import '../../favorites/providers/favorites_provider.dart';
+import '../../settings/providers/settings_provider.dart';
 
 class PlaylistProvider extends ChangeNotifier {
   List<Playlist> _playlists = [];
@@ -14,6 +15,27 @@ class PlaylistProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   double _importProgress = 0.0;
+  
+  /// Last extracted EPG URL from M3U file
+  String? _lastExtractedEpgUrl;
+  String? get lastExtractedEpgUrl => _lastExtractedEpgUrl;
+  
+  /// Apply extracted EPG URL to settings if available
+  Future<bool> applyExtractedEpgUrl(SettingsProvider settingsProvider) async {
+    if (_lastExtractedEpgUrl == null || _lastExtractedEpgUrl!.isEmpty) {
+      return false;
+    }
+    
+    try {
+      debugPrint('DEBUG: 自动应用EPG URL: $_lastExtractedEpgUrl');
+      await settingsProvider.setEpgUrl(_lastExtractedEpgUrl!);
+      await settingsProvider.setEnableEpg(true);
+      return true;
+    } catch (e) {
+      debugPrint('DEBUG: 应用EPG URL失败: $e');
+      return false;
+    }
+  }
 
   // Getters
   List<Playlist> get playlists => _playlists;
@@ -106,6 +128,12 @@ class PlaylistProvider extends ChangeNotifier {
 
       // Parse M3U from URL
       final channels = await M3UParser.parseFromUrl(url, playlistId);
+      
+      // Check for EPG URL in M3U header
+      _lastExtractedEpgUrl = M3UParser.lastParseResult?.epgUrl;
+      if (_lastExtractedEpgUrl != null) {
+        debugPrint('DEBUG: 从M3U提取到EPG URL: $_lastExtractedEpgUrl');
+      }
 
       _importProgress = 0.6;
       notifyListeners();
@@ -170,6 +198,12 @@ class PlaylistProvider extends ChangeNotifier {
 
       // Parse M3U content directly
       final channels = M3UParser.parse(content, playlistId);
+      
+      // Check for EPG URL in M3U header
+      _lastExtractedEpgUrl = M3UParser.lastParseResult?.epgUrl;
+      if (_lastExtractedEpgUrl != null) {
+        debugPrint('DEBUG: 从M3U提取到EPG URL: $_lastExtractedEpgUrl');
+      }
 
       _importProgress = 0.6;
       notifyListeners();
@@ -246,6 +280,12 @@ class PlaylistProvider extends ChangeNotifier {
 
       // Parse M3U from file
       final channels = await M3UParser.parseFromFile(filePath, playlistId);
+      
+      // Check for EPG URL in M3U header
+      _lastExtractedEpgUrl = M3UParser.lastParseResult?.epgUrl;
+      if (_lastExtractedEpgUrl != null) {
+        debugPrint('DEBUG: 从M3U提取到EPG URL: $_lastExtractedEpgUrl');
+      }
 
       _importProgress = 0.6;
       notifyListeners();
@@ -289,6 +329,10 @@ class PlaylistProvider extends ChangeNotifier {
     if (playlist.id == null) return false;
 
     debugPrint('DEBUG: 开始刷新播放列表: ${playlist.name} (ID: ${playlist.id})');
+    debugPrint('DEBUG: playlist.url = ${playlist.url}');
+    debugPrint('DEBUG: playlist.filePath = ${playlist.filePath}');
+    debugPrint('DEBUG: playlist.isRemote = ${playlist.isRemote}');
+    debugPrint('DEBUG: playlist.isLocal = ${playlist.isLocal}');
 
     _isLoading = true;
     _importProgress = 0.0;
@@ -296,34 +340,54 @@ class PlaylistProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // 重新从数据库加载 playlist 以确保数据是最新的
+      final dbResults = await ServiceLocator.database.query(
+        'playlists',
+        where: 'id = ?',
+        whereArgs: [playlist.id],
+      );
+      
+      if (dbResults.isEmpty) {
+        throw Exception('Playlist not found in database');
+      }
+      
+      final freshPlaylist = Playlist.fromMap(dbResults.first);
+      debugPrint('DEBUG: 从数据库重新加载 - URL: ${freshPlaylist.url}, FilePath: ${freshPlaylist.filePath}');
+      
       List<Channel> channels;
 
       debugPrint(
-          'DEBUG: 播放列表源类型: ${playlist.isRemote ? "远程URL" : playlist.isLocal ? "本地文件" : "未知"}');
-      debugPrint('DEBUG: 播放列表源路径: ${playlist.sourcePath}');
+          'DEBUG: 播放列表源类型: ${freshPlaylist.isRemote ? "远程URL" : freshPlaylist.isLocal ? "本地文件" : "未知"}');
+      debugPrint('DEBUG: 播放列表源路径: ${freshPlaylist.sourcePath}');
 
-      if (playlist.isRemote) {
-        debugPrint('DEBUG: 开始从URL解析播放列表: ${playlist.url}');
-        channels = await M3UParser.parseFromUrl(playlist.url!, playlist.id!);
-      } else if (playlist.isLocal) {
-        debugPrint('DEBUG: 开始从本地文件解析播放列表: ${playlist.filePath}');
+      if (freshPlaylist.isRemote) {
+        debugPrint('DEBUG: 开始从URL解析播放列表: ${freshPlaylist.url}');
+        channels = await M3UParser.parseFromUrl(freshPlaylist.url!, playlist.id!);
+      } else if (freshPlaylist.isLocal) {
+        debugPrint('DEBUG: 开始从本地文件解析播放列表: ${freshPlaylist.filePath}');
 
         // Check if file exists before trying to parse
-        final file = File(playlist.filePath!);
+        final file = File(freshPlaylist.filePath!);
         if (!await file.exists()) {
-          debugPrint('DEBUG: 本地文件不存在: ${playlist.filePath}');
+          debugPrint('DEBUG: 本地文件不存在: ${freshPlaylist.filePath}');
           throw Exception(
-              'Local playlist file not found: ${playlist.filePath}');
+              'Local playlist file not found: ${freshPlaylist.filePath}');
         }
 
         channels =
-            await M3UParser.parseFromFile(playlist.filePath!, playlist.id!);
+            await M3UParser.parseFromFile(freshPlaylist.filePath!, playlist.id!);
       } else {
         // Check if this is a content-imported playlist without a proper file path
         debugPrint(
-            'DEBUG: 播放列表源无效，URL: ${playlist.url}, 文件路径: ${playlist.filePath}');
+            'DEBUG: 播放列表源无效，URL: ${freshPlaylist.url}, 文件路径: ${freshPlaylist.filePath}');
         throw Exception(
-            'Invalid playlist source - URL: ${playlist.url}, File: ${playlist.filePath}');
+            'Invalid playlist source - URL: ${freshPlaylist.url}, File: ${freshPlaylist.filePath}');
+      }
+      
+      // Check for EPG URL in M3U header
+      _lastExtractedEpgUrl = M3UParser.lastParseResult?.epgUrl;
+      if (_lastExtractedEpgUrl != null) {
+        debugPrint('DEBUG: 从M3U提取到EPG URL: $_lastExtractedEpgUrl');
       }
 
       debugPrint('DEBUG: 解析完成，共找到 ${channels.length} 个频道');

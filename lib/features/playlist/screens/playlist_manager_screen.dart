@@ -12,6 +12,8 @@ import '../../../core/platform/platform_detector.dart';
 import '../providers/playlist_provider.dart';
 import '../../channels/providers/channel_provider.dart';
 import '../../favorites/providers/favorites_provider.dart';
+import '../../settings/providers/settings_provider.dart';
+import '../../epg/providers/epg_provider.dart';
 
 class PlaylistManagerScreen extends StatefulWidget {
   const PlaylistManagerScreen({super.key});
@@ -37,60 +39,99 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
-      appBar: AppBar(
-        backgroundColor: AppTheme.backgroundColor,
-        title: Text(
-          AppStrings.of(context)?.playlistManager ?? 'Playlist Manager',
-          style: const TextStyle(
-            color: AppTheme.textPrimary,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          Consumer<PlaylistProvider>(
-            builder: (context, provider, _) {
-              return IconButton(
-                icon: Icon(
-                  provider.sortBy.contains('name')
-                      ? Icons.sort_by_alpha_rounded
-                      : Icons.calendar_month_rounded,
+    return Consumer<PlaylistProvider>(
+      builder: (context, provider, _) {
+        return Stack(
+          children: [
+            Scaffold(
+              backgroundColor: AppTheme.backgroundColor,
+              appBar: AppBar(
+                backgroundColor: AppTheme.backgroundColor,
+                title: Text(
+                  AppStrings.of(context)?.playlistManager ?? 'Playlist Manager',
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                tooltip: provider.sortBy.contains('name')
-                    ? 'Sort by Date'
-                    : 'Sort by Name',
-                onPressed: provider.toggleSortOrder,
-              );
-            },
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: Consumer<PlaylistProvider>(
-        builder: (context, provider, _) {
-          return Column(
-            children: [
-              // Add Playlist Section
-              _buildAddPlaylistSection(provider),
-
-              const Divider(color: AppTheme.cardColor, height: 1),
-
-              // Playlists List
-              Expanded(
-                child: provider.playlists.isEmpty
-                    ? _buildEmptyState()
-                    : _buildPlaylistsList(provider),
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  onPressed: provider.isLoading ? null : () => Navigator.pop(context),
+                ),
+                actions: [
+                  IconButton(
+                    icon: Icon(
+                      provider.sortBy.contains('name')
+                          ? Icons.sort_by_alpha_rounded
+                          : Icons.calendar_month_rounded,
+                    ),
+                    tooltip: provider.sortBy.contains('name')
+                        ? 'Sort by Date'
+                        : 'Sort by Name',
+                    onPressed: provider.isLoading ? null : provider.toggleSortOrder,
+                  ),
+                  const SizedBox(width: 8),
+                ],
               ),
-            ],
-          );
-        },
-      ),
+              body: Column(
+                children: [
+                  // Add Playlist Section
+                  _buildAddPlaylistSection(provider),
+
+                  const Divider(color: AppTheme.cardColor, height: 1),
+
+                  // Playlists List
+                  Expanded(
+                    child: provider.playlists.isEmpty
+                        ? _buildEmptyState()
+                        : _buildPlaylistsList(provider),
+                  ),
+                ],
+              ),
+            ),
+            // Loading overlay
+            if (provider.isLoading)
+              Container(
+                color: Colors.black54,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceColor,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(color: AppTheme.primaryColor),
+                        const SizedBox(height: 16),
+                        Text(
+                          '${(provider.importProgress * 100).toInt()}%',
+                          style: const TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            decoration: TextDecoration.none,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          '正在处理，请稍候...',
+                          style: TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 14,
+                            decoration: TextDecoration.none,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -370,66 +411,120 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
     required String label,
     required bool isPrimary,
   }) {
+    // TV端使用TVFocusable，确保遥控器按键正确处理
+    if (PlatformDetector.isTV) {
+      return TVFocusable(
+        onSelect: onPressed,
+        focusScale: 1.05,
+        showFocusBorder: true,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+          decoration: BoxDecoration(
+            color: isPrimary ? AppTheme.primaryColor : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: isPrimary
+                ? null
+                : Border.all(color: AppTheme.primaryColor.withOpacity(0.5)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconTheme(
+                data: IconThemeData(
+                  color: isPrimary ? Colors.white : AppTheme.primaryColor,
+                ),
+                child: icon,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isPrimary ? Colors.white : AppTheme.primaryColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    
+    // 非TV端保持原有逻辑
     return Builder(
       builder: (context) {
         return Focus(
           onFocusChange: (hasFocus) {
             if (mounted) setState(() {});
           },
+          onKeyEvent: (node, event) {
+            if (event is KeyDownEvent) {
+              if (event.logicalKey == LogicalKeyboardKey.select ||
+                  event.logicalKey == LogicalKeyboardKey.enter ||
+                  event.logicalKey == LogicalKeyboardKey.gameButtonA) {
+                onPressed?.call();
+                return KeyEventResult.handled;
+              }
+            }
+            return KeyEventResult.ignored;
+          },
           child: Builder(
             builder: (context) {
               final isFocused = Focus.of(context).hasFocus;
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                transform: Matrix4.identity()..scale(isFocused ? 1.05 : 1.0),
-                transformAlignment: Alignment.center,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: isFocused
-                      ? [
-                          BoxShadow(
-                            color: AppTheme.primaryColor.withOpacity(0.4),
-                            blurRadius: 12,
-                            spreadRadius: 2,
+              return GestureDetector(
+                onTap: onPressed,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  transform: Matrix4.identity()..scale(isFocused ? 1.05 : 1.0),
+                  transformAlignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: isFocused
+                        ? [
+                            BoxShadow(
+                              color: AppTheme.primaryColor.withOpacity(0.4),
+                              blurRadius: 12,
+                              spreadRadius: 2,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: isPrimary
+                      ? ElevatedButton.icon(
+                          onPressed: onPressed,
+                          icon: icon,
+                          label: Text(label),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primaryColor,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
-                        ]
-                      : null,
+                        )
+                      : OutlinedButton.icon(
+                          onPressed: onPressed,
+                          icon: icon,
+                          label: Text(label),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.primaryColor,
+                            side: BorderSide(
+                              color: isFocused
+                                  ? AppTheme.primaryColor
+                                  : AppTheme.primaryColor.withOpacity(0.5),
+                              width: isFocused ? 2 : 1,
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 16,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
                 ),
-                child: isPrimary
-                    ? ElevatedButton.icon(
-                        onPressed: onPressed,
-                        icon: icon,
-                        label: Text(label),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primaryColor,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      )
-                    : OutlinedButton.icon(
-                        onPressed: onPressed,
-                        icon: icon,
-                        label: Text(label),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppTheme.primaryColor,
-                          side: BorderSide(
-                            color: isFocused
-                                ? AppTheme.primaryColor
-                                : AppTheme.primaryColor.withOpacity(0.5),
-                            width: isFocused ? 2 : 1,
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 16,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
               );
             },
           ),
@@ -496,6 +591,174 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
   }
 
   Widget _buildPlaylistCard(PlaylistProvider provider, dynamic playlist) {
+    final isTV = PlatformDetector.isTV;
+    final isActive = provider.activePlaylist?.id == playlist.id;
+    
+    // TV端使用 FocusTraversalGroup 让内部按钮可以获取焦点
+    if (isTV) {
+      return FocusTraversalGroup(
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: isActive
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppTheme.primaryColor.withOpacity(0.2),
+                      AppTheme.primaryColor.withOpacity(0.1),
+                    ],
+                  )
+                : null,
+            color: isActive ? null : AppTheme.surfaceColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isActive
+                  ? AppTheme.primaryColor.withOpacity(0.5)
+                  : Colors.transparent,
+              width: 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              // 主体部分可点击选择播放列表
+              Expanded(
+                child: TVFocusable(
+                  onSelect: () {
+                    provider.setActivePlaylist(
+                      playlist,
+                      onPlaylistChanged: (playlistId) {
+                        context.read<ChannelProvider>().loadChannels(playlistId);
+                      },
+                      favoritesProvider: context.read<FavoritesProvider>(),
+                    );
+                  },
+                  focusScale: 1.0,
+                  showFocusBorder: true,
+                  child: Row(
+                    children: [
+                      // Icon
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryColor.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          playlist.isRemote ? Icons.cloud_outlined : Icons.folder_outlined,
+                          color: AppTheme.primaryColor,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      // Info
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    playlist.name,
+                                    style: const TextStyle(
+                                      color: AppTheme.textPrimary,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (isActive)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primaryColor,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      AppStrings.of(context)?.active ?? 'ACTIVE',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(
+                                  playlist.isRemote ? Icons.cloud_outlined : Icons.folder_outlined,
+                                  color: AppTheme.textMuted,
+                                  size: 12,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  playlist.isRemote ? 'URL' : '本地文件',
+                                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '${playlist.channelCount} ${AppStrings.of(context)?.channels ?? 'channels'} • ${playlist.groupCount} ${AppStrings.of(context)?.categories ?? 'groups'}',
+                                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                                ),
+                              ],
+                            ),
+                            if (playlist.lastUpdated != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                '${AppStrings.of(context)?.updated ?? 'Updated'}: ${_formatDate(playlist.lastUpdated!)}',
+                                style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // 刷新按钮
+              TVFocusable(
+                onSelect: () => _refreshPlaylist(provider, playlist),
+                focusScale: 1.1,
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardColor,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.refresh_rounded, color: AppTheme.textSecondary, size: 22),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // 删除按钮
+              TVFocusable(
+                onSelect: () => _confirmDelete(provider, playlist),
+                focusScale: 1.1,
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardColor,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.delete_outline_rounded, color: AppTheme.errorColor, size: 22),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    
+    // 非TV端保持原有逻辑
     return TVFocusable(
       onSelect: () {
         provider.setActivePlaylist(
@@ -608,12 +871,27 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  '${playlist.channelCount} ${AppStrings.of(context)?.channels ?? 'channels'} • ${playlist.groupCount} ${AppStrings.of(context)?.categories ?? 'groups'}',
-                  style: const TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 13,
-                  ),
+                Row(
+                  children: [
+                    Icon(
+                      playlist.isRemote ? Icons.cloud_outlined : Icons.folder_outlined,
+                      color: AppTheme.textMuted,
+                      size: 12,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      playlist.isRemote ? 'URL' : '本地文件',
+                      style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${playlist.channelCount} ${AppStrings.of(context)?.channels ?? 'channels'} • ${playlist.groupCount} ${AppStrings.of(context)?.categories ?? 'groups'}',
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
                 ),
                 if (playlist.lastUpdated != null) ...[
                   const SizedBox(height: 2),
@@ -634,19 +912,47 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               // Refresh Button
-              IconButton(
-                icon: const Icon(Icons.refresh_rounded),
-                color: AppTheme.textSecondary,
-                onPressed: () => _refreshPlaylist(provider, playlist),
-                tooltip: AppStrings.of(context)?.refresh ?? 'Refresh',
-              ),
-              // Delete Button
-              IconButton(
-                icon: const Icon(Icons.delete_outline_rounded),
-                color: AppTheme.errorColor,
-                onPressed: () => _confirmDelete(provider, playlist),
-                tooltip: AppStrings.of(context)?.delete ?? 'Delete',
-              ),
+              if (PlatformDetector.isTV) ...[
+                TVFocusable(
+                  onSelect: () => _refreshPlaylist(provider, playlist),
+                  focusScale: 1.1,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cardColor,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.refresh_rounded, color: AppTheme.textSecondary, size: 20),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TVFocusable(
+                  onSelect: () => _confirmDelete(provider, playlist),
+                  focusScale: 1.1,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cardColor,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.delete_outline_rounded, color: AppTheme.errorColor, size: 20),
+                  ),
+                ),
+              ] else ...[
+                IconButton(
+                  icon: const Icon(Icons.refresh_rounded),
+                  color: AppTheme.textSecondary,
+                  onPressed: () => _refreshPlaylist(provider, playlist),
+                  tooltip: AppStrings.of(context)?.refresh ?? 'Refresh',
+                ),
+                // Delete Button
+                IconButton(
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  color: AppTheme.errorColor,
+                  onPressed: () => _confirmDelete(provider, playlist),
+                  tooltip: AppStrings.of(context)?.delete ?? 'Delete',
+                ),
+              ],
             ],
           ),
         ],
@@ -702,6 +1008,23 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
       provider.setActivePlaylist(playlist,
           favoritesProvider: context.read<FavoritesProvider>());
       await context.read<ChannelProvider>().loadChannels(playlist.id!);
+      
+      // Auto-apply EPG URL if extracted from M3U
+      if (provider.lastExtractedEpgUrl != null) {
+        final settingsProvider = context.read<SettingsProvider>();
+        final epgApplied = await provider.applyExtractedEpgUrl(settingsProvider);
+        if (epgApplied && mounted) {
+          // Reload EPG data
+          await context.read<EpgProvider>().loadEpg(provider.lastExtractedEpgUrl!);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('已自动应用EPG源: ${provider.lastExtractedEpgUrl}'),
+              backgroundColor: AppTheme.successColor,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
 
       _nameController.clear();
       _urlController.clear();
@@ -720,26 +1043,44 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
 
   Future<void> _refreshPlaylist(
       PlaylistProvider provider, dynamic playlist) async {
+    debugPrint('DEBUG: 开始刷新播放列表: ${playlist.name}');
     final success = await provider.refreshPlaylist(playlist);
+    
+    // refreshPlaylist 完成后 isLoading 应该已经是 false 了
+    // 但为了确保，我们在这里等待一帧让 UI 更新
+    await Future.delayed(const Duration(milliseconds: 100));
 
     if (mounted) {
       if (success) {
+        // 后台加载频道，不阻塞 UI
         context.read<ChannelProvider>().loadAllChannels();
+        
+        // Auto-apply EPG URL if extracted from M3U
+        if (provider.lastExtractedEpgUrl != null) {
+          final settingsProvider = context.read<SettingsProvider>();
+          final epgApplied = await provider.applyExtractedEpgUrl(settingsProvider);
+          if (epgApplied && mounted) {
+            // Reload EPG data (后台加载)
+            context.read<EpgProvider>().loadEpg(provider.lastExtractedEpgUrl!);
+          }
+        }
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success
-                ? (AppStrings.of(context)?.playlistRefreshed ??
-                    'Playlist refreshed successfully')
-                : (AppStrings.of(context)?.playlistRefreshFailed ??
-                    'Failed to refresh playlist'),
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              success
+                  ? (AppStrings.of(context)?.playlistRefreshed ??
+                      'Playlist refreshed successfully')
+                  : (AppStrings.of(context)?.playlistRefreshFailed ??
+                      'Failed to refresh playlist'),
+            ),
+            backgroundColor:
+                success ? AppTheme.successColor : AppTheme.errorColor,
           ),
-          backgroundColor:
-              success ? AppTheme.successColor : AppTheme.errorColor,
-        ),
-      );
+        );
+      }
     }
   }
 

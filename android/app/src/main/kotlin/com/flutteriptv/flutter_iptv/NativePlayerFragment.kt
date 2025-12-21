@@ -42,6 +42,14 @@ class NativePlayerFragment : Fragment() {
     private lateinit var topBar: View
     private lateinit var bottomBar: View
     
+    // EPG views
+    private lateinit var epgContainer: View
+    private lateinit var epgCurrentContainer: View
+    private lateinit var epgNextContainer: View
+    private lateinit var epgCurrentTitle: TextView
+    private lateinit var epgCurrentTime: TextView
+    private lateinit var epgNextTitle: TextView
+    
     // Category panel views
     private lateinit var categoryPanel: View
     private lateinit var categoryListContainer: View
@@ -77,6 +85,10 @@ class NativePlayerFragment : Fragment() {
     private var videoCodec = ""
     private var isHardwareDecoder = false
     private var frameRate = 0f
+    
+    // EPG update
+    private var epgUpdateRunnable: Runnable? = null
+    private val EPG_UPDATE_INTERVAL = 60000L // 每分钟更新一次
     
     var onCloseListener: (() -> Unit)? = null
 
@@ -148,6 +160,14 @@ class NativePlayerFragment : Fragment() {
         categoryList = view.findViewById(R.id.category_list)
         channelList = view.findViewById(R.id.channel_list)
         channelListTitle = view.findViewById(R.id.channel_list_title)
+        
+        // EPG views
+        epgContainer = view.findViewById(R.id.epg_container)
+        epgCurrentContainer = view.findViewById(R.id.epg_current_container)
+        epgNextContainer = view.findViewById(R.id.epg_next_container)
+        epgCurrentTitle = view.findViewById(R.id.epg_current_title)
+        epgCurrentTime = view.findViewById(R.id.epg_current_time)
+        epgNextTitle = view.findViewById(R.id.epg_next_title)
 
         channelNameText.text = currentName
         updateStatus("Loading")
@@ -659,6 +679,21 @@ class NativePlayerFragment : Fragment() {
                     }
                     updateVideoInfoDisplay()
                 }
+                
+                override fun onDroppedVideoFrames(
+                    eventTime: AnalyticsListener.EventTime,
+                    droppedFrames: Int,
+                    elapsedMs: Long
+                ) {
+                    // 通过丢帧信息估算帧率
+                    if (frameRate <= 0 && elapsedMs > 0) {
+                        val estimatedFps = (droppedFrames * 1000f / elapsedMs) + 25f // 粗略估算
+                        if (estimatedFps in 20f..60f) {
+                            frameRate = estimatedFps
+                            updateVideoInfoDisplay()
+                        }
+                    }
+                }
             })
         }
     }
@@ -734,12 +769,17 @@ class NativePlayerFragment : Fragment() {
             if (frameRate > 0) {
                 parts.add("${frameRate.toInt()}fps")
             }
-            val hwStatus = if (isHardwareDecoder) "HW" else "SW"
-            parts.add(hwStatus)
+            if (isHardwareDecoder) {
+                parts.add("硬解")
+            } else {
+                parts.add("软解")
+            }
             
             if (parts.isNotEmpty()) {
-                videoInfoText.text = parts.joinToString(" | ")
+                videoInfoText.text = parts.joinToString(" · ")
                 videoInfoText.visibility = View.VISIBLE
+            } else {
+                videoInfoText.visibility = View.GONE
             }
         }
     }
@@ -767,6 +807,44 @@ class NativePlayerFragment : Fragment() {
         topBar.animate().alpha(1f).setDuration(200).start()
         bottomBar.animate().alpha(1f).setDuration(200).start()
         scheduleHideControls()
+        updateEpgInfo()
+    }
+    
+    private fun updateEpgInfo() {
+        // Request EPG info from Flutter via MethodChannel
+        val activity = activity as? MainActivity ?: return
+        activity.getEpgInfo(currentName) { epgInfo ->
+            activity.runOnUiThread {
+                if (epgInfo != null) {
+                    val currentTitle = epgInfo["currentTitle"] as? String
+                    val currentRemaining = epgInfo["currentRemaining"] as? Int
+                    val nextTitle = epgInfo["nextTitle"] as? String
+                    
+                    if (currentTitle != null || nextTitle != null) {
+                        epgContainer.visibility = View.VISIBLE
+                        
+                        if (currentTitle != null) {
+                            epgCurrentContainer.visibility = View.VISIBLE
+                            epgCurrentTitle.text = currentTitle
+                            epgCurrentTime.text = if (currentRemaining != null) "${currentRemaining}分钟后结束" else ""
+                        } else {
+                            epgCurrentContainer.visibility = View.GONE
+                        }
+                        
+                        if (nextTitle != null) {
+                            epgNextContainer.visibility = View.VISIBLE
+                            epgNextTitle.text = nextTitle
+                        } else {
+                            epgNextContainer.visibility = View.GONE
+                        }
+                    } else {
+                        epgContainer.visibility = View.GONE
+                    }
+                } else {
+                    epgContainer.visibility = View.GONE
+                }
+            }
+        }
     }
     
     private fun hideControls() {
