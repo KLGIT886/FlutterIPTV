@@ -177,10 +177,10 @@ class FlutterIPTVApp extends StatelessWidget {
                   textScaler: const TextScaler.linear(1.0),
                 ),
                 child: Platform.isWindows
-                    ? Column(
+                    ? Stack(
                         children: [
+                          child!,
                           const WindowTitleBar(),
-                          Expanded(child: child!),
                         ],
                       )
                     : child!,

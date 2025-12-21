@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import '../theme/app_theme.dart';
 
-class WindowTitleBar extends StatelessWidget {
+/// 自动隐藏的Windows标题栏
+/// 鼠标移到顶部区域时显示，移开后自动隐藏
+class WindowTitleBar extends StatefulWidget {
   final String title;
   final Widget? leading;
   final List<Widget>? actions;
@@ -16,41 +19,145 @@ class WindowTitleBar extends StatelessWidget {
   });
 
   @override
+  State<WindowTitleBar> createState() => _WindowTitleBarState();
+}
+
+class _WindowTitleBarState extends State<WindowTitleBar> {
+  bool _isVisible = false;
+  Timer? _hideTimer;
+  
+  // 触发区域高度（鼠标进入此区域显示标题栏）
+  static const double _triggerHeight = 8.0;
+  // 标题栏高度
+  static const double _barHeight = 32.0;
+  // 自动隐藏延迟
+  static const Duration _hideDelay = Duration(milliseconds: 1500);
+
+  @override
+  void dispose() {
+    _hideTimer?.cancel();
+    super.dispose();
+  }
+
+  void _showTitleBar() {
+    _hideTimer?.cancel();
+    if (!_isVisible) {
+      setState(() => _isVisible = true);
+    }
+  }
+
+  void _startHideTimer() {
+    _hideTimer?.cancel();
+    _hideTimer = Timer(_hideDelay, () {
+      if (mounted) {
+        setState(() => _isVisible = false);
+      }
+    });
+  }
+
+  void _cancelHideTimer() {
+    _hideTimer?.cancel();
+  }
+
+  @override
   Widget build(BuildContext context) {
     if (!Platform.isWindows) {
       return const SizedBox.shrink();
     }
 
-    return GestureDetector(
-      onPanStart: (_) => windowManager.startDragging(),
-      onDoubleTap: () async {
-        if (await windowManager.isMaximized()) {
-          await windowManager.unmaximize();
-        } else {
-          await windowManager.maximize();
-        }
-      },
-      child: Container(
-        height: 32,
-        color: AppTheme.backgroundColor,
-        child: Row(
-          children: [
-            // Draggable area
-            const Expanded(child: SizedBox()),
-            // Window buttons
-            _WindowButton(
-              icon: Icons.remove,
-              onPressed: () => windowManager.minimize(),
-            ),
-            _MaximizeButton(),
-            _WindowButton(
-              icon: Icons.close,
-              hoverColor: Colors.red,
-              onPressed: () => windowManager.close(),
-            ),
-          ],
+    return Stack(
+      children: [
+        // 触发区域（始终存在，用于检测鼠标进入）
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          height: _triggerHeight,
+          child: MouseRegion(
+            onEnter: (_) => _showTitleBar(),
+            child: Container(color: Colors.transparent),
+          ),
         ),
-      ),
+        // 标题栏（带动画）
+        AnimatedPositioned(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          top: _isVisible ? 0 : -_barHeight,
+          left: 0,
+          right: 0,
+          height: _barHeight,
+          child: MouseRegion(
+            onEnter: (_) => _cancelHideTimer(),
+            onExit: (_) => _startHideTimer(),
+            child: GestureDetector(
+              onPanStart: (_) => windowManager.startDragging(),
+              onDoubleTap: () async {
+                if (await windowManager.isMaximized()) {
+                  await windowManager.unmaximize();
+                } else {
+                  await windowManager.maximize();
+                }
+              },
+              child: Container(
+                height: _barHeight,
+                decoration: BoxDecoration(
+                  color: AppTheme.backgroundColor,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 12),
+                    // App icon
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: Image.asset(
+                        'assets/icons/app_icon.png',
+                        width: 18,
+                        height: 18,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.live_tv,
+                          size: 18,
+                          color: AppTheme.primaryColor,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Title
+                    Text(
+                      widget.title,
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        decoration: TextDecoration.none,
+                      ),
+                    ),
+                    // Draggable area
+                    const Expanded(child: SizedBox()),
+                    // Window buttons
+                    _WindowButton(
+                      icon: Icons.remove,
+                      onPressed: () => windowManager.minimize(),
+                    ),
+                    _MaximizeButton(),
+                    _WindowButton(
+                      icon: Icons.close,
+                      hoverColor: Colors.red,
+                      onPressed: () => windowManager.close(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
