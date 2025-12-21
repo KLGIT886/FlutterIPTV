@@ -350,20 +350,126 @@ class NativePlayerFragment : Fragment() {
     private fun showCategoryPanel() {
         categoryPanelVisible = true
         showingChannelList = false
-        selectedCategoryIndex = -1
         categoryPanel.visibility = View.VISIBLE
         channelListContainer.visibility = View.GONE
         
-        // Refresh category list
-        categoryList.adapter?.notifyDataSetChanged()
+        // 找到当前播放频道所在的分类
+        val currentGroup = if (currentIndex >= 0 && currentIndex < channelGroups.size) {
+            channelGroups[currentIndex].ifEmpty { "未分类" }
+        } else {
+            null
+        }
         
-        // Focus first category
-        categoryList.post {
-            categoryList.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
+        // 找到分类索引
+        val categoryIndex = if (currentGroup != null) {
+            categories.indexOfFirst { it.name == currentGroup }
+        } else {
+            -1
+        }
+        
+        if (categoryIndex >= 0) {
+            // 自动选择当前频道所在的分类，并展开频道列表
+            selectedCategoryIndex = categoryIndex
+            
+            // 刷新分类列表
+            categoryList.adapter?.notifyDataSetChanged()
+            
+            // 滚动到对应分类
+            categoryList.scrollToPosition(categoryIndex)
+            
+            // 自动展开频道列表并定位到当前频道
+            selectCategoryAndLocateChannel(categoryIndex)
+        } else {
+            selectedCategoryIndex = -1
+            // 刷新分类列表
+            categoryList.adapter?.notifyDataSetChanged()
+            
+            // Focus first category
+            categoryList.post {
+                categoryList.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
+            }
         }
         
         // Cancel auto-hide
         hideControlsRunnable?.let { handler.removeCallbacks(it) }
+    }
+    
+    private fun selectCategoryAndLocateChannel(position: Int) {
+        selectedCategoryIndex = position
+        val category = categories[position]
+        channelListTitle.text = category.name
+        
+        // 刷新分类列表以更新选中状态
+        categoryList.adapter?.notifyDataSetChanged()
+        
+        // Get channels for this category
+        val channelsInCategory = mutableListOf<ChannelItem>()
+        var currentChannelPositionInList = -1
+        
+        for (i in channelGroups.indices) {
+            val groupName = channelGroups[i].ifEmpty { "未分类" }
+            if (groupName == category.name) {
+                val isPlaying = i == currentIndex
+                if (isPlaying) {
+                    currentChannelPositionInList = channelsInCategory.size
+                }
+                channelsInCategory.add(ChannelItem(i, channelNames.getOrElse(i) { "Channel $i" }, isPlaying))
+            }
+        }
+        
+        // Setup channel adapter
+        channelList.adapter = object : RecyclerView.Adapter<ChannelViewHolder>() {
+            override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ChannelViewHolder {
+                val view = LayoutInflater.from(parent.context).inflate(R.layout.item_channel, parent, false)
+                return ChannelViewHolder(view)
+            }
+            
+            override fun onBindViewHolder(holder: ChannelViewHolder, position: Int) {
+                val item = channelsInCategory[position]
+                holder.nameText.text = item.name
+                holder.playingIcon.visibility = if (item.isPlaying) View.VISIBLE else View.GONE
+                holder.nameText.setTextColor(if (item.isPlaying) 0xFFE91E63.toInt() else 0xFFFFFFFF.toInt())
+                
+                holder.itemView.setOnClickListener {
+                    switchChannel(item.index)
+                    hideCategoryPanel()
+                }
+                
+                // 给每个 item 添加按键监听
+                holder.itemView.setOnKeyListener { _, keyCode, event ->
+                    if (event.action == KeyEvent.ACTION_DOWN) {
+                        when (keyCode) {
+                            KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                handleBackKey()
+                                true
+                            }
+                            else -> false
+                        }
+                    } else {
+                        false
+                    }
+                }
+                
+                holder.itemView.setOnFocusChangeListener { v, hasFocus ->
+                    v.isSelected = hasFocus
+                }
+            }
+            
+            override fun getItemCount() = channelsInCategory.size
+        }
+        
+        // Show channel list
+        channelListContainer.visibility = View.VISIBLE
+        showingChannelList = true
+        
+        // 滚动到当前播放的频道并聚焦
+        val focusPosition = if (currentChannelPositionInList >= 0) currentChannelPositionInList else 0
+        channelList.post {
+            channelList.scrollToPosition(focusPosition)
+            channelList.post {
+                channelList.findViewHolderForAdapterPosition(focusPosition)?.itemView?.requestFocus()
+            }
+        }
     }
     
     private fun hideCategoryPanel() {
