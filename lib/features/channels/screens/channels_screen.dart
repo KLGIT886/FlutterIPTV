@@ -435,7 +435,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                 sliver: SliverGrid(
                   gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                     maxCrossAxisExtent: 180,
-                    childAspectRatio: 1.17,
+                    childAspectRatio: 1.11,
                     crossAxisSpacing: 16,
                     mainAxisSpacing: 16,
                   ),
