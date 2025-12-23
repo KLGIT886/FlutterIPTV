@@ -29,6 +29,9 @@ class AppStrings {
   String get delete => _localizedValues['delete']!;
   String get settings => _localizedValues['settings']!;
   String get language => _localizedValues['language']!;
+  String get general => _localizedValues['general']!;
+  String get followSystem => _localizedValues['followSystem']!;
+  String get languageFollowSystem => _localizedValues['languageFollowSystem']!;
   String get unknown => _localizedValues['unknown']!;
   String get save => _localizedValues['save']!;
   String get error => _localizedValues['error']!;
@@ -231,6 +234,9 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'delete': '删除',
     'settings': '设置',
     'language': '语言',
+    'general': '通用',
+    'followSystem': '跟随系统',
+    'languageFollowSystem': '已设置为跟随系统语言',
     'unknown': '未知',
     'save': '保存',
     'error': '错误',
@@ -403,6 +409,9 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'delete': 'Delete',
     'settings': 'Settings',
     'language': 'Language',
+    'general': 'General',
+    'followSystem': 'Follow System',
+    'languageFollowSystem': 'Set to follow system language',
     'unknown': 'Unknown',
     'save': 'Save',
     'error': 'Error',

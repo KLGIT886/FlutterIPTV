@@ -124,6 +124,8 @@ class SettingsProvider extends ChangeNotifier {
     }
     if (_locale != null) {
       await prefs.setString(_keyLocale, _locale!.languageCode);
+    } else {
+      await prefs.remove(_keyLocale);
     }
     await prefs.setBool(_keyVolumeNormalization, _volumeNormalization);
     await prefs.setInt(_keyVolumeBoost, _volumeBoost);

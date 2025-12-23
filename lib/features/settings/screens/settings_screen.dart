@@ -46,14 +46,12 @@ class SettingsScreen extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           children: [
             // General Settings
-            _buildSectionHeader(AppStrings.of(context)?.categories ?? 'General'),
+            _buildSectionHeader(AppStrings.of(context)?.general ?? 'General'),
             _buildSettingsCard([
               _buildSelectTile(
                 context,
                 title: AppStrings.of(context)?.language ?? 'Language',
-                subtitle: settings.locale?.languageCode == 'zh' 
-                    ? (AppStrings.of(context)?.chinese ?? '中文')
-                    : (AppStrings.of(context)?.english ?? 'English'),
+                subtitle: _getCurrentLanguageLabel(context, settings),
                 icon: Icons.language_rounded,
                 onTap: () => _showLanguageDialog(context, settings),
               ),
@@ -325,6 +323,21 @@ class SettingsScreen extends StatelessWidget {
       ),
       body: content,
     );
+  }
+
+  String _getCurrentLanguageLabel(BuildContext context, SettingsProvider settings) {
+    final locale = settings.locale;
+    if (locale == null) {
+      // 没有设置，显示"跟随系统"
+      final systemLocale = Localizations.localeOf(context);
+      final systemLang = systemLocale.languageCode == 'zh' ? '中文' : 'English';
+      return '${AppStrings.of(context)?.followSystem ?? "跟随系统"} ($systemLang)';
+    }
+    // 根据保存的设置显示
+    if (locale.languageCode == 'zh') {
+      return '中文';
+    }
+    return 'English';
   }
 
   String _getPlatformName() {
@@ -993,6 +1006,9 @@ class SettingsScreen extends StatelessWidget {
   }
 
   void _showLanguageDialog(BuildContext context, SettingsProvider settings) {
+    // 获取当前设置的语言代码，null 表示跟随系统
+    final currentLang = settings.locale?.languageCode;
+    
     showDialog(
       context: context,
       builder: (dialogContext) {
@@ -1005,13 +1021,27 @@ class SettingsScreen extends StatelessWidget {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              RadioListTile<String>(
+              RadioListTile<String?>(
+                title: Text(
+                  AppStrings.of(context)?.followSystem ?? '跟随系统',
+                  style: const TextStyle(color: AppTheme.textPrimary),
+                ),
+                value: null,
+                groupValue: currentLang,
+                onChanged: (value) {
+                  settings.setLocale(null);
+                  Navigator.pop(dialogContext);
+                  _showSuccess(context, AppStrings.of(context)?.languageFollowSystem ?? '已设置为跟随系统语言');
+                },
+                activeColor: AppTheme.primaryColor,
+              ),
+              RadioListTile<String?>(
                 title: const Text(
                   'English',
                   style: TextStyle(color: AppTheme.textPrimary),
                 ),
                 value: 'en',
-                groupValue: settings.locale?.languageCode ?? 'en',
+                groupValue: currentLang,
                 onChanged: (value) {
                   settings.setLocale(const Locale('en'));
                   Navigator.pop(dialogContext);
@@ -1019,13 +1049,13 @@ class SettingsScreen extends StatelessWidget {
                 },
                 activeColor: AppTheme.primaryColor,
               ),
-              RadioListTile<String>(
-                title: Text(
-                  AppStrings.of(context)?.chinese ?? '中文',
-                  style: const TextStyle(color: AppTheme.textPrimary),
+              RadioListTile<String?>(
+                title: const Text(
+                  '中文',
+                  style: TextStyle(color: AppTheme.textPrimary),
                 ),
                 value: 'zh',
-                groupValue: settings.locale?.languageCode ?? 'en',
+                groupValue: currentLang,
                 onChanged: (value) {
                   settings.setLocale(const Locale('zh'));
                   Navigator.pop(dialogContext);
