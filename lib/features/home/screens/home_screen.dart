@@ -28,31 +28,50 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedNavIndex = 0;
   List<Channel> _recommendedChannels = [];
   int? _lastPlaylistId; // 跟踪上次的播放列表ID
+  int _lastChannelCount = 0; // 跟踪上次的频道数量
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    // 监听频道变化
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ChannelProvider>().addListener(_onChannelProviderChanged);
+      context.read<PlaylistProvider>().addListener(_onPlaylistProviderChanged);
+    });
+  }
+  
+  @override
+  void dispose() {
+    // 移除监听器时需要小心，因为 context 可能已经不可用
+    super.dispose();
+  }
+  
+  void _onChannelProviderChanged() {
+    if (!mounted) return;
+    final channelProvider = context.read<ChannelProvider>();
+    // 只有当频道数量变化时才刷新
+    if (channelProvider.channels.length != _lastChannelCount && 
+        channelProvider.channels.isNotEmpty &&
+        !channelProvider.isLoading) {
+      _lastChannelCount = channelProvider.channels.length;
+      _refreshRecommendedChannels();
+    }
+  }
+  
+  void _onPlaylistProviderChanged() {
+    if (!mounted) return;
+    final playlistProvider = context.read<PlaylistProvider>();
+    final currentPlaylistId = playlistProvider.activePlaylist?.id;
+    if (_lastPlaylistId != currentPlaylistId) {
+      _lastPlaylistId = currentPlaylistId;
+      _recommendedChannels = []; // 清空，等待新频道加载
+    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 当从其他页面返回时，检查是否需要刷新推荐频道
-    final channelProvider = context.read<ChannelProvider>();
-    final playlistProvider = context.read<PlaylistProvider>();
-    final currentPlaylistId = playlistProvider.activePlaylist?.id;
-    
-    // 如果播放列表变化了，清空推荐频道并重新加载
-    if (_lastPlaylistId != currentPlaylistId) {
-      _lastPlaylistId = currentPlaylistId;
-      _recommendedChannels = [];
-      if (channelProvider.channels.isNotEmpty) {
-        _refreshRecommendedChannels();
-      }
-    } else if (_recommendedChannels.isEmpty && channelProvider.channels.isNotEmpty) {
-      _refreshRecommendedChannels();
-    }
   }
 
   Future<void> _loadData() async {
@@ -74,11 +93,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _refreshRecommendedChannels() {
+    if (!mounted) return;
+    
     final channelProvider = context.read<ChannelProvider>();
+    if (channelProvider.channels.isEmpty) return;
+    
     // 随机打乱频道顺序，显示数量由 _buildChannelRow 根据宽度自动计算
     final shuffled = List<Channel>.from(channelProvider.channels)..shuffle();
     // 最多取20个作为候选，实际显示数量由宽度决定
     _recommendedChannels = shuffled.take(20).toList();
+    
     setState(() {});
   }
 
@@ -161,22 +185,6 @@ class _HomeScreenState extends State<HomeScreen> {
         if (!playlistProvider.hasPlaylists) return _buildEmptyState();
         if (channelProvider.isLoading) {
           return const Center(child: CircularProgressIndicator(color: AppTheme.primaryColor));
-        }
-        
-        // 检查播放列表是否变化，或者推荐频道为空
-        final currentPlaylistId = playlistProvider.activePlaylist?.id;
-        final needsRefresh = _lastPlaylistId != currentPlaylistId || 
-            _recommendedChannels.isEmpty ||
-            // 检查推荐频道是否来自当前播放列表（通过检查第一个频道是否在当前频道列表中）
-            (_recommendedChannels.isNotEmpty && 
-             channelProvider.channels.isNotEmpty &&
-             !channelProvider.channels.any((c) => c.id == _recommendedChannels.first.id));
-        
-        if (needsRefresh && channelProvider.channels.isNotEmpty) {
-          _lastPlaylistId = currentPlaylistId;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _refreshRecommendedChannels();
-          });
         }
         
         final favChannels = _getFavoriteChannels(channelProvider);

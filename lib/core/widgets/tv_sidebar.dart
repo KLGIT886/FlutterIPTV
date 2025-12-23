@@ -80,19 +80,15 @@ class _TVSidebarState extends State<TVSidebar> {
     if (index == widget.selectedIndex) return;
     
     if (index == 0) {
-      // 返回首页：先 pop 到 splash，再 push 新的 home
-      // 这样 home 会被销毁重建，焦点状态会被正确重置
-      Navigator.of(context).popUntil((r) => r.settings.name == AppRouter.splash);
-      Navigator.pushNamed(context, AppRouter.home);
+      // 返回首页：直接 pop 到首页
+      Navigator.of(context).popUntil((r) => r.settings.name == AppRouter.home || r.settings.name == AppRouter.splash);
     } else if (route != null) {
       if (widget.selectedIndex == 0) {
-        // 从首页跳转
+        // 从首页跳转，直接 push
         Navigator.pushNamed(context, route);
       } else {
-        // 从其他页面跳转，先返回首页再跳转
-        Navigator.of(context).popUntil((r) => r.settings.name == AppRouter.splash);
-        Navigator.pushNamed(context, AppRouter.home);
-        Navigator.pushNamed(context, route);
+        // 从其他页面跳转，使用 pushReplacementNamed 替换当前页面
+        Navigator.pushReplacementNamed(context, route);
       }
     }
   }
