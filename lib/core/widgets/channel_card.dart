@@ -100,7 +100,7 @@ class ChannelCard extends StatelessWidget {
                     Container(
                       color: Theme.of(context).brightness == Brightness.dark 
                           ? const Color(0xFF0A0A0A) 
-                          : const Color(0xFFE8E8E8),
+                          : const Color(0xFFB8B8B8),
                       child: Center(
                         child: logoUrl != null && logoUrl!.isNotEmpty
                             ? _buildChannelLogo(logoUrl!)
@@ -313,21 +313,36 @@ class ChannelCard extends StatelessWidget {
   }
 
   Widget _buildFavoriteButton() {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onFavoriteToggle,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(5),
-          decoration: const BoxDecoration(color: Color(0x80000000), shape: BoxShape.circle),
-          child: Icon(
-            isFavorite ? Icons.favorite : Icons.favorite_border_rounded,
-            color: isFavorite ? AppTheme.primaryColor : Colors.white,
-            size: 12,
+    return Builder(
+      builder: (context) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onFavoriteToggle,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0x80000000) : Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: isDark ? null : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: Icon(
+                isFavorite ? Icons.favorite : Icons.favorite_border_rounded,
+                color: isFavorite ? AppTheme.primaryColor : (isDark ? Colors.white : Colors.grey[500]),
+                size: 12,
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
