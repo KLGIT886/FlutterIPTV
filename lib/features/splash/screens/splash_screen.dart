@@ -63,9 +63,8 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     await Future.delayed(const Duration(milliseconds: 1500));
 
     if (mounted) {
-      // 不用 pushReplacementNamed，而是用 pushNamed
-      // 这样 splash 会留在栈底，home 是 push 上去的
-      Navigator.of(context).pushNamed(AppRouter.home);
+      // 使用 pushReplacementNamed 替换 splash，这样退出时不会显示 splash
+      Navigator.of(context).pushReplacementNamed(AppRouter.home);
     }
   }
 

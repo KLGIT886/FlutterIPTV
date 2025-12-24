@@ -82,7 +82,7 @@ class _TVSidebarState extends State<TVSidebar> {
 
     if (index == 0) {
       // 返回首页：直接 pop 到首页
-      Navigator.of(context).popUntil((r) => r.settings.name == AppRouter.home || r.settings.name == AppRouter.splash);
+      Navigator.of(context).popUntil((r) => r.settings.name == AppRouter.home || r.isFirst);
     } else if (route != null) {
       if (widget.selectedIndex == 0) {
         // 从首页跳转，直接 push
