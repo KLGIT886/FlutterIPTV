@@ -333,78 +333,17 @@ jobs:
           echo "Current tag: $CURRENT_TAG"
           echo "Previous tag: $PREV_TAG"
           
-          # Initialize category files
-          echo "" > fixes.txt
-          echo "" > features.txt
-          echo "" > improvements.txt
-          echo "" > others.txt
-          
           if [ -n "$PREV_TAG" ]; then
-            # Get commits between previous tag and current, save to temp file
-            git log --pretty=format:"%s" $PREV_TAG..$CURRENT_TAG 2>/dev/null > all_commits.txt || echo "Initial release" > all_commits.txt
-            
-            # Process each commit
-            while IFS= read -r line || [ -n "$line" ]; do
-              # Skip merge commits and empty lines
-              if [[ -z "$line" ]] || [[ "$line" == Merge* ]]; then
-                continue
-              fi
-              
-              # Categorize commits based on conventional commit prefixes
-              if [[ "$line" == fix:* ]] || [[ "$line" == fix\(*\):* ]]; then
-                # Extract message after prefix
-                msg=$(echo "$line" | sed 's/^fix[:(][^)]*[)]*: *//' | sed 's/^fix: *//')
-                echo "- 🐛 $msg" >> fixes.txt
-              elif [[ "$line" == feat:* ]] || [[ "$line" == feat\(*\):* ]]; then
-                msg=$(echo "$line" | sed 's/^feat[:(][^)]*[)]*: *//' | sed 's/^feat: *//')
-                echo "- ✨ $msg" >> features.txt
-              elif [[ "$line" == perf:* ]] || [[ "$line" == refactor:* ]] || [[ "$line" == style:* ]]; then
-                msg=$(echo "$line" | sed 's/^[a-z]*[:(][^)]*[)]*: *//' | sed 's/^[a-z]*: *//')
-                echo "- ⚡ $msg" >> improvements.txt
-              elif [[ "$line" == chore:* ]] || [[ "$line" == docs:* ]] || [[ "$line" == build:* ]] || [[ "$line" == ci:* ]] || [[ "$line" == test:* ]]; then
-                # chore, docs, build, ci, test commits go to others
-                msg=$(echo "$line" | sed 's/^[a-z]*[:(][^)]*[)]*: *//' | sed 's/^[a-z]*: *//')
-                echo "- 🔧 $msg" >> others.txt
-              else
-                # Any other commits
-                echo "- 📝 $line" >> others.txt
-              fi
-            done < all_commits.txt
+            # Get commits between previous tag and current
+            git log --pretty=format:"- %s" $PREV_TAG..$CURRENT_TAG 2>/dev/null > commits.txt || echo "- Initial release" > commits.txt
           else
-            echo "- 🎉 Initial release" > others.txt
+            # Get recent commits for this tag if no previous tag
+            git log --pretty=format:"- %s" -20 $CURRENT_TAG 2>/dev/null > commits.txt || echo "- Initial release" > commits.txt
           fi
           
-          # Combine all categories
-          echo "### 🐛 Bug 修复" > commits.txt
-          if [ -s fixes.txt ] && [ "$(cat fixes.txt | tr -d '[:space:]')" != "" ]; then
-            cat fixes.txt >> commits.txt
-          else
-            echo "_无_" >> commits.txt
-          fi
-          
-          echo "" >> commits.txt
-          echo "### ✨ 新功能" >> commits.txt
-          if [ -s features.txt ] && [ "$(cat features.txt | tr -d '[:space:]')" != "" ]; then
-            cat features.txt >> commits.txt
-          else
-            echo "_无_" >> commits.txt
-          fi
-          
-          echo "" >> commits.txt
-          echo "### ⚡ 优化改进" >> commits.txt
-          if [ -s improvements.txt ] && [ "$(cat improvements.txt | tr -d '[:space:]')" != "" ]; then
-            cat improvements.txt >> commits.txt
-          else
-            echo "_无_" >> commits.txt
-          fi
-          
-          echo "" >> commits.txt
-          echo "### 📝 其他更新" >> commits.txt
-          if [ -s others.txt ] && [ "$(cat others.txt | tr -d '[:space:]')" != "" ]; then
-            cat others.txt >> commits.txt
-          else
-            echo "_无_" >> commits.txt
-          fi
+          # Filter out merge commits
+          grep -v "^- Merge" commits.txt > commits_filtered.txt || true
+          mv commits_filtered.txt commits.txt
           
           echo "Got commits:"
           cat commits.txt
@@ -422,12 +361,14 @@ jobs:
           cat << 'EOFHEADER' > release_notes.md
           ## 📺 FlutterIPTV VERSION_PLACEHOLDER
           
+          ### 📝 更新内容
+          
           EOFHEADER
           
           # Replace version placeholder
           sed -i "s/VERSION_PLACEHOLDER/${VERSION}/g" release_notes.md
           
-          # Add commits section
+          # Add commits
           cat commits.txt >> release_notes.md
           
           cat << EOFBODY >> release_notes.md
@@ -444,49 +385,18 @@ jobs:
           #### 📱 Android 手机版
           | 文件 | 说明 |
           |------|------|
-          | [flutteriptv-Android-Mobile-arm64-v8a.apk](${BASE_URL}/flutteriptv-Android-Mobile-arm64-v8a.apk) | 64位 ARM 设备（推荐，适用于大多数现代手机） |
-          | [flutteriptv-Android-Mobile-armeabi-v7a.apk](${BASE_URL}/flutteriptv-Android-Mobile-armeabi-v7a.apk) | 32位 ARM 设备（旧款手机） |
+          | [flutteriptv-Android-Mobile-arm64-v8a.apk](${BASE_URL}/flutteriptv-Android-Mobile-arm64-v8a.apk) | 64位 ARM 设备（推荐） |
+          | [flutteriptv-Android-Mobile-armeabi-v7a.apk](${BASE_URL}/flutteriptv-Android-Mobile-armeabi-v7a.apk) | 32位 ARM 设备 |
           | [flutteriptv-Android-Mobile-x86_64.apk](${BASE_URL}/flutteriptv-Android-Mobile-x86_64.apk) | x86_64 模拟器 |
-          | [flutteriptv-Android-Mobile-universal.apk](${BASE_URL}/flutteriptv-Android-Mobile-universal.apk) | 通用版（文件较大，兼容所有设备） |
+          | [flutteriptv-Android-Mobile-universal.apk](${BASE_URL}/flutteriptv-Android-Mobile-universal.apk) | 通用版 |
           
           #### 📺 Android TV 电视版
           | 文件 | 说明 |
           |------|------|
-          | [flutteriptv-AndroidTV-arm64-v8a.apk](${BASE_URL}/flutteriptv-AndroidTV-arm64-v8a.apk) | 64位 ARM 电视设备（Fire TV Stick 4K、Shield TV 等） |
-          | [flutteriptv-AndroidTV-armeabi-v7a.apk](${BASE_URL}/flutteriptv-AndroidTV-armeabi-v7a.apk) | 32位 ARM 电视设备（旧款 Fire TV） |
+          | [flutteriptv-AndroidTV-arm64-v8a.apk](${BASE_URL}/flutteriptv-AndroidTV-arm64-v8a.apk) | 64位 ARM 电视（推荐） |
+          | [flutteriptv-AndroidTV-armeabi-v7a.apk](${BASE_URL}/flutteriptv-AndroidTV-armeabi-v7a.apk) | 32位 ARM 电视 |
           | [flutteriptv-AndroidTV-x86_64.apk](${BASE_URL}/flutteriptv-AndroidTV-x86_64.apk) | x86_64 电视模拟器 |
-          | [flutteriptv-AndroidTV-universal.apk](${BASE_URL}/flutteriptv-AndroidTV-universal.apk) | 通用电视版（文件较大，兼容所有电视设备） |
-          
-          ---
-          
-          ### ✨ 主要功能
-          - 支持 M3U/M3U8 播放列表
-          - 高质量视频播放（HLS、DASH、RTMP）
-          - 频道分组和收藏功能
-          - EPG 电子节目单支持
-          - Android TV 完整遥控器导航支持
-          - 明亮/暗黑主题切换
-          
-          ### 📋 安装说明
-          
-          **Windows:**
-          1. 下载 \`flutteriptv-Windows-x64-Setup.exe\`
-          2. 运行安装程序并按提示操作
-          3. 从开始菜单或桌面快捷方式启动
-          
-          **Android 手机:**
-          1. 下载适合您设备的 APK 文件
-          2. 如有提示，请启用"允许安装未知来源应用"
-          3. 安装并打开应用
-          
-          **Android TV:**
-          1. 下载适合您电视的 APK 文件
-          2. 通过 USB、ADB 或文件管理器安装
-          3. 从电视应用列表启动
-          
-          ---
-          
-          > 💡 **提示:** ARM64 设备建议使用 \`arm64-v8a\` 版本以获得更好的性能。
+          | [flutteriptv-AndroidTV-universal.apk](${BASE_URL}/flutteriptv-AndroidTV-universal.apk) | 通用电视版 |
           EOFBODY
       
       - name: Create Release
