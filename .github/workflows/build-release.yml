@@ -340,28 +340,36 @@ jobs:
           echo "" > others.txt
           
           if [ -n "$PREV_TAG" ]; then
-            # Get commits between previous tag and current
-            git log --pretty=format:"%s" $PREV_TAG..$CURRENT_TAG 2>/dev/null | while read -r line; do
+            # Get commits between previous tag and current, save to temp file
+            git log --pretty=format:"%s" $PREV_TAG..$CURRENT_TAG 2>/dev/null > all_commits.txt || echo "Initial release" > all_commits.txt
+            
+            # Process each commit
+            while IFS= read -r line || [ -n "$line" ]; do
               # Skip merge commits and empty lines
               if [[ -z "$line" ]] || [[ "$line" == Merge* ]]; then
                 continue
               fi
               
               # Categorize commits based on conventional commit prefixes
-              if [[ "$line" == fix:* ]] || [[ "$line" == fix\(*\):* ]] || [[ "$line" == *修复* ]] || [[ "$line" == *fix* ]]; then
+              if [[ "$line" == fix:* ]] || [[ "$line" == fix\(*\):* ]]; then
                 # Extract message after prefix
                 msg=$(echo "$line" | sed 's/^fix[:(][^)]*[)]*: *//' | sed 's/^fix: *//')
                 echo "- 🐛 $msg" >> fixes.txt
-              elif [[ "$line" == feat:* ]] || [[ "$line" == feat\(*\):* ]] || [[ "$line" == *新增* ]] || [[ "$line" == *添加* ]]; then
+              elif [[ "$line" == feat:* ]] || [[ "$line" == feat\(*\):* ]]; then
                 msg=$(echo "$line" | sed 's/^feat[:(][^)]*[)]*: *//' | sed 's/^feat: *//')
                 echo "- ✨ $msg" >> features.txt
-              elif [[ "$line" == perf:* ]] || [[ "$line" == refactor:* ]] || [[ "$line" == style:* ]] || [[ "$line" == *优化* ]] || [[ "$line" == *改进* ]]; then
+              elif [[ "$line" == perf:* ]] || [[ "$line" == refactor:* ]] || [[ "$line" == style:* ]]; then
                 msg=$(echo "$line" | sed 's/^[a-z]*[:(][^)]*[)]*: *//' | sed 's/^[a-z]*: *//')
                 echo "- ⚡ $msg" >> improvements.txt
+              elif [[ "$line" == chore:* ]] || [[ "$line" == docs:* ]] || [[ "$line" == build:* ]] || [[ "$line" == ci:* ]] || [[ "$line" == test:* ]]; then
+                # chore, docs, build, ci, test commits go to others
+                msg=$(echo "$line" | sed 's/^[a-z]*[:(][^)]*[)]*: *//' | sed 's/^[a-z]*: *//')
+                echo "- 🔧 $msg" >> others.txt
               else
+                # Any other commits
                 echo "- 📝 $line" >> others.txt
               fi
-            done
+            done < all_commits.txt
           else
             echo "- 🎉 Initial release" > others.txt
           fi
