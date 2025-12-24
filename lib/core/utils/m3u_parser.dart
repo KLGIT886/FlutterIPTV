@@ -9,7 +9,7 @@ import '../models/channel.dart';
 class M3UParseResult {
   final List<Channel> channels;
   final String? epgUrl;
-  
+
   M3UParseResult({required this.channels, this.epgUrl});
 }
 
@@ -21,7 +21,7 @@ class M3UParser {
 
   /// Parse result containing channels and metadata
   static M3UParseResult? _lastParseResult;
-  
+
   /// Get the last parse result (for accessing EPG URL)
   static M3UParseResult? get lastParseResult => _lastParseResult;
 
@@ -71,8 +71,7 @@ class M3UParser {
   }
 
   /// Parse M3U content from a local file
-  static Future<List<Channel>> parseFromFile(
-      String filePath, int playlistId) async {
+  static Future<List<Channel>> parseFromFile(String filePath, int playlistId) async {
     try {
       debugPrint('DEBUG: 开始从本地文件读取播放列表: $filePath');
       final file = File(filePath);
@@ -125,7 +124,7 @@ class M3UParser {
         }
       }
     }
-    
+
     if (!foundHeader) {
       debugPrint('DEBUG: 警告 - 缺少M3U头部标记，尝试继续解析');
       // Try parsing anyway, some files don't have the header
@@ -170,8 +169,7 @@ class M3UParser {
             );
 
             // Debug logging for channel creation
-            debugPrint(
-                'DEBUG: 创建频道 - 名称: ${channel.name}, 台标: ${channel.logoUrl ?? "无"}');
+            debugPrint('DEBUG: 创建频道 - 名称: ${channel.name}, 台标: ${channel.logoUrl ?? "无"}');
 
             channels.add(channel);
             validChannelCount++;
@@ -191,15 +189,14 @@ class M3UParser {
       }
     }
 
-    debugPrint(
-        'DEBUG: 解析完成 - 有效频道: $validChannelCount, 无效URL: $invalidUrlCount');
-    
+    debugPrint('DEBUG: 解析完成 - 有效频道: $validChannelCount, 无效URL: $invalidUrlCount');
+
     // Save parse result with EPG URL
     _lastParseResult = M3UParseResult(channels: channels, epgUrl: epgUrl);
-    
+
     return channels;
   }
-  
+
   /// Extract EPG URL from M3U header line
   /// Supports: x-tvg-url="url" or url-tvg="url"
   static String? _extractEpgUrl(String headerLine) {
@@ -210,7 +207,7 @@ class M3UParser {
       RegExp(r"x-tvg-url='([^']+)'", caseSensitive: false),
       RegExp(r"url-tvg='([^']+)'", caseSensitive: false),
     ];
-    
+
     for (final pattern in patterns) {
       final match = pattern.firstMatch(headerLine);
       if (match != null && match.groupCount >= 1) {
@@ -266,8 +263,7 @@ class M3UParser {
     final Map<String, String> attributes = {};
 
     // Regular expression to match key="value" or key=value patterns
-    final RegExp attrRegex =
-        RegExp(r'(\S+?)=["\u0027]?([^"\u0027]+)["\u0027]?(?:\s|$)');
+    final RegExp attrRegex = RegExp(r'(\S+?)=["\u0027]?([^"\u0027]+)["\u0027]?(?:\s|$)');
 
     for (final match in attrRegex.allMatches(content)) {
       if (match.groupCount >= 2) {
@@ -286,14 +282,8 @@ class M3UParser {
   static bool _isValidUrl(String url) {
     try {
       final uri = Uri.parse(url);
-      final isValid = uri.hasScheme &&
-          (uri.scheme == 'http' ||
-              uri.scheme == 'https' ||
-              uri.scheme == 'rtmp' ||
-              uri.scheme == 'rtsp' ||
-              uri.scheme == 'mms' ||
-              uri.scheme == 'mmsh' ||
-              uri.scheme == 'mmst');
+      final isValid =
+          uri.hasScheme && (uri.scheme == 'http' || uri.scheme == 'https' || uri.scheme == 'rtmp' || uri.scheme == 'rtsp' || uri.scheme == 'mms' || uri.scheme == 'mmsh' || uri.scheme == 'mmst');
 
       if (!isValid) {
         debugPrint('DEBUG: URL验证失败 - Scheme: ${uri.scheme}, Host: ${uri.host}');

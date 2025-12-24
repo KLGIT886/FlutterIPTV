@@ -92,7 +92,7 @@ class PlayerProvider extends ChangeNotifier {
   DateTime? _lastErrorTime;
   String? _lastErrorMessage;
   bool _errorDisplayed = false; // 标记错误是否已被显示
-  
+
   void _setError(String error) {
     final now = DateTime.now();
     // 如果错误已经被显示过，不再设置
@@ -100,9 +100,7 @@ class PlayerProvider extends ChangeNotifier {
       return;
     }
     // 相同错误在30秒内不重复设置
-    if (_lastErrorMessage == error && 
-        _lastErrorTime != null &&
-        now.difference(_lastErrorTime!).inSeconds < 30) {
+    if (_lastErrorMessage == error && _lastErrorTime != null && now.difference(_lastErrorTime!).inSeconds < 30) {
       return;
     }
     _lastErrorMessage = error;
@@ -148,7 +146,7 @@ class PlayerProvider extends ChangeNotifier {
     if (_useNativePlayer) {
       return;
     }
-    
+
     if (!_useExoPlayer) {
       _initMediaKitPlayer(useSoftwareDecoding: useSoftwareDecoding);
     }
@@ -174,8 +172,12 @@ class PlayerProvider extends ChangeNotifier {
 
   void _setupMediaKitListeners() {
     _mediaKitPlayer!.stream.playing.listen((playing) {
-      if (playing) { _state = PlayerState.playing; _retryCount = 0; }
-      else if (_state == PlayerState.playing) { _state = PlayerState.paused; }
+      if (playing) {
+        _state = PlayerState.playing;
+        _retryCount = 0;
+      } else if (_state == PlayerState.playing) {
+        _state = PlayerState.paused;
+      }
       notifyListeners();
     });
 
@@ -188,8 +190,14 @@ class PlayerProvider extends ChangeNotifier {
       notifyListeners();
     });
 
-    _mediaKitPlayer!.stream.position.listen((pos) { _position = pos; notifyListeners(); });
-    _mediaKitPlayer!.stream.duration.listen((dur) { _duration = dur; notifyListeners(); });
+    _mediaKitPlayer!.stream.position.listen((pos) {
+      _position = pos;
+      notifyListeners();
+    });
+    _mediaKitPlayer!.stream.duration.listen((dur) {
+      _duration = dur;
+      notifyListeners();
+    });
     _mediaKitPlayer!.stream.tracks.listen((tracks) {
       for (final track in tracks.video) {
         if (track.codec != null) _videoCodec = track.codec!;
@@ -197,11 +205,17 @@ class PlayerProvider extends ChangeNotifier {
       }
       notifyListeners();
     });
-    _mediaKitPlayer!.stream.volume.listen((vol) { _volume = vol / 100; notifyListeners(); });
+    _mediaKitPlayer!.stream.volume.listen((vol) {
+      _volume = vol / 100;
+      notifyListeners();
+    });
     _mediaKitPlayer!.stream.error.listen((err) {
       if (err.isNotEmpty) {
-        if (_shouldTrySoftwareFallback(err)) { _attemptSoftwareFallback(); }
-        else { _setError(err); }
+        if (_shouldTrySoftwareFallback(err)) {
+          _attemptSoftwareFallback();
+        } else {
+          _setError(err);
+        }
       }
     });
     _mediaKitPlayer!.stream.width.listen((_) => notifyListeners());
@@ -220,9 +234,7 @@ class PlayerProvider extends ChangeNotifier {
 
   bool _shouldTrySoftwareFallback(String error) {
     final lowerError = error.toLowerCase();
-    return (lowerError.contains('codec') || lowerError.contains('decoder') ||
-            lowerError.contains('hwdec') || lowerError.contains('mediacodec')) &&
-        _retryCount < _maxRetries;
+    return (lowerError.contains('codec') || lowerError.contains('decoder') || lowerError.contains('hwdec') || lowerError.contains('mediacodec')) && _retryCount < _maxRetries;
   }
 
   void _attemptSoftwareFallback() {
@@ -232,15 +244,14 @@ class PlayerProvider extends ChangeNotifier {
     if (channelToPlay != null) playChannel(channelToPlay);
   }
 
-
   // ============ ExoPlayer Methods ============
 
   Future<void> _initExoPlayer(String url) async {
     await _disposeExoPlayer();
-    
+
     // 增加 key 强制 VideoPlayer widget 重建
     _exoPlayerKey++;
-    
+
     // 先通知 UI exoPlayer 已被释放
     notifyListeners();
 
@@ -256,7 +267,7 @@ class PlayerProvider extends ChangeNotifier {
       await _exoPlayer!.initialize();
       // 初始化完成后立即通知 UI
       notifyListeners();
-      
+
       await _exoPlayer!.setVolume(_isMuted ? 0 : _volume);
       await _exoPlayer!.play();
       _state = PlayerState.playing;
@@ -273,17 +284,17 @@ class PlayerProvider extends ChangeNotifier {
     _position = value.position;
     _duration = value.duration;
 
-    if (value.hasError) { 
+    if (value.hasError) {
       _setError(value.errorDescription ?? 'Unknown error');
       return;
-    } else if (value.isPlaying) { 
-      _state = PlayerState.playing; 
-    } else if (value.isBuffering) { 
-      _state = PlayerState.buffering; 
-    } else if (value.isInitialized && !value.isPlaying) { 
-      _state = PlayerState.paused; 
+    } else if (value.isPlaying) {
+      _state = PlayerState.playing;
+    } else if (value.isBuffering) {
+      _state = PlayerState.buffering;
+    } else if (value.isInitialized && !value.isPlaying) {
+      _state = PlayerState.paused;
     }
-    
+
     notifyListeners();
   }
 
@@ -308,9 +319,16 @@ class PlayerProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      if (_useExoPlayer) { await _initExoPlayer(channel.url); }
-      else { await _mediaKitPlayer?.open(Media(channel.url)); _state = PlayerState.playing; }
-    } catch (e) { _setError('Failed to play channel: $e'); return; }
+      if (_useExoPlayer) {
+        await _initExoPlayer(channel.url);
+      } else {
+        await _mediaKitPlayer?.open(Media(channel.url));
+        _state = PlayerState.playing;
+      }
+    } catch (e) {
+      _setError('Failed to play channel: $e');
+      return;
+    }
     notifyListeners();
   }
 
@@ -323,9 +341,16 @@ class PlayerProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      if (_useExoPlayer) { await _initExoPlayer(url); }
-      else { await _mediaKitPlayer?.open(Media(url)); _state = PlayerState.playing; }
-    } catch (e) { _setError('Failed to play: $e'); return; }
+      if (_useExoPlayer) {
+        await _initExoPlayer(url);
+      } else {
+        await _mediaKitPlayer?.open(Media(url));
+        _state = PlayerState.playing;
+      }
+    } catch (e) {
+      _setError('Failed to play: $e');
+      return;
+    }
     notifyListeners();
   }
 
@@ -333,11 +358,18 @@ class PlayerProvider extends ChangeNotifier {
     if (_useExoPlayer) {
       if (_exoPlayer == null) return;
       _exoPlayer!.value.isPlaying ? _exoPlayer!.pause() : _exoPlayer!.play();
-    } else { _mediaKitPlayer?.playOrPause(); }
+    } else {
+      _mediaKitPlayer?.playOrPause();
+    }
   }
 
-  void pause() { _useExoPlayer ? _exoPlayer?.pause() : _mediaKitPlayer?.pause(); }
-  void play() { _useExoPlayer ? _exoPlayer?.play() : _mediaKitPlayer?.play(); }
+  void pause() {
+    _useExoPlayer ? _exoPlayer?.pause() : _mediaKitPlayer?.pause();
+  }
+
+  void play() {
+    _useExoPlayer ? _exoPlayer?.play() : _mediaKitPlayer?.play();
+  }
 
   Future<void> stop() async {
     if (_useExoPlayer) {
@@ -350,9 +382,18 @@ class PlayerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void seek(Duration position) { _useExoPlayer ? _exoPlayer?.seekTo(position) : _mediaKitPlayer?.seek(position); }
-  void seekForward(int seconds) { seek(_position + Duration(seconds: seconds)); }
-  void seekBackward(int seconds) { final newPos = _position - Duration(seconds: seconds); seek(newPos.isNegative ? Duration.zero : newPos); }
+  void seek(Duration position) {
+    _useExoPlayer ? _exoPlayer?.seekTo(position) : _mediaKitPlayer?.seek(position);
+  }
+
+  void seekForward(int seconds) {
+    seek(_position + Duration(seconds: seconds));
+  }
+
+  void seekBackward(int seconds) {
+    final newPos = _position - Duration(seconds: seconds);
+    seek(newPos.isNegative ? Duration.zero : newPos);
+  }
 
   void setVolume(double volume) {
     _volume = volume.clamp(0.0, 1.0);
@@ -407,10 +448,25 @@ class PlayerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleFullscreen() { _isFullscreen = !_isFullscreen; notifyListeners(); }
-  void setFullscreen(bool fullscreen) { _isFullscreen = fullscreen; notifyListeners(); }
-  void setControlsVisible(bool visible) { _controlsVisible = visible; notifyListeners(); }
-  void toggleControls() { _controlsVisible = !_controlsVisible; notifyListeners(); }
+  void toggleFullscreen() {
+    _isFullscreen = !_isFullscreen;
+    notifyListeners();
+  }
+
+  void setFullscreen(bool fullscreen) {
+    _isFullscreen = fullscreen;
+    notifyListeners();
+  }
+
+  void setControlsVisible(bool visible) {
+    _controlsVisible = visible;
+    notifyListeners();
+  }
+
+  void toggleControls() {
+    _controlsVisible = !_controlsVisible;
+    notifyListeners();
+  }
 
   void playNext(List<Channel> channels) {
     if (_currentChannel == null || channels.isEmpty) return;

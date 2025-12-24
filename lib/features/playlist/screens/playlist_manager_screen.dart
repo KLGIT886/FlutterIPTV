@@ -62,13 +62,9 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
                 actions: [
                   IconButton(
                     icon: Icon(
-                      provider.sortBy.contains('name')
-                          ? Icons.sort_by_alpha_rounded
-                          : Icons.calendar_month_rounded,
+                      provider.sortBy.contains('name') ? Icons.sort_by_alpha_rounded : Icons.calendar_month_rounded,
                     ),
-                    tooltip: provider.sortBy.contains('name')
-                        ? 'Sort by Date'
-                        : 'Sort by Name',
+                    tooltip: provider.sortBy.contains('name') ? 'Sort by Date' : 'Sort by Name',
                     onPressed: provider.isLoading ? null : provider.toggleSortOrder,
                   ),
                   const SizedBox(width: 8),
@@ -83,9 +79,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
 
                   // Playlists List
                   Expanded(
-                    child: provider.playlists.isEmpty
-                        ? _buildEmptyState()
-                        : _buildPlaylistsList(provider),
+                    child: provider.playlists.isEmpty ? _buildEmptyState() : _buildPlaylistsList(provider),
                   ),
                 ],
               ),
@@ -190,8 +184,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
                 child: _buildFocusableTextField(
                   controller: _nameController,
                   focusNode: _nameFocusNode,
-                  hintText:
-                      AppStrings.of(context)?.playlistName ?? 'Playlist Name',
+                  hintText: AppStrings.of(context)?.playlistName ?? 'Playlist Name',
                   prefixIcon: Icons.label_outline,
                   autofocus: true,
                 ),
@@ -216,9 +209,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
                     child: FocusTraversalOrder(
                       order: const NumericFocusOrder(3),
                       child: _buildActionButton(
-                        onPressed: provider.isLoading
-                            ? null
-                            : () => _addPlaylist(provider),
+                        onPressed: provider.isLoading ? null : () => _addPlaylist(provider),
                         icon: provider.isLoading
                             ? const SizedBox(
                                 width: 18,
@@ -229,11 +220,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
                                 ),
                               )
                             : const Icon(Icons.add_rounded, size: 20),
-                        label: provider.isLoading
-                            ? (AppStrings.of(context)?.importing ??
-                                'Importing...')
-                            : (AppStrings.of(context)?.addFromUrl ??
-                                'Add from URL'),
+                        label: provider.isLoading ? (AppStrings.of(context)?.importing ?? 'Importing...') : (AppStrings.of(context)?.addFromUrl ?? 'Add from URL'),
                         isPrimary: true,
                       ),
                     ),
@@ -295,8 +282,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
                 decoration: BoxDecoration(
                   color: AppTheme.errorColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border:
-                      Border.all(color: AppTheme.errorColor.withOpacity(0.3)),
+                  border: Border.all(color: AppTheme.errorColor.withOpacity(0.3)),
                 ),
                 child: Row(
                   children: [
@@ -349,8 +335,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
       onKeyEvent: (node, event) {
         // Allow Enter/Select to focus the text field for editing
         if (event is KeyDownEvent) {
-          if (event.logicalKey == LogicalKeyboardKey.select ||
-              event.logicalKey == LogicalKeyboardKey.enter) {
+          if (event.logicalKey == LogicalKeyboardKey.select || event.logicalKey == LogicalKeyboardKey.enter) {
             // TextField is already focused, just allow default behavior
             return KeyEventResult.ignored;
           }
@@ -422,9 +407,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
           decoration: BoxDecoration(
             color: isPrimary ? AppTheme.primaryColor : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
-            border: isPrimary
-                ? null
-                : Border.all(color: AppTheme.primaryColor.withOpacity(0.5)),
+            border: isPrimary ? null : Border.all(color: AppTheme.primaryColor.withOpacity(0.5)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -449,7 +432,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
         ),
       );
     }
-    
+
     // 非TV端保持原有逻辑
     return Builder(
       builder: (context) {
@@ -459,9 +442,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
           },
           onKeyEvent: (node, event) {
             if (event is KeyDownEvent) {
-              if (event.logicalKey == LogicalKeyboardKey.select ||
-                  event.logicalKey == LogicalKeyboardKey.enter ||
-                  event.logicalKey == LogicalKeyboardKey.gameButtonA) {
+              if (event.logicalKey == LogicalKeyboardKey.select || event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.gameButtonA) {
                 onPressed?.call();
                 return KeyEventResult.handled;
               }
@@ -510,9 +491,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppTheme.primaryColor,
                             side: BorderSide(
-                              color: isFocused
-                                  ? AppTheme.primaryColor
-                                  : AppTheme.primaryColor.withOpacity(0.5),
+                              color: isFocused ? AppTheme.primaryColor : AppTheme.primaryColor.withOpacity(0.5),
                               width: isFocused ? 2 : 1,
                             ),
                             padding: const EdgeInsets.symmetric(
@@ -537,7 +516,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
     final platformText = PlatformDetector.isTV
         ? (AppStrings.of(context)?.addFirstPlaylistTV ?? 'Add your first M3U playlist\nYou can import via USB or scan QR code')
         : (AppStrings.of(context)?.addFirstPlaylist ?? 'Add your first M3U playlist above');
-            
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -592,7 +571,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
   Widget _buildPlaylistCard(PlaylistProvider provider, dynamic playlist) {
     final isTV = PlatformDetector.isTV;
     final isActive = provider.activePlaylist?.id == playlist.id;
-    
+
     // TV端使用 FocusTraversalGroup 让内部按钮可以获取焦点
     if (isTV) {
       return FocusTraversalGroup(
@@ -613,9 +592,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
             color: isActive ? null : AppTheme.getSurfaceColor(context),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isActive
-                  ? AppTheme.primaryColor.withOpacity(0.5)
-                  : Colors.transparent,
+              color: isActive ? AppTheme.primaryColor.withOpacity(0.5) : Colors.transparent,
               width: 1,
             ),
           ),
@@ -756,7 +733,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
         ),
       );
     }
-    
+
     // 非TV端保持原有逻辑
     return TVFocusable(
       onSelect: () {
@@ -981,8 +958,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(AppStrings.of(context)?.pleaseEnterPlaylistName ??
-              'Please enter a playlist name'),
+          content: Text(AppStrings.of(context)?.pleaseEnterPlaylistName ?? 'Please enter a playlist name'),
           backgroundColor: AppTheme.errorColor,
         ),
       );
@@ -992,8 +968,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
     if (url.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(AppStrings.of(context)?.pleaseEnterPlaylistUrl ??
-              'Please enter a playlist URL'),
+          content: Text(AppStrings.of(context)?.pleaseEnterPlaylistUrl ?? 'Please enter a playlist URL'),
           backgroundColor: AppTheme.errorColor,
         ),
       );
@@ -1005,10 +980,9 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
 
       if (playlist != null && mounted) {
         // Set the new playlist as active and load its channels
-        provider.setActivePlaylist(playlist,
-            favoritesProvider: context.read<FavoritesProvider>());
+        provider.setActivePlaylist(playlist, favoritesProvider: context.read<FavoritesProvider>());
         await context.read<ChannelProvider>().loadChannels(playlist.id!);
-        
+
         // Auto-apply EPG URL if extracted from M3U
         if (provider.lastExtractedEpgUrl != null) {
           final settingsProvider = context.read<SettingsProvider>();
@@ -1037,10 +1011,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                (AppStrings.of(context)?.playlistAdded ?? 'Added "{name}"')
-                    .replaceAll('{name}', playlist.name)
-                    .replaceAll('{count}', '${playlist.channelCount}')),
+            content: Text((AppStrings.of(context)?.playlistAdded ?? 'Added "{name}"').replaceAll('{name}', playlist.name).replaceAll('{count}', '${playlist.channelCount}')),
             backgroundColor: AppTheme.successColor,
           ),
         );
@@ -1057,11 +1028,10 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
     }
   }
 
-  Future<void> _refreshPlaylist(
-      PlaylistProvider provider, dynamic playlist) async {
+  Future<void> _refreshPlaylist(PlaylistProvider provider, dynamic playlist) async {
     debugPrint('DEBUG: 开始刷新播放列表: ${playlist.name}');
     final success = await provider.refreshPlaylist(playlist);
-    
+
     // refreshPlaylist 完成后 isLoading 应该已经是 false 了
     // 但为了确保，我们在这里等待一帧让 UI 更新
     await Future.delayed(const Duration(milliseconds: 100));
@@ -1070,7 +1040,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
       if (success) {
         // 后台加载频道，不阻塞 UI
         context.read<ChannelProvider>().loadAllChannels();
-        
+
         // Auto-apply EPG URL if extracted from M3U
         if (provider.lastExtractedEpgUrl != null) {
           final settingsProvider = context.read<SettingsProvider>();
@@ -1092,14 +1062,9 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              success
-                  ? (AppStrings.of(context)?.playlistRefreshed ??
-                      'Playlist refreshed successfully')
-                  : (AppStrings.of(context)?.playlistRefreshFailed ??
-                      'Failed to refresh playlist'),
+              success ? (AppStrings.of(context)?.playlistRefreshed ?? 'Playlist refreshed successfully') : (AppStrings.of(context)?.playlistRefreshFailed ?? 'Failed to refresh playlist'),
             ),
-            backgroundColor:
-                success ? AppTheme.successColor : AppTheme.errorColor,
+            backgroundColor: success ? AppTheme.successColor : AppTheme.errorColor,
           ),
         );
       }
@@ -1120,9 +1085,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
             style: TextStyle(color: AppTheme.getTextPrimary(context)),
           ),
           content: Text(
-            (AppStrings.of(context)?.deleteConfirmation ??
-                    'Are you sure you want to delete "{name}"? This will also remove all channels from this playlist.')
-                .replaceAll('{name}', playlist.name),
+            (AppStrings.of(context)?.deleteConfirmation ?? 'Are you sure you want to delete "{name}"? This will also remove all channels from this playlist.').replaceAll('{name}', playlist.name),
             style: TextStyle(color: AppTheme.getTextSecondary(context)),
           ),
           actions: [
@@ -1141,8 +1104,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
 
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(AppStrings.of(context)?.playlistDeleted ??
-                          'Playlist deleted'),
+                      content: Text(AppStrings.of(context)?.playlistDeleted ?? 'Playlist deleted'),
                       backgroundColor: AppTheme.successColor,
                     ),
                   );
@@ -1196,20 +1158,17 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
         if (!mounted) return;
 
         final filePath = result.files.single.path!;
-        final fileName =
-            result.files.single.name.replaceAll(RegExp(r'\.m3u8?'), '');
+        final fileName = result.files.single.name.replaceAll(RegExp(r'\.m3u8?'), '');
 
         try {
-          final playlist =
-              await provider.addPlaylistFromFile(fileName, filePath);
+          final playlist = await provider.addPlaylistFromFile(fileName, filePath);
 
           if (mounted) {
             // Set the new playlist as active and load its channels
             if (playlist != null) {
-              provider.setActivePlaylist(playlist,
-                  favoritesProvider: context.read<FavoritesProvider>());
+              provider.setActivePlaylist(playlist, favoritesProvider: context.read<FavoritesProvider>());
               await context.read<ChannelProvider>().loadChannels(playlist.id!);
-              
+
               // Auto-apply EPG URL if extracted from M3U
               if (provider.lastExtractedEpgUrl != null) {
                 final settingsProvider = context.read<SettingsProvider>();
@@ -1228,9 +1187,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
             }
 
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                  content: Text(AppStrings.of(context)?.playlistImported ??
-                      'Playlist imported successfully')),
+              SnackBar(content: Text(AppStrings.of(context)?.playlistImported ?? 'Playlist imported successfully')),
             );
             _nameController.clear();
             _urlController.clear();
@@ -1256,10 +1213,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text((AppStrings.of(context)?.errorPickingFile ??
-                      'Error picking file: {error}')
-                  .replaceAll('{error}', '$e'))),
+          SnackBar(content: Text((AppStrings.of(context)?.errorPickingFile ?? 'Error picking file: {error}').replaceAll('{error}', '$e'))),
         );
       }
     }

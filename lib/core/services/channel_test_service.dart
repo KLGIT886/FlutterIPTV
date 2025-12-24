@@ -26,16 +26,16 @@ class ChannelTestService {
   /// 测试单个频道
   Future<ChannelTestResult> testChannel(Channel channel) async {
     final stopwatch = Stopwatch()..start();
-    
+
     try {
       final uri = Uri.parse(channel.url);
-      
+
       // 根据协议类型选择测试方法
       if (uri.scheme == 'rtmp' || uri.scheme == 'rtsp') {
         // RTMP/RTSP 流无法通过 HTTP 测试，尝试 socket 连接
         return await _testSocketConnection(channel, uri, stopwatch);
       }
-      
+
       // HTTP/HTTPS 流测试 - 使用 GET 请求并只读取少量数据
       return await _testHttpStream(channel, uri, stopwatch);
     } on TimeoutException {
@@ -74,37 +74,37 @@ class ChannelTestService {
     HttpClient? client;
     HttpClientRequest? request;
     HttpClientResponse? response;
-    
+
     try {
       client = HttpClient();
       client.connectionTimeout = const Duration(seconds: _timeout);
-      
+
       // 使用 GET 请求
       request = await client.getUrl(uri).timeout(
-        const Duration(seconds: _timeout),
-      );
-      
+            const Duration(seconds: _timeout),
+          );
+
       // 设置常见的流媒体请求头
       request.headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
       request.headers.set('Accept', '*/*');
       request.headers.set('Connection', 'keep-alive');
-      
+
       response = await request.close().timeout(
-        const Duration(seconds: _timeout),
-      );
-      
+            const Duration(seconds: _timeout),
+          );
+
       stopwatch.stop();
-      
+
       // 检查响应状态
       // 流媒体服务器可能返回 200, 206 (部分内容), 或 302/301 (重定向)
       final statusCode = response.statusCode;
       final isAvailable = statusCode >= 200 && statusCode < 400;
-      
+
       // 检查 Content-Type 是否像流媒体 (用于调试日志)
       final contentType = response.headers.contentType?.toString() ?? '';
-      
+
       debugPrint('测试频道 ${channel.name}: HTTP $statusCode, Content-Type: $contentType');
-      
+
       return ChannelTestResult(
         channel: channel,
         isAvailable: isAvailable,
@@ -127,19 +127,19 @@ class ChannelTestService {
     Stopwatch stopwatch,
   ) async {
     Socket? socket;
-    
+
     try {
       final host = uri.host;
       final port = uri.port != 0 ? uri.port : (uri.scheme == 'rtmp' ? 1935 : 554);
-      
+
       socket = await Socket.connect(
         host,
         port,
         timeout: const Duration(seconds: _timeout),
       );
-      
+
       stopwatch.stop();
-      
+
       return ChannelTestResult(
         channel: channel,
         isAvailable: true,
@@ -163,20 +163,20 @@ class ChannelTestService {
     // 分批处理
     for (var i = 0; i < channels.length; i += _maxConcurrent) {
       final batch = channels.skip(i).take(_maxConcurrent).toList();
-      
+
       final futures = batch.map((channel) => testChannel(channel));
       final batchResults = await Future.wait(futures);
-      
+
       for (final result in batchResults) {
         completed++;
         results.add(result);
-        
+
         if (result.isAvailable) {
           available++;
         } else {
           unavailable++;
         }
-        
+
         yield ChannelTestProgress(
           total: total,
           completed: completed,

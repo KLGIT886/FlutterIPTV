@@ -39,7 +39,7 @@ class ChannelTestDialog extends StatefulWidget {
 class _ChannelTestDialogState extends State<ChannelTestDialog> {
   final ChannelTestService _testService = ChannelTestService();
   StreamSubscription<ChannelTestProgress>? _subscription;
-  
+
   bool _isTesting = false;
   bool _isComplete = false;
   int _total = 0;
@@ -116,11 +116,7 @@ class _ChannelTestDialogState extends State<ChannelTestDialog> {
   }
 
   Future<void> _moveToUnavailableGroup(BuildContext context) async {
-    final unavailableChannelIds = _results
-        .where((r) => !r.isAvailable)
-        .map((r) => r.channel.id)
-        .whereType<int>()
-        .toList();
+    final unavailableChannelIds = _results.where((r) => !r.isAvailable).map((r) => r.channel.id).whereType<int>().toList();
 
     if (unavailableChannelIds.isEmpty) return;
 
@@ -139,17 +135,15 @@ class _ChannelTestDialogState extends State<ChannelTestDialog> {
   void _runInBackground(BuildContext context) {
     // 停止当前测试
     _subscription?.cancel();
-    
+
     // 获取剩余未测试的频道
     final testedIds = _results.map((r) => r.channel.id).toSet();
-    final remainingChannels = widget.channels
-        .where((c) => !testedIds.contains(c.id))
-        .toList();
-    
+    final remainingChannels = widget.channels.where((c) => !testedIds.contains(c.id)).toList();
+
     // 启动后台测试
     final backgroundService = BackgroundTestService();
     backgroundService.startTest(remainingChannels);
-    
+
     // 关闭对话框，返回特殊标记表示后台执行
     Navigator.of(context).pop(ChannelTestDialogResult(
       results: _results,
@@ -497,9 +491,7 @@ class _ChannelTestDialogState extends State<ChannelTestDialog> {
             width: 28,
             height: 28,
             decoration: BoxDecoration(
-              color: result.isAvailable
-                  ? Colors.green.withOpacity(0.2)
-                  : AppTheme.errorColor.withOpacity(0.2),
+              color: result.isAvailable ? Colors.green.withOpacity(0.2) : AppTheme.errorColor.withOpacity(0.2),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
@@ -550,7 +542,6 @@ class _ChannelTestDialogState extends State<ChannelTestDialog> {
     );
   }
 }
-
 
 /// 后台测试进度对话框
 class BackgroundTestProgressDialog extends StatefulWidget {
@@ -790,7 +781,7 @@ class _BackgroundTestProgressDialogState extends State<BackgroundTestProgressDia
 
     // 移动到失效分类
     await context.read<ChannelProvider>().markChannelsAsUnavailable(unavailableChannelIds);
-    
+
     // 清除结果
     _backgroundService.clearResults();
 

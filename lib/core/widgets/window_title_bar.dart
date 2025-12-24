@@ -25,7 +25,7 @@ class WindowTitleBar extends StatefulWidget {
 class _WindowTitleBarState extends State<WindowTitleBar> {
   bool _isVisible = false;
   Timer? _hideTimer;
-  
+
   // 触发区域高度（鼠标进入此区域显示标题栏）
   static const double _triggerHeight = 8.0;
   // 标题栏高度
@@ -190,15 +190,11 @@ class _WindowButtonState extends State<_WindowButton> {
         child: Container(
           width: 46,
           height: 32,
-          color: _isHovered
-              ? (widget.hoverColor ?? const Color(0x33FFFFFF))
-              : Colors.transparent,
+          color: _isHovered ? (widget.hoverColor ?? const Color(0x33FFFFFF)) : Colors.transparent,
           child: Icon(
             widget.icon,
             size: 16,
-            color: _isHovered && widget.hoverColor != null
-                ? Colors.white
-                : AppTheme.textSecondaryDark,
+            color: _isHovered && widget.hoverColor != null ? Colors.white : AppTheme.textSecondaryDark,
           ),
         ),
       ),

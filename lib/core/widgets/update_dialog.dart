@@ -162,12 +162,10 @@ class UpdateDialog extends StatelessWidget {
     formatted = formatted.replaceAll(RegExp(r'\n\s*\n\s*\n'), '\n\n');
 
     // 处理列表项
-    formatted =
-        formatted.replaceAll(RegExp(r'^\s*[-*]\s+', multiLine: true), '• ');
+    formatted = formatted.replaceAll(RegExp(r'^\s*[-*]\s+', multiLine: true), '• ');
 
     // 处理标题
-    formatted =
-        formatted.replaceAll(RegExp(r'^\s*#+\s+(.+)$', multiLine: true), '\\1');
+    formatted = formatted.replaceAll(RegExp(r'^\s*#+\s+(.+)$', multiLine: true), '\\1');
 
     return formatted.trim();
   }

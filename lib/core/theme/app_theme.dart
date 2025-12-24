@@ -58,43 +58,35 @@ class AppTheme {
 
   // ============ Helper methods to get theme-aware colors ============
   static Color getBackgroundColor(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.dark 
-        ? backgroundColorDark : backgroundColorLight;
+    return Theme.of(context).brightness == Brightness.dark ? backgroundColorDark : backgroundColorLight;
   }
-  
+
   static Color getSurfaceColor(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.dark 
-        ? surfaceColorDark : surfaceColorLight;
+    return Theme.of(context).brightness == Brightness.dark ? surfaceColorDark : surfaceColorLight;
   }
-  
+
   static Color getCardColor(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.dark 
-        ? cardColorDark : cardColorLight;
+    return Theme.of(context).brightness == Brightness.dark ? cardColorDark : cardColorLight;
   }
-  
+
   static Color getTextPrimary(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.dark 
-        ? textPrimaryDark : textPrimaryLight;
+    return Theme.of(context).brightness == Brightness.dark ? textPrimaryDark : textPrimaryLight;
   }
-  
+
   static Color getTextSecondary(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.dark 
-        ? textSecondaryDark : textSecondaryLight;
+    return Theme.of(context).brightness == Brightness.dark ? textSecondaryDark : textSecondaryLight;
   }
-  
+
   static Color getTextMuted(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.dark 
-        ? textMutedDark : textMutedLight;
+    return Theme.of(context).brightness == Brightness.dark ? textMutedDark : textMutedLight;
   }
-  
+
   static Color getGlassColor(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.dark 
-        ? glassColorDark : glassColorLight;
+    return Theme.of(context).brightness == Brightness.dark ? glassColorDark : glassColorLight;
   }
-  
+
   static Color getGlassBorderColor(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.dark 
-        ? glassBorderColorDark : glassBorderColorLight;
+    return Theme.of(context).brightness == Brightness.dark ? glassBorderColorDark : glassBorderColorLight;
   }
 
   // Lotus Gradient - 莲花渐变
@@ -322,8 +314,7 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: glassColor,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
           borderSide: const BorderSide(color: glassBorderColor),
@@ -521,9 +512,7 @@ class GlassDecoration extends BoxDecoration {
           borderRadius: BorderRadius.circular(borderRadius),
           color: AppTheme.glassColor,
           border: Border.all(
-            color: focused
-                ? (glowColor ?? AppTheme.focusBorderColor)
-                : AppTheme.glassBorderColor,
+            color: focused ? (glowColor ?? AppTheme.focusBorderColor) : AppTheme.glassBorderColor,
             width: focused ? 2 : 1,
           ),
           boxShadow: focused

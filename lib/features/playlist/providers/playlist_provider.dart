@@ -15,17 +15,17 @@ class PlaylistProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   double _importProgress = 0.0;
-  
+
   /// Last extracted EPG URL from M3U file
   String? _lastExtractedEpgUrl;
   String? get lastExtractedEpgUrl => _lastExtractedEpgUrl;
-  
+
   /// Apply extracted EPG URL to settings if available
   Future<bool> applyExtractedEpgUrl(SettingsProvider settingsProvider) async {
     if (_lastExtractedEpgUrl == null || _lastExtractedEpgUrl!.isEmpty) {
       return false;
     }
-    
+
     try {
       debugPrint('DEBUG: 自动应用EPG URL: $_lastExtractedEpgUrl');
       await settingsProvider.setEpgUrl(_lastExtractedEpgUrl!);
@@ -121,15 +121,14 @@ class PlaylistProvider extends ChangeNotifier {
         createdAt: DateTime.now(),
       ).toMap();
 
-      playlistId =
-          await ServiceLocator.database.insert('playlists', playlistData);
+      playlistId = await ServiceLocator.database.insert('playlists', playlistData);
 
       _importProgress = 0.2;
       notifyListeners();
 
       // Parse M3U from URL
       final channels = await M3UParser.parseFromUrl(url, playlistId);
-      
+
       // Check for EPG URL in M3U header
       _lastExtractedEpgUrl = M3UParser.lastParseResult?.epgUrl;
       if (_lastExtractedEpgUrl != null) {
@@ -155,8 +154,7 @@ class PlaylistProvider extends ChangeNotifier {
         'playlists',
         {
           'last_updated': DateTime.now().millisecondsSinceEpoch,
-          'channel_count':
-              channels.length, // Store locally to avoid immediate recounting
+          'channel_count': channels.length, // Store locally to avoid immediate recounting
         },
         where: 'id = ?',
         whereArgs: [playlistId],
@@ -201,15 +199,14 @@ class PlaylistProvider extends ChangeNotifier {
         createdAt: DateTime.now(),
       ).toMap();
 
-      final playlistId =
-          await ServiceLocator.database.insert('playlists', playlistData);
+      final playlistId = await ServiceLocator.database.insert('playlists', playlistData);
 
       _importProgress = 0.2;
       notifyListeners();
 
       // Parse M3U content directly
       final channels = M3UParser.parse(content, playlistId);
-      
+
       // Check for EPG URL in M3U header
       _lastExtractedEpgUrl = M3UParser.lastParseResult?.epgUrl;
       if (_lastExtractedEpgUrl != null) {
@@ -233,9 +230,7 @@ class PlaylistProvider extends ChangeNotifier {
       // Save the content as a temporary file for future refreshes
       final tempDir = await getTemporaryDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final tempFile =
-          await File('${tempDir.path}/playlist_${playlistId}_$timestamp.m3u')
-              .writeAsString(content);
+      final tempFile = await File('${tempDir.path}/playlist_${playlistId}_$timestamp.m3u').writeAsString(content);
 
       debugPrint('DEBUG: 保存临时播放列表文件: ${tempFile.path}');
 
@@ -245,8 +240,7 @@ class PlaylistProvider extends ChangeNotifier {
         {
           'last_updated': DateTime.now().millisecondsSinceEpoch,
           'channel_count': channels.length,
-          'file_path':
-              tempFile.path, // Save temp file path for future refreshes
+          'file_path': tempFile.path, // Save temp file path for future refreshes
         },
         where: 'id = ?',
         whereArgs: [playlistId],
@@ -283,15 +277,14 @@ class PlaylistProvider extends ChangeNotifier {
         createdAt: DateTime.now(),
       ).toMap();
 
-      final playlistId =
-          await ServiceLocator.database.insert('playlists', playlistData);
+      final playlistId = await ServiceLocator.database.insert('playlists', playlistData);
 
       _importProgress = 0.2;
       notifyListeners();
 
       // Parse M3U from file
       final channels = await M3UParser.parseFromFile(filePath, playlistId);
-      
+
       // Check for EPG URL in M3U header
       _lastExtractedEpgUrl = M3UParser.lastParseResult?.epgUrl;
       if (_lastExtractedEpgUrl != null) {
@@ -357,18 +350,17 @@ class PlaylistProvider extends ChangeNotifier {
         where: 'id = ?',
         whereArgs: [playlist.id],
       );
-      
+
       if (dbResults.isEmpty) {
         throw Exception('Playlist not found in database');
       }
-      
+
       final freshPlaylist = Playlist.fromMap(dbResults.first);
       debugPrint('DEBUG: 从数据库重新加载 - URL: ${freshPlaylist.url}, FilePath: ${freshPlaylist.filePath}');
-      
+
       List<Channel> channels;
 
-      debugPrint(
-          'DEBUG: 播放列表源类型: ${freshPlaylist.isRemote ? "远程URL" : freshPlaylist.isLocal ? "本地文件" : "未知"}');
+      debugPrint('DEBUG: 播放列表源类型: ${freshPlaylist.isRemote ? "远程URL" : freshPlaylist.isLocal ? "本地文件" : "未知"}');
       debugPrint('DEBUG: 播放列表源路径: ${freshPlaylist.sourcePath}');
 
       if (freshPlaylist.isRemote) {
@@ -381,20 +373,16 @@ class PlaylistProvider extends ChangeNotifier {
         final file = File(freshPlaylist.filePath!);
         if (!await file.exists()) {
           debugPrint('DEBUG: 本地文件不存在: ${freshPlaylist.filePath}');
-          throw Exception(
-              'Local playlist file not found: ${freshPlaylist.filePath}');
+          throw Exception('Local playlist file not found: ${freshPlaylist.filePath}');
         }
 
-        channels =
-            await M3UParser.parseFromFile(freshPlaylist.filePath!, playlist.id!);
+        channels = await M3UParser.parseFromFile(freshPlaylist.filePath!, playlist.id!);
       } else {
         // Check if this is a content-imported playlist without a proper file path
-        debugPrint(
-            'DEBUG: 播放列表源无效，URL: ${freshPlaylist.url}, 文件路径: ${freshPlaylist.filePath}');
-        throw Exception(
-            'Invalid playlist source - URL: ${freshPlaylist.url}, File: ${freshPlaylist.filePath}');
+        debugPrint('DEBUG: 播放列表源无效，URL: ${freshPlaylist.url}, 文件路径: ${freshPlaylist.filePath}');
+        throw Exception('Invalid playlist source - URL: ${freshPlaylist.url}, File: ${freshPlaylist.filePath}');
       }
-      
+
       // Check for EPG URL in M3U header
       _lastExtractedEpgUrl = M3UParser.lastParseResult?.epgUrl;
       if (_lastExtractedEpgUrl != null) {
@@ -459,8 +447,7 @@ class PlaylistProvider extends ChangeNotifier {
   Future<bool> deletePlaylist(int playlistId) async {
     try {
       // Find the playlist before deletion to check for temp files
-      final playlist = _playlists.firstWhere((p) => p.id == playlistId,
-          orElse: () => Playlist(name: ''));
+      final playlist = _playlists.firstWhere((p) => p.id == playlistId, orElse: () => Playlist(name: ''));
 
       // Delete channels first (cascade should handle this, but being explicit)
       await ServiceLocator.database.delete(
@@ -506,9 +493,7 @@ class PlaylistProvider extends ChangeNotifier {
   }
 
   // Set active playlist
-  void setActivePlaylist(Playlist playlist,
-      {Function(int)? onPlaylistChanged,
-      FavoritesProvider? favoritesProvider}) async {
+  void setActivePlaylist(Playlist playlist, {Function(int)? onPlaylistChanged, FavoritesProvider? favoritesProvider}) async {
     debugPrint('DEBUG: 设置激活播放列表: ${playlist.name} (ID: ${playlist.id})');
     _activePlaylist = playlist;
 

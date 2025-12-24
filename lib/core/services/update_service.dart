@@ -7,10 +7,8 @@ import 'package:version/version.dart';
 import '../models/app_update.dart';
 
 class UpdateService {
-  static const String _githubRepoUrl =
-      'https://api.github.com/repos/shnulaa/FlutterIPTV/releases';
-  static const String _githubReleasesUrl =
-      'https://github.com/shnulaa/FlutterIPTV/releases';
+  static const String _githubRepoUrl = 'https://api.github.com/repos/shnulaa/FlutterIPTV/releases';
+  static const String _githubReleasesUrl = 'https://github.com/shnulaa/FlutterIPTV/releases';
 
   // 检查更新的间隔时间（小时）
   static const int _checkUpdateInterval = 24;
@@ -28,8 +26,7 @@ class UpdateService {
       if (!forceCheck) {
         final lastCheck = await _getLastUpdateCheckTime();
         final now = DateTime.now();
-        if (lastCheck != null &&
-            now.difference(lastCheck).inHours < _checkUpdateInterval) {
+        if (lastCheck != null && now.difference(lastCheck).inHours < _checkUpdateInterval) {
           debugPrint('UPDATE: 距离上次检查不足24小时，跳过本次检查');
           return null;
         }

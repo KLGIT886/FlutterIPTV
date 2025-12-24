@@ -11,13 +11,11 @@ class UpdateManager {
   final UpdateService _updateService = UpdateService();
 
   /// 检查更新并显示更新对话框
-  Future<void> checkAndShowUpdateDialog(BuildContext context,
-      {bool forceCheck = false}) async {
+  Future<void> checkAndShowUpdateDialog(BuildContext context, {bool forceCheck = false}) async {
     try {
       debugPrint('UPDATE_MANAGER: 开始检查更新...');
 
-      final update =
-          await _updateService.checkForUpdates(forceCheck: forceCheck);
+      final update = await _updateService.checkForUpdates(forceCheck: forceCheck);
 
       if (update != null && context.mounted) {
         debugPrint('UPDATE_MANAGER: 发现新版本，显示更新对话框');

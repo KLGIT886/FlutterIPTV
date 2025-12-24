@@ -31,12 +31,8 @@ class Playlist {
       url: map['url'] as String?,
       filePath: map['file_path'] as String?,
       isActive: (map['is_active'] as int?) == 1,
-      lastUpdated: map['last_updated'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(map['last_updated'] as int)
-          : null,
-      createdAt: map['created_at'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int)
-          : DateTime.now(),
+      lastUpdated: map['last_updated'] != null ? DateTime.fromMillisecondsSinceEpoch(map['last_updated'] as int) : null,
+      createdAt: map['created_at'] != null ? DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int) : DateTime.now(),
     );
   }
 
@@ -83,10 +79,7 @@ class Playlist {
   bool get isLocal => filePath != null && filePath!.isNotEmpty;
 
   /// Check if this is a temporary playlist (imported via QR)
-  bool get isTemporary =>
-      filePath != null &&
-      filePath!.contains('temp') &&
-      filePath!.contains('playlist_');
+  bool get isTemporary => filePath != null && filePath!.contains('temp') && filePath!.contains('playlist_');
 
   /// Get the source path (URL or file path)
   String get sourcePath => url ?? filePath ?? '';
@@ -101,6 +94,5 @@ class Playlist {
   int get hashCode => id.hashCode;
 
   @override
-  String toString() =>
-      'Playlist(id: $id, name: $name, channels: $channelCount)';
+  String toString() => 'Playlist(id: $id, name: $name, channels: $channelCount)';
 }

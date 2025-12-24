@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 /// Represents an IPTV channel
 class Channel {
   final int? id;
@@ -42,9 +40,7 @@ class Channel {
       groupName: map['group_name'] as String?,
       epgId: map['epg_id'] as String?,
       isActive: (map['is_active'] as int?) == 1,
-      createdAt: map['created_at'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int)
-          : DateTime.now(),
+      createdAt: map['created_at'] != null ? DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int) : DateTime.now(),
     );
   }
 

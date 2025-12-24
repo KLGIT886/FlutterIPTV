@@ -8,8 +8,7 @@ class SettingsProvider extends ChangeNotifier {
   static const String _keyRefreshInterval = 'refresh_interval';
   static const String _keyDefaultQuality = 'default_quality';
   static const String _keyHardwareDecoding = 'hardware_decoding';
-  static const String _keyDecodingMode =
-      'decoding_mode'; // New: auto, hardware, software
+  static const String _keyDecodingMode = 'decoding_mode'; // New: auto, hardware, software
   static const String _keyBufferSize = 'buffer_size';
   static const String _keyLastPlaylistId = 'last_playlist_id';
   static const String _keyEnableEpg = 'enable_epg';

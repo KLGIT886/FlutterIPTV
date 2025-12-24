@@ -47,7 +47,7 @@ class BackgroundTestService {
 
   final ChannelTestService _testService = ChannelTestService();
   StreamSubscription<ChannelTestProgress>? _subscription;
-  
+
   BackgroundTestStatus _status = BackgroundTestStatus.idle;
   int _total = 0;
   int _completed = 0;
@@ -55,23 +55,23 @@ class BackgroundTestService {
   int _unavailable = 0;
   String? _currentChannelName;
   List<ChannelTestResult> _results = [];
-  
+
   final List<BackgroundTestCallback> _listeners = [];
 
   // Getters
   BackgroundTestStatus get status => _status;
   bool get isRunning => _status == BackgroundTestStatus.running;
   bool get hasResults => _results.isNotEmpty;
-  
+
   BackgroundTestProgress get currentProgress => BackgroundTestProgress(
-    total: _total,
-    completed: _completed,
-    available: _available,
-    unavailable: _unavailable,
-    currentChannelName: _currentChannelName,
-    status: _status,
-    results: List.unmodifiable(_results),
-  );
+        total: _total,
+        completed: _completed,
+        available: _available,
+        unavailable: _unavailable,
+        currentChannelName: _currentChannelName,
+        status: _status,
+        results: List.unmodifiable(_results),
+      );
 
   /// 添加监听器
   void addListener(BackgroundTestCallback callback) {
@@ -114,11 +114,11 @@ class BackgroundTestService {
         _unavailable = progress.unavailable;
         _currentChannelName = progress.currentChannel.name;
         _results = progress.results;
-        
+
         if (progress.isComplete) {
           _status = BackgroundTestStatus.completed;
         }
-        
+
         _notifyListeners();
       },
       onError: (e) {
@@ -158,10 +158,6 @@ class BackgroundTestService {
 
   /// 获取失效频道ID列表
   List<int> getUnavailableChannelIds() {
-    return _results
-        .where((r) => !r.isAvailable)
-        .map((r) => r.channel.id)
-        .whereType<int>()
-        .toList();
+    return _results.where((r) => !r.isAvailable).map((r) => r.channel.id).whereType<int>().toList();
   }
 }

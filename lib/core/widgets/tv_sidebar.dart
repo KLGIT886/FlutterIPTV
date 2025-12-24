@@ -11,10 +11,11 @@ import 'tv_focusable.dart';
 class TVSidebar extends StatefulWidget {
   final int selectedIndex;
   final Widget child;
-  final VoidCallback? onRight;  // 按右键时的回调
-  
+  final VoidCallback? onRight; // 按右键时的回调
+
   /// 用于外部获取菜单焦点节点列表
   static List<FocusNode>? menuFocusNodes;
+
   /// 当前选中的菜单索引
   static int? selectedMenuIndex;
 
@@ -32,8 +33,8 @@ class TVSidebar extends StatefulWidget {
 class _TVSidebarState extends State<TVSidebar> {
   bool _expanded = false;
   final List<FocusNode> _menuFocusNodes = [];
-  Timer? _navDelayTimer;  // 延迟导航定时器
-  int? _pendingNavIndex;  // 待导航的菜单索引
+  Timer? _navDelayTimer; // 延迟导航定时器
+  int? _pendingNavIndex; // 待导航的菜单索引
 
   @override
   void initState() {
@@ -78,7 +79,7 @@ class _TVSidebarState extends State<TVSidebar> {
 
   void _onNavItemTap(int index, String? route) {
     if (index == widget.selectedIndex) return;
-    
+
     if (index == 0) {
       // 返回首页：直接 pop 到首页
       Navigator.of(context).popUntil((r) => r.settings.name == AppRouter.home || r.settings.name == AppRouter.splash);
@@ -184,7 +185,7 @@ class _TVSidebarState extends State<TVSidebar> {
         onFocusChange: (hasFocus) {
           // 强制刷新UI
           if (mounted) setState(() {});
-          
+
           // 延迟触发导航
           if (hasFocus && index != widget.selectedIndex) {
             _navDelayTimer?.cancel();
@@ -202,11 +203,9 @@ class _TVSidebarState extends State<TVSidebar> {
         },
         onKeyEvent: (node, event) {
           if (event is! KeyDownEvent) return KeyEventResult.ignored;
-          
+
           final key = event.logicalKey;
-          if (key == LogicalKeyboardKey.select ||
-              key == LogicalKeyboardKey.enter ||
-              key == LogicalKeyboardKey.space) {
+          if (key == LogicalKeyboardKey.select || key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.space) {
             // 手动确认时立即导航，取消延迟
             _navDelayTimer?.cancel();
             _pendingNavIndex = null;
@@ -231,7 +230,7 @@ class _TVSidebarState extends State<TVSidebar> {
               // 只有当侧边栏展开时才显示焦点高亮
               final showHighlight = isFocused && _expanded;
               final showSelected = isSelected && !showHighlight;
-              
+
               return Container(
                 padding: EdgeInsets.symmetric(horizontal: _expanded ? 10 : 8, vertical: 10),
                 decoration: BoxDecoration(
@@ -244,11 +243,12 @@ class _TVSidebarState extends State<TVSidebar> {
                           Icon(item.icon, color: showHighlight ? Colors.white : (showSelected ? AppTheme.primaryColor : AppTheme.textMuted), size: 18),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: Text(item.label, style: TextStyle(
-                              color: showHighlight ? Colors.white : (showSelected ? AppTheme.primaryColor : AppTheme.textSecondary), 
-                              fontSize: 12, 
-                              fontWeight: (showHighlight || showSelected) ? FontWeight.w600 : FontWeight.normal,
-                            )),
+                            child: Text(item.label,
+                                style: TextStyle(
+                                  color: showHighlight ? Colors.white : (showSelected ? AppTheme.primaryColor : AppTheme.textSecondary),
+                                  fontSize: 12,
+                                  fontWeight: (showHighlight || showSelected) ? FontWeight.w600 : FontWeight.normal,
+                                )),
                           ),
                         ],
                       )

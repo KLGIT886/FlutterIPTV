@@ -22,7 +22,7 @@ class ChannelCard extends StatelessWidget {
   final VoidCallback? onTest;
   final VoidCallback? onLeft;
   final VoidCallback? onDown;
-  final VoidCallback? onFocused;  // 获得焦点时的回调
+  final VoidCallback? onFocused; // 获得焦点时的回调
   final bool autofocus;
   final FocusNode? focusNode;
 
@@ -64,9 +64,7 @@ class ChannelCard extends StatelessWidget {
         final isDark = Theme.of(context).brightness == Brightness.dark;
         return Container(
           decoration: BoxDecoration(
-            color: isFocused 
-                ? (isDark ? const Color(0xFF1E1E2E) : const Color(0xFFE8E0F0))
-                : AppTheme.getCardColor(context),
+            color: isFocused ? (isDark ? const Color(0xFF1E1E2E) : const Color(0xFFE8E0F0)) : AppTheme.getCardColor(context),
             borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
             border: Border.all(
               color: isFocused
@@ -98,13 +96,9 @@ class ChannelCard extends StatelessWidget {
                   children: [
                     // Logo
                     Container(
-                      color: Theme.of(context).brightness == Brightness.dark 
-                          ? const Color(0xFF0A0A0A) 
-                          : const Color(0xFFB8B8B8),
+                      color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF0A0A0A) : const Color(0xFFB8B8B8),
                       child: Center(
-                        child: logoUrl != null && logoUrl!.isNotEmpty
-                            ? _buildChannelLogo(logoUrl!)
-                            : _buildPlaceholder(),
+                        child: logoUrl != null && logoUrl!.isNotEmpty ? _buildChannelLogo(logoUrl!) : _buildPlaceholder(),
                       ),
                     ),
                     // Playing indicator
@@ -326,13 +320,15 @@ class ChannelCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: isDark ? const Color(0x80000000) : Colors.white,
                 shape: BoxShape.circle,
-                boxShadow: isDark ? null : [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 4,
-                    offset: const Offset(0, 1),
-                  ),
-                ],
+                boxShadow: isDark
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.15),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
               ),
               child: Icon(
                 isFavorite ? Icons.favorite : Icons.favorite_border_rounded,
@@ -361,7 +357,7 @@ class ChannelCard extends StatelessWidget {
         child: CachedNetworkImage(
           imageUrl: url,
           fit: BoxFit.contain,
-          memCacheWidth: 160,  // 限制内存缓存大小
+          memCacheWidth: 160, // 限制内存缓存大小
           memCacheHeight: 90,
           placeholder: (context, url) => _buildPlaceholder(),
           errorWidget: (context, url, error) => _buildPlaceholder(),

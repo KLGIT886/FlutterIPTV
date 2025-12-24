@@ -39,9 +39,7 @@ class CategoryCard extends StatelessWidget {
       builder: (context, isFocused, child) {
         return Container(
           decoration: BoxDecoration(
-            gradient: isFocused
-                ? LinearGradient(colors: [cardColor.withAlpha(180), cardColor.withAlpha(120)])
-                : LinearGradient(colors: [cardColor.withAlpha(60), cardColor.withAlpha(30)]),
+            gradient: isFocused ? LinearGradient(colors: [cardColor.withAlpha(180), cardColor.withAlpha(120)]) : LinearGradient(colors: [cardColor.withAlpha(60), cardColor.withAlpha(30)]),
             borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
             border: Border.all(
               color: isFocused ? Colors.white.withAlpha(150) : AppTheme.glassBorderColor,

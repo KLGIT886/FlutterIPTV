@@ -44,20 +44,20 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   String? _selectedCategory;
   final ScrollController _categoryScrollController = ScrollController();
   final ScrollController _channelScrollController = ScrollController();
-  
+
   // 保存 provider 引用，用于 dispose 时释放资源
   PlayerProvider? _playerProvider;
-  
+
   // 手势控制相关变量
   double _gestureStartY = 0;
   double _initialVolume = 0;
   double _initialBrightness = 0;
   bool _showGestureIndicator = false;
   double _gestureValue = 0;
-  
+
   // 本地 loading 状态，用于强制刷新
   bool _isLoading = true;
-  
+
   // 错误已显示标记，防止重复显示
   bool _errorShown = false;
 
@@ -69,7 +69,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     WakelockPlus.enable();
     _checkAndLaunchPlayer();
   }
-  
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -80,19 +80,19 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       _isLoading = _playerProvider!.isLoading;
     }
   }
-  
+
   void _onProviderUpdate() {
     if (!mounted) return;
     final provider = _playerProvider;
     if (provider == null) return;
-    
+
     final newLoading = provider.isLoading;
     if (_isLoading != newLoading) {
       setState(() {
         _isLoading = newLoading;
       });
     }
-    
+
     // 检查错误状态
     if (provider.hasError && !_errorShown) {
       _checkAndShowError();
@@ -112,11 +112,11 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       debugPrint('PlayerScreen: Native player available: $nativeAvailable');
       if (nativeAvailable && mounted) {
         _usingNativePlayer = true;
-        
+
         // Get channel list for native player (use all channels, not filtered)
         final channelProvider = context.read<ChannelProvider>();
         final channels = channelProvider.channels;
-        
+
         // Find current channel index
         int currentIndex = 0;
         for (int i = 0; i < channels.length; i++) {
@@ -125,14 +125,14 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
             break;
           }
         }
-        
+
         // Prepare channel lists with groups
         final urls = channels.map((c) => c.url).toList();
         final names = channels.map((c) => c.name).toList();
         final groups = channels.map((c) => c.groupName ?? '').toList();
-        
+
         debugPrint('PlayerScreen: Launching native player for ${widget.channelName} (index $currentIndex of ${channels.length})');
-        
+
         // Launch native player with channel list and callback for when it closes
         final launched = await NativePlayerChannel.launchPlayer(
           url: widget.channelUrl,
@@ -148,7 +148,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
             }
           },
         );
-        
+
         if (launched && mounted) {
           // Don't pop - wait for native player to close via callback
           // The native player is now a Fragment overlay, not a separate Activity
@@ -186,13 +186,12 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       final errorMessage = provider.error!;
       _errorShown = true;
       provider.clearError();
-      
+
       ScaffoldMessenger.of(context).clearSnackBars();
       final scaffoldMessenger = ScaffoldMessenger.of(context);
       scaffoldMessenger.showSnackBar(
         SnackBar(
-          content: Text(
-              '${AppStrings.of(context)?.playbackError ?? "Error"}: $errorMessage'),
+          content: Text('${AppStrings.of(context)?.playbackError ?? "Error"}: $errorMessage'),
           backgroundColor: AppTheme.errorColor,
           duration: const Duration(seconds: 30), // 设置较长时间，用 Timer 控制
           behavior: SnackBarBehavior.floating,
@@ -206,7 +205,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
           ),
         ),
       );
-      
+
       // 3秒后自动关闭
       Future.delayed(const Duration(seconds: 3), () {
         if (mounted) {
@@ -227,12 +226,12 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       final channel = channelProvider.channels.firstWhere(
         (c) => c.url == widget.channelUrl,
       );
-      
+
       // 保存上次播放的频道ID
       if (settingsProvider.rememberLastChannel && channel.id != null) {
         settingsProvider.setLastChannelId(channel.id);
       }
-      
+
       playerProvider.playChannel(channel);
     } catch (_) {
       // Fallback if channel object not found
@@ -269,12 +268,12 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       _playerProvider!.removeListener(_onProviderUpdate);
       _playerProvider!.stop();
     }
-    
+
     // 重置亮度到系统默认
     try {
       ScreenBrightness.instance.resetApplicationScreenBrightness();
     } catch (_) {}
-    
+
     // 关闭屏幕常亮
     WakelockPlus.disable();
 
@@ -293,23 +292,23 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   }
 
   // ============ 手机端手势控制 ============
-  
+
   // 简化手势控制
   Offset? _panStartPosition;
   String? _currentGestureType; // 'volume', 'brightness', 'channel', 'horizontal'
-  
+
   void _onPanStart(DragStartDetails details) {
     _panStartPosition = details.globalPosition;
     _currentGestureType = null;
-    
+
     final playerProvider = _playerProvider ?? context.read<PlayerProvider>();
     _initialVolume = playerProvider.volume;
     _gestureStartY = details.globalPosition.dy;
-    
+
     // 异步获取当前亮度
     _loadCurrentBrightness();
   }
-  
+
   Future<void> _loadCurrentBrightness() async {
     try {
       _initialBrightness = await ScreenBrightness.instance.current;
@@ -317,20 +316,20 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       _initialBrightness = 0.5;
     }
   }
-  
+
   void _onPanUpdate(DragUpdateDetails details) {
     if (_panStartPosition == null) return;
-    
+
     final dx = details.globalPosition.dx - _panStartPosition!.dx;
     final dy = details.globalPosition.dy - _panStartPosition!.dy;
-    
+
     // 首次移动超过阈值时决定手势类型
     if (_currentGestureType == null) {
       const threshold = 10.0; // 降低阈值，更灵敏
       if (dx.abs() > threshold || dy.abs() > threshold) {
         final screenWidth = MediaQuery.of(context).size.width;
         final x = _panStartPosition!.dx;
-        
+
         if (dy.abs() > dx.abs()) {
           // 垂直滑动
           if (x < screenWidth * 0.35) {
@@ -349,11 +348,11 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       }
       return;
     }
-    
+
     // 处理垂直滑动
     final screenHeight = MediaQuery.of(context).size.height;
     final deltaY = _gestureStartY - details.globalPosition.dy;
-    
+
     if (_currentGestureType == 'volume') {
       final volumeChange = (deltaY / (screenHeight * 0.5)) * 1.0; // 滑动半屏改变100%音量
       final newVolume = (_initialVolume + volumeChange).clamp(0.0, 1.0);
@@ -380,18 +379,18 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       });
     }
   }
-  
+
   void _onPanEnd(DragEndDetails details) {
     if (_panStartPosition == null) {
       _resetGestureState();
       return;
     }
-    
+
     final dx = details.globalPosition.dx - _panStartPosition!.dx;
     final dy = details.globalPosition.dy - _panStartPosition!.dy;
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
-    
+
     // 处理频道切换
     if (_currentGestureType == 'channel') {
       final threshold = screenHeight * 0.08; // 滑动超过屏幕8%即可切换
@@ -412,7 +411,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         setState(() {});
       }
     }
-    
+
     // 处理水平滑动 - 显示/隐藏分类菜单
     if (_currentGestureType == 'horizontal') {
       final threshold = screenWidth * 0.15; // 滑动超过屏幕15%
@@ -430,10 +429,10 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         });
       }
     }
-    
+
     _resetGestureState();
   }
-  
+
   void _resetGestureState() {
     setState(() {
       _showGestureIndicator = false;
@@ -441,11 +440,11 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     _panStartPosition = null;
     _currentGestureType = null;
   }
-  
+
   Widget _buildGestureIndicator() {
     IconData icon;
     String label;
-    
+
     if (_currentGestureType == 'volume') {
       icon = _gestureValue > 0.5 ? Icons.volume_up : (_gestureValue > 0 ? Icons.volume_down : Icons.volume_off);
       label = '${(_gestureValue * 100).toInt()}%';
@@ -464,7 +463,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     } else {
       return const SizedBox.shrink();
     }
-    
+
     return Center(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -496,9 +495,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     final key = event.logicalKey;
 
     // Play/Pause & Favorite (Select/Enter)
-    if (key == LogicalKeyboardKey.select ||
-        key == LogicalKeyboardKey.enter ||
-        key == LogicalKeyboardKey.space) {
+    if (key == LogicalKeyboardKey.select || key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.space) {
       if (event is KeyDownEvent) {
         if (event is KeyRepeatEvent) return KeyEventResult.handled;
         _lastSelectKeyDownTime = DateTime.now();
@@ -605,8 +602,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     // They didn't complain about Up/Down. So I will ONLY modify Left/Right.
 
     // Previous Channel (Up)
-    if (key == LogicalKeyboardKey.arrowUp ||
-        key == LogicalKeyboardKey.channelUp) {
+    if (key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.channelUp) {
       _errorShown = false; // 切换频道时重置错误标记
       final channelProvider = context.read<ChannelProvider>();
       playerProvider.playPrevious(channelProvider.filteredChannels);
@@ -616,8 +612,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     }
 
     // Next Channel (Down)
-    if (key == LogicalKeyboardKey.arrowDown ||
-        key == LogicalKeyboardKey.channelDown) {
+    if (key == LogicalKeyboardKey.arrowDown || key == LogicalKeyboardKey.channelDown) {
       _errorShown = false; // 切换频道时重置错误标记
       final channelProvider = context.read<ChannelProvider>();
       playerProvider.playNext(channelProvider.filteredChannels);
@@ -636,8 +631,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     }
 
     // Mute - 只在TV端处理
-    if (key == LogicalKeyboardKey.keyM ||
-        (key == LogicalKeyboardKey.audioVolumeMute && !PlatformDetector.isMobile)) {
+    if (key == LogicalKeyboardKey.keyM || (key == LogicalKeyboardKey.audioVolumeMute && !PlatformDetector.isMobile)) {
       playerProvider.toggleMute();
       return KeyEventResult.handled;
     }
@@ -657,8 +651,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     }
 
     // Settings / Menu
-    if (key == LogicalKeyboardKey.settings ||
-        key == LogicalKeyboardKey.contextMenu) {
+    if (key == LogicalKeyboardKey.settings || key == LogicalKeyboardKey.contextMenu) {
       _showSettingsSheet(context);
       return KeyEventResult.handled;
     }
@@ -719,7 +712,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                 const Positioned.fill(
                   child: ColoredBox(color: Colors.transparent),
                 ),
-                
+
                 // Video Player
                 _buildVideoPlayer(),
 
@@ -768,7 +761,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
           if (exoPlayer == null) {
             return const SizedBox.expand();
           }
-          
+
           // 使用 ValueListenableBuilder 监听 controller 变化
           return ValueListenableBuilder<VideoPlayerValue>(
             valueListenable: exoPlayer,
@@ -776,7 +769,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
               if (!value.isInitialized) {
                 return const SizedBox.expand();
               }
-              
+
               return Center(
                 child: AspectRatio(
                   aspectRatio: value.aspectRatio > 0 ? value.aspectRatio : 16 / 9,
@@ -786,7 +779,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
             },
           );
         }
-        
+
         // Use media_kit on other platforms
         if (provider.videoController == null) {
           return const SizedBox.expand();
@@ -1004,7 +997,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                   final channel = provider.currentChannel;
                   final currentProgram = epgProvider.getCurrentProgram(channel?.epgId, channel?.name);
                   final nextProgram = epgProvider.getNextProgram(channel?.epgId, channel?.name);
-                  
+
                   if (currentProgram != null || nextProgram != null) {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
@@ -1075,7 +1068,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                   return const SizedBox.shrink();
                 },
               ),
-              
+
               // Control buttons row (moved above progress bar)
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1253,8 +1246,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    AppStrings.of(context)?.playbackSettings ??
-                        'Playback Settings',
+                    AppStrings.of(context)?.playbackSettings ?? 'Playback Settings',
                     style: const TextStyle(
                       color: AppTheme.textPrimary,
                       fontSize: 20,
@@ -1283,9 +1275,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                         selectedColor: AppTheme.primaryColor,
                         backgroundColor: AppTheme.cardColor,
                         labelStyle: TextStyle(
-                          color: isSelected
-                              ? Colors.white
-                              : AppTheme.textSecondary,
+                          color: isSelected ? Colors.white : AppTheme.textSecondary,
                         ),
                       );
                     }).toList(),
@@ -1304,7 +1294,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   Widget _buildCategoryPanel() {
     final channelProvider = context.read<ChannelProvider>();
     final groups = channelProvider.groups;
-    
+
     return Positioned(
       left: 0,
       top: 0,
@@ -1406,7 +1396,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     final playerProvider = context.read<PlayerProvider>();
     final channels = channelProvider.getChannelsByGroup(_selectedCategory!);
     final currentChannel = playerProvider.currentChannel;
-    
+
     return Container(
       width: 220,
       decoration: const BoxDecoration(
@@ -1465,7 +1455,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                       if (settingsProvider.rememberLastChannel && channel.id != null) {
                         settingsProvider.setLastChannelId(channel.id);
                       }
-                      
+
                       // 切换到该频道
                       playerProvider.playChannel(channel);
                       // 关闭面板

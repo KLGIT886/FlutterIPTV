@@ -94,25 +94,19 @@ class DatabaseHelper {
     ''');
 
     // Create indexes for better performance
-    await db
-        .execute('CREATE INDEX idx_channels_playlist ON channels(playlist_id)');
+    await db.execute('CREATE INDEX idx_channels_playlist ON channels(playlist_id)');
     await db.execute('CREATE INDEX idx_channels_group ON channels(group_name)');
-    await db
-        .execute('CREATE INDEX idx_favorites_channel ON favorites(channel_id)');
-    await db.execute(
-        'CREATE INDEX idx_history_channel ON watch_history(channel_id)');
-    await db
-        .execute('CREATE INDEX idx_epg_channel ON epg_data(channel_epg_id)');
-    await db
-        .execute('CREATE INDEX idx_epg_time ON epg_data(start_time, end_time)');
+    await db.execute('CREATE INDEX idx_favorites_channel ON favorites(channel_id)');
+    await db.execute('CREATE INDEX idx_history_channel ON watch_history(channel_id)');
+    await db.execute('CREATE INDEX idx_epg_channel ON epg_data(channel_epg_id)');
+    await db.execute('CREATE INDEX idx_epg_time ON epg_data(start_time, end_time)');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       // Add channel_count column to playlists table
       try {
-        await db.execute(
-            'ALTER TABLE playlists ADD COLUMN channel_count INTEGER DEFAULT 0');
+        await db.execute('ALTER TABLE playlists ADD COLUMN channel_count INTEGER DEFAULT 0');
       } catch (e) {
         // Ignore if column already exists
         debugPrint('Migration error (ignored): $e');
@@ -172,8 +166,7 @@ class DatabaseHelper {
     return await db.delete(table, where: where, whereArgs: whereArgs);
   }
 
-  Future<List<Map<String, dynamic>>> rawQuery(String sql,
-      [List<Object?>? arguments]) async {
+  Future<List<Map<String, dynamic>>> rawQuery(String sql, [List<Object?>? arguments]) async {
     return await db.rawQuery(sql, arguments);
   }
 }

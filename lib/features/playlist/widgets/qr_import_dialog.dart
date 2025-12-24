@@ -86,8 +86,7 @@ class _QrImportDialogState extends State<QrImportDialog> {
         // 设置新导入的播放列表为激活状态
         final playlistProvider = context.read<PlaylistProvider>();
         final favoritesProvider = context.read<FavoritesProvider>();
-        playlistProvider.setActivePlaylist(playlist,
-            favoritesProvider: favoritesProvider);
+        playlistProvider.setActivePlaylist(playlist, favoritesProvider: favoritesProvider);
 
         // 加载新播放列表的频道
         final channelProvider = context.read<ChannelProvider>();
@@ -144,8 +143,7 @@ class _QrImportDialogState extends State<QrImportDialog> {
         // 设置新导入的播放列表为激活状态
         final playlistProvider = context.read<PlaylistProvider>();
         final favoritesProvider = context.read<FavoritesProvider>();
-        playlistProvider.setActivePlaylist(playlist,
-            favoritesProvider: favoritesProvider);
+        playlistProvider.setActivePlaylist(playlist, favoritesProvider: favoritesProvider);
 
         // 加载新播放列表的频道
         final channelProvider = context.read<ChannelProvider>();
@@ -222,12 +220,7 @@ class _QrImportDialogState extends State<QrImportDialog> {
             const SizedBox(height: 20),
 
             // Content
-            if (_isLoading)
-              _buildLoadingState()
-            else if (_error != null)
-              _buildErrorState()
-            else if (_isServerRunning)
-              _buildQrCodeState(),
+            if (_isLoading) _buildLoadingState() else if (_error != null) _buildErrorState() else if (_isServerRunning) _buildQrCodeState(),
 
             const SizedBox(height: 20),
 

@@ -58,16 +58,16 @@ class EpgService {
 
   // channelId -> List<EpgProgram>
   final Map<String, List<EpgProgram>> _programs = {};
-  
+
   // 频道名称映射 (用于匹配)
   final Map<String, String> _channelNames = {};
-  
+
   // 频道名称索引 (normalizedName -> channelId) 用于快速查找
   final Map<String, String> _nameIndex = {};
-  
+
   // EPG 查询缓存 (channelKey -> channelId)
   final Map<String, String?> _lookupCache = {};
-  
+
   DateTime? _lastUpdate;
   bool _isLoading = false;
 
@@ -78,7 +78,7 @@ class EpgService {
   EpgProgram? getCurrentProgram(String? channelId, String? channelName) {
     final programs = _findPrograms(channelId, channelName);
     if (programs == null) return null;
-    
+
     final now = DateTime.now();
     for (final program in programs) {
       if (now.isAfter(program.start) && now.isBefore(program.end)) {
@@ -92,7 +92,7 @@ class EpgService {
   EpgProgram? getNextProgram(String? channelId, String? channelName) {
     final programs = _findPrograms(channelId, channelName);
     if (programs == null) return null;
-    
+
     final now = DateTime.now();
     for (final program in programs) {
       if (program.start.isAfter(now)) {
@@ -106,20 +106,18 @@ class EpgService {
   List<EpgProgram> getTodayPrograms(String? channelId, String? channelName) {
     final programs = _findPrograms(channelId, channelName);
     if (programs == null) return [];
-    
+
     final today = DateTime.now();
     final startOfDay = DateTime(today.year, today.month, today.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
-    
-    return programs.where((p) => 
-      p.start.isAfter(startOfDay) && p.start.isBefore(endOfDay)
-    ).toList();
+
+    return programs.where((p) => p.start.isAfter(startOfDay) && p.start.isBefore(endOfDay)).toList();
   }
 
   List<EpgProgram>? _findPrograms(String? channelId, String? channelName) {
     // 生成缓存 key
     final cacheKey = '${channelId ?? ''}_${channelName ?? ''}';
-    
+
     // 检查缓存
     if (_lookupCache.containsKey(cacheKey)) {
       final cachedId = _lookupCache[cacheKey];
@@ -128,13 +126,13 @@ class EpgService {
       }
       return null;
     }
-    
+
     // 先用 channelId 查找
     if (channelId != null && _programs.containsKey(channelId)) {
       _lookupCache[cacheKey] = channelId;
       return _programs[channelId];
     }
-    
+
     // 用频道名称索引快速查找
     if (channelName != null) {
       final normalizedName = _normalizeName(channelName);
@@ -144,19 +142,14 @@ class EpgService {
         return _programs[foundId];
       }
     }
-    
+
     // 缓存未找到的结果
     _lookupCache[cacheKey] = null;
     return null;
   }
 
   String _normalizeName(String name) {
-    return name.toLowerCase()
-        .replaceAll(RegExp(r'[^\w\u4e00-\u9fa5]'), '')
-        .replaceAll('hd', '')
-        .replaceAll('高清', '')
-        .replaceAll('标清', '')
-        .replaceAll('超清', '');
+    return name.toLowerCase().replaceAll(RegExp(r'[^\w\u4e00-\u9fa5]'), '').replaceAll('hd', '').replaceAll('高清', '').replaceAll('标清', '').replaceAll('超清', '');
   }
 
   /// 从 URL 加载 EPG 数据
@@ -166,18 +159,18 @@ class EpgService {
 
     try {
       debugPrint('EPG: Loading from $url');
-      
+
       final response = await http.get(Uri.parse(url)).timeout(
-        const Duration(seconds: 30),
-      );
-      
+            const Duration(seconds: 30),
+          );
+
       if (response.statusCode != 200) {
         debugPrint('EPG: HTTP error ${response.statusCode}');
         return false;
       }
 
       String content;
-      
+
       // 检查是否是 gzip 压缩
       if (url.endsWith('.gz')) {
         final decompressed = GZipCodec().decode(response.bodyBytes);
@@ -193,11 +186,11 @@ class EpgService {
         _channelNames.clear();
         _nameIndex.clear();
         _lookupCache.clear();
-        
+
         _programs.addAll(result['programs'] as Map<String, List<EpgProgram>>);
         _channelNames.addAll(result['channelNames'] as Map<String, String>);
         _nameIndex.addAll(result['nameIndex'] as Map<String, String>);
-        
+
         _lastUpdate = DateTime.now();
         debugPrint('EPG: Loaded ${_programs.length} channels, ${_programs.values.fold(0, (sum, list) => sum + list.length)} programs');
         return true;
@@ -226,7 +219,7 @@ class EpgService {
       for (final channel in tv.findElements('channel')) {
         final id = channel.getAttribute('id');
         if (id == null) continue;
-        
+
         final displayName = channel.findElements('display-name').firstOrNull?.innerText;
         if (displayName != null) {
           channelNames[id] = displayName;
@@ -240,7 +233,7 @@ class EpgService {
         final channelId = programme.getAttribute('channel');
         final startStr = programme.getAttribute('start');
         final stopStr = programme.getAttribute('stop');
-        
+
         if (channelId == null || startStr == null || stopStr == null) continue;
 
         final start = _parseDateTimeStatic(startStr);
@@ -279,19 +272,14 @@ class EpgService {
   }
 
   static String _normalizeNameStatic(String name) {
-    return name.toLowerCase()
-        .replaceAll(RegExp(r'[^\w\u4e00-\u9fa5]'), '')
-        .replaceAll('hd', '')
-        .replaceAll('高清', '')
-        .replaceAll('标清', '')
-        .replaceAll('超清', '');
+    return name.toLowerCase().replaceAll(RegExp(r'[^\w\u4e00-\u9fa5]'), '').replaceAll('hd', '').replaceAll('高清', '').replaceAll('标清', '').replaceAll('超清', '');
   }
 
   static DateTime? _parseDateTimeStatic(String str) {
     try {
       final match = RegExp(r'(\d{14})').firstMatch(str);
       if (match == null) return null;
-      
+
       final dateStr = match.group(1)!;
       return DateTime(
         int.parse(dateStr.substring(0, 4)),
@@ -316,21 +304,18 @@ class EpgService {
         return content;
       }
     } catch (_) {}
-    
+
     // 尝试 Latin1 (ISO-8859-1) 作为 GBK 的替代
     // 因为 Dart 没有内置 GBK 支持，我们用 Latin1 读取原始字节
     try {
       final latin1Content = latin1.decode(bytes);
       // 检查 XML 声明中的编码
-      if (latin1Content.contains('encoding="gb2312"') || 
-          latin1Content.contains('encoding="gbk"') ||
-          latin1Content.contains('encoding="GB2312"') ||
-          latin1Content.contains('encoding="GBK"')) {
+      if (latin1Content.contains('encoding="gb2312"') || latin1Content.contains('encoding="gbk"') || latin1Content.contains('encoding="GB2312"') || latin1Content.contains('encoding="GBK"')) {
         // 需要 GBK 解码，但 Dart 不支持，尝试用 UTF-8 with allowMalformed
         return utf8.decode(bytes, allowMalformed: true);
       }
     } catch (_) {}
-    
+
     // 最后用 UTF-8 with allowMalformed
     return utf8.decode(bytes, allowMalformed: true);
   }

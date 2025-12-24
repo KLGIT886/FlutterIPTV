@@ -4,7 +4,7 @@ import '../../../core/services/service_locator.dart';
 
 class EpgProvider extends ChangeNotifier {
   final EpgService _epgService = EpgService();
-  
+
   bool _isLoading = false;
   String? _error;
   DateTime? _lastUpdate;
@@ -22,7 +22,7 @@ class EpgProvider extends ChangeNotifier {
     final prefs = ServiceLocator.prefs;
     final enabled = prefs.getBool('enable_epg') ?? true;
     final url = prefs.getString('epg_url');
-    
+
     if (enabled && url != null && url.isNotEmpty) {
       await loadEpg(url);
     }
@@ -30,7 +30,7 @@ class EpgProvider extends ChangeNotifier {
 
   Future<bool> loadEpg(String url) async {
     if (_isLoading) return false;
-    
+
     _isLoading = true;
     _error = null;
     notifyListeners();

@@ -29,9 +29,7 @@ class EpgEntry {
       startTime: DateTime.fromMillisecondsSinceEpoch(map['start_time'] as int),
       endTime: DateTime.fromMillisecondsSinceEpoch(map['end_time'] as int),
       category: map['category'] as String?,
-      createdAt: map['created_at'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int)
-          : DateTime.now(),
+      createdAt: map['created_at'] != null ? DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int) : DateTime.now(),
     );
   }
 
@@ -72,6 +70,5 @@ class EpgEntry {
   }
 
   @override
-  String toString() =>
-      'EpgEntry(title: $title, start: $startTime, end: $endTime)';
+  String toString() => 'EpgEntry(title: $title, start: $startTime, end: $endTime)';
 }

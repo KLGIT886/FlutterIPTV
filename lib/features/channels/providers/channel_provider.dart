@@ -103,10 +103,8 @@ class ChannelProvider extends ChangeNotifier {
     }
 
     // 按原始顺序创建分组列表
-    _groups = groupOrder
-        .map((name) => ChannelGroup(name: name, channelCount: groupCounts[name] ?? 0))
-        .toList();
-    
+    _groups = groupOrder.map((name) => ChannelGroup(name: name, channelCount: groupCounts[name] ?? 0)).toList();
+
     // 如果有失效频道，添加到列表末尾
     if (unavailableCount > 0) {
       _groups.add(ChannelGroup(name: unavailableGroupName, channelCount: unavailableCount));
@@ -131,8 +129,7 @@ class ChannelProvider extends ChangeNotifier {
 
     final lowerQuery = query.toLowerCase();
     return _channels.where((c) {
-      return c.name.toLowerCase().contains(lowerQuery) ||
-          (c.groupName?.toLowerCase().contains(lowerQuery) ?? false);
+      return c.name.toLowerCase().contains(lowerQuery) || (c.groupName?.toLowerCase().contains(lowerQuery) ?? false);
     }).toList();
   }
 
@@ -238,9 +235,9 @@ class ChannelProvider extends ChangeNotifier {
         final originalGroup = channel.groupName ?? 'Uncategorized';
         // 如果已经是失效频道，不重复标记
         if (isUnavailableChannel(originalGroup)) continue;
-        
+
         final newGroupName = '$unavailableGroupPrefix|$originalGroup';
-        
+
         await ServiceLocator.database.update(
           'channels',
           {'group_name': newGroupName},
@@ -277,7 +274,7 @@ class ChannelProvider extends ChangeNotifier {
     try {
       final channel = _channels.firstWhere((c) => c.id == channelId);
       final originalGroup = extractOriginalGroup(channel.groupName);
-      
+
       if (originalGroup == null) {
         debugPrint('DEBUG: 频道不是失效频道，无需恢复');
         return false;
@@ -297,7 +294,7 @@ class ChannelProvider extends ChangeNotifier {
 
       _updateGroups();
       notifyListeners();
-      
+
       debugPrint('DEBUG: 已恢复频道到分组: $originalGroup');
       return true;
     } catch (e) {

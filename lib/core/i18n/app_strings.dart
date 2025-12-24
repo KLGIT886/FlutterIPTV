@@ -11,8 +11,7 @@ class AppStrings {
     return Localizations.of<AppStrings>(context, AppStrings);
   }
 
-  static const LocalizationsDelegate<AppStrings> delegate =
-      _AppStringsDelegate();
+  static const LocalizationsDelegate<AppStrings> delegate = _AppStringsDelegate();
 
   String get playlistManager => _localizedValues['playlistManager']!;
   String get addNewPlaylist => _localizedValues['addNewPlaylist']!;
@@ -139,7 +138,7 @@ class AppStrings {
   String get addFirstPlaylistHint => _localizedValues['addFirstPlaylistHint']!;
   String get addPlaylist => _localizedValues['addPlaylist']!;
   String get totalChannels => _localizedValues['totalChannels']!;
-  
+
   // New translations
   String get volumeNormalization => _localizedValues['volumeNormalization']!;
   String get volumeNormalizationSubtitle => _localizedValues['volumeNormalizationSubtitle']!;
@@ -170,7 +169,7 @@ class AppStrings {
   String get testChannel => _localizedValues['testChannel']!;
   String get unavailable => _localizedValues['unavailable']!;
   String get localFile => _localizedValues['localFile']!;
-  
+
   // Home screen
   String get recommendedChannels => _localizedValues['recommendedChannels']!;
   String get myFavorites => _localizedValues['myFavorites']!;
@@ -179,11 +178,11 @@ class AppStrings {
   String get noPlaylistYet => _localizedValues['noPlaylistYet']!;
   String get addM3uToStart => _localizedValues['addM3uToStart']!;
   String get search => _localizedValues['search']!;
-  
+
   // Player hints
   String get playerHintTV => _localizedValues['playerHintTV']!;
   String get playerHintDesktop => _localizedValues['playerHintDesktop']!;
-  
+
   // More UI strings
   String get more => _localizedValues['more']!;
   String get close => _localizedValues['close']!;
@@ -208,8 +207,7 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
 
   @override
   Future<AppStrings> load(Locale locale) {
-    return SynchronousFuture<AppStrings>(
-        AppStrings(locale, _getValues(locale)));
+    return SynchronousFuture<AppStrings>(AppStrings(locale, _getValues(locale)));
   }
 
   @override
@@ -222,7 +220,7 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
       return _enValues;
     }
   }
-  
+
   static const Map<String, String> _zhValues = {
     'playlistManager': '播放列表管理',
     'addNewPlaylist': '添加新播放列表',
@@ -402,7 +400,7 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'qrStep2': '在网页中输入链接或上传文件',
     'qrStep3': '点击导入，电视自动接收',
   };
-  
+
   static const Map<String, String> _enValues = {
     'playlistManager': 'Playlist Manager',
     'addNewPlaylist': 'Add New Playlist',

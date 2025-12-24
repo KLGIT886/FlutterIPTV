@@ -34,7 +34,7 @@ void main() async {
 
     // Initialize MediaKit
     MediaKit.ensureInitialized();
-    
+
     // Initialize native player channel for Android TV
     NativePlayerChannel.init();
 
@@ -43,11 +43,11 @@ void main() async {
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;
     }
-    
+
     // Initialize window manager for Windows
     if (Platform.isWindows) {
       await windowManager.ensureInitialized();
-      
+
       WindowOptions windowOptions = const WindowOptions(
         size: Size(1280, 720),
         minimumSize: Size(800, 600),
@@ -56,7 +56,7 @@ void main() async {
         titleBarStyle: TitleBarStyle.hidden,
         windowButtonVisibility: false,
       );
-      
+
       await windowManager.waitUntilReadyToShow(windowOptions, () async {
         await windowManager.show();
         await windowManager.focus();
@@ -103,10 +103,7 @@ void main() async {
                 const SizedBox(height: 16),
                 const Text(
                   'Application Failed to Start',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold),
+                  style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -149,8 +146,11 @@ class FlutterIPTVApp extends StatelessWidget {
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
-            themeMode: settings.themeMode == 'light' ? ThemeMode.light : 
-                       settings.themeMode == 'system' ? ThemeMode.system : ThemeMode.dark,
+            themeMode: settings.themeMode == 'light'
+                ? ThemeMode.light
+                : settings.themeMode == 'system'
+                    ? ThemeMode.system
+                    : ThemeMode.dark,
             locale: settings.locale,
             supportedLocales: const [
               Locale('en', ''),
@@ -165,10 +165,8 @@ class FlutterIPTVApp extends StatelessWidget {
             // Use shortcuts for TV remote support
             shortcuts: <ShortcutActivator, Intent>{
               ...WidgetsApp.defaultShortcuts,
-              const SingleActivator(LogicalKeyboardKey.select):
-                  const ActivateIntent(),
-              const SingleActivator(LogicalKeyboardKey.enter):
-                  const ActivateIntent(),
+              const SingleActivator(LogicalKeyboardKey.select): const ActivateIntent(),
+              const SingleActivator(LogicalKeyboardKey.enter): const ActivateIntent(),
             },
             onGenerateRoute: AppRouter.generateRoute,
             initialRoute: AppRouter.splash,

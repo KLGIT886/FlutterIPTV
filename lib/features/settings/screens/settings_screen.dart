@@ -65,246 +65,226 @@ class SettingsScreen extends StatelessWidget {
               ),
             ]),
 
-              const SizedBox(height: 24),
+            const SizedBox(height: 24),
 
-              // Playback Settings
-              _buildSectionHeader(
-                  AppStrings.of(context)?.playback ?? 'Playback'),
-              _buildSettingsCard([
-                _buildSwitchTile(
-                  context,
-                  title: AppStrings.of(context)?.autoPlay ?? 'Auto-play',
-                  subtitle: AppStrings.of(context)?.autoPlaySubtitle ??
-                      'Automatically start playback when selecting a channel',
-                  icon: Icons.play_circle_outline_rounded,
-                  value: settings.autoPlay,
-                  onChanged: (value) {
-                    settings.setAutoPlay(value);
-                    _showSuccess(context, value ? '已启用自动播放' : '已关闭自动播放');
-                  },
-                ),
+            // Playback Settings
+            _buildSectionHeader(AppStrings.of(context)?.playback ?? 'Playback'),
+            _buildSettingsCard([
+              _buildSwitchTile(
+                context,
+                title: AppStrings.of(context)?.autoPlay ?? 'Auto-play',
+                subtitle: AppStrings.of(context)?.autoPlaySubtitle ?? 'Automatically start playback when selecting a channel',
+                icon: Icons.play_circle_outline_rounded,
+                value: settings.autoPlay,
+                onChanged: (value) {
+                  settings.setAutoPlay(value);
+                  _showSuccess(context, value ? '已启用自动播放' : '已关闭自动播放');
+                },
+              ),
+              _buildDivider(),
+              _buildSelectTile(
+                context,
+                title: AppStrings.of(context)?.decodingMode ?? 'Decoding Mode',
+                subtitle: _getDecodingModeLabel(context, settings.decodingMode),
+                icon: Icons.memory_rounded,
+                onTap: () => _showDecodingModeDialog(context, settings),
+              ),
+              _buildDivider(),
+              _buildSelectTile(
+                context,
+                title: AppStrings.of(context)?.bufferSize ?? 'Buffer Size',
+                subtitle: '${settings.bufferSize} ${AppStrings.of(context)?.seconds ?? 'seconds'} (未实现)',
+                icon: Icons.storage_rounded,
+                onTap: () => _showBufferSizeDialog(context, settings),
+              ),
+              _buildDivider(),
+              _buildSwitchTile(
+                context,
+                title: AppStrings.of(context)?.volumeNormalization ?? 'Volume Normalization',
+                subtitle: '${AppStrings.of(context)?.volumeNormalizationSubtitle ?? 'Auto-adjust volume differences between channels'} (未实现)',
+                icon: Icons.volume_up_rounded,
+                value: settings.volumeNormalization,
+                onChanged: (value) {
+                  settings.setVolumeNormalization(value);
+                  _showError(context, '音量标准化尚未实现，设置不会生效');
+                },
+              ),
+              if (settings.volumeNormalization) ...[
                 _buildDivider(),
                 _buildSelectTile(
                   context,
-                  title: AppStrings.of(context)?.decodingMode ?? 'Decoding Mode',
-                  subtitle: _getDecodingModeLabel(context, settings.decodingMode),
-                  icon: Icons.memory_rounded,
-                  onTap: () => _showDecodingModeDialog(context, settings),
+                  title: AppStrings.of(context)?.volumeBoost ?? 'Volume Boost',
+                  subtitle: settings.volumeBoost == 0 ? (AppStrings.of(context)?.noBoost ?? 'No boost') : '${settings.volumeBoost > 0 ? '+' : ''}${settings.volumeBoost} dB',
+                  icon: Icons.equalizer_rounded,
+                  onTap: () => _showVolumeBoostDialog(context, settings),
                 ),
+              ],
+            ]),
+
+            const SizedBox(height: 24),
+
+            // Playlist Settings
+            _buildSectionHeader(AppStrings.of(context)?.playlists ?? 'Playlists'),
+            _buildSettingsCard([
+              _buildSwitchTile(
+                context,
+                title: AppStrings.of(context)?.autoRefresh ?? 'Auto-refresh',
+                subtitle: '${AppStrings.of(context)?.autoRefreshSubtitle ?? 'Automatically update playlists periodically'} (未实现)',
+                icon: Icons.refresh_rounded,
+                value: settings.autoRefresh,
+                onChanged: (value) {
+                  settings.setAutoRefresh(value);
+                  _showError(context, '自动刷新尚未实现，设置不会生效');
+                },
+              ),
+              if (settings.autoRefresh) ...[
                 _buildDivider(),
                 _buildSelectTile(
                   context,
-                  title: AppStrings.of(context)?.bufferSize ?? 'Buffer Size',
-                  subtitle:
-                      '${settings.bufferSize} ${AppStrings.of(context)?.seconds ?? 'seconds'} (未实现)',
-                  icon: Icons.storage_rounded,
-                  onTap: () => _showBufferSizeDialog(context, settings),
+                  title: AppStrings.of(context)?.refreshInterval ?? 'Refresh Interval',
+                  subtitle: 'Every ${settings.refreshInterval} ${AppStrings.of(context)?.hours ?? 'hours'} (未实现)',
+                  icon: Icons.schedule_rounded,
+                  onTap: () => _showRefreshIntervalDialog(context, settings),
                 ),
-                _buildDivider(),
-                _buildSwitchTile(
-                  context,
-                  title: AppStrings.of(context)?.volumeNormalization ?? 'Volume Normalization',
-                  subtitle: '${AppStrings.of(context)?.volumeNormalizationSubtitle ?? 'Auto-adjust volume differences between channels'} (未实现)',
-                  icon: Icons.volume_up_rounded,
-                  value: settings.volumeNormalization,
-                  onChanged: (value) {
-                    settings.setVolumeNormalization(value);
-                    _showError(context, '音量标准化尚未实现，设置不会生效');
-                  },
-                ),
-                if (settings.volumeNormalization) ...[
-                  _buildDivider(),
-                  _buildSelectTile(
-                    context,
-                    title: AppStrings.of(context)?.volumeBoost ?? 'Volume Boost',
-                    subtitle: settings.volumeBoost == 0
-                        ? (AppStrings.of(context)?.noBoost ?? 'No boost')
-                        : '${settings.volumeBoost > 0 ? '+' : ''}${settings.volumeBoost} dB',
-                    icon: Icons.equalizer_rounded,
-                    onTap: () => _showVolumeBoostDialog(context, settings),
-                  ),
-                ],
-              ]),
+              ],
+              _buildDivider(),
+              _buildSwitchTile(
+                context,
+                title: AppStrings.of(context)?.rememberLastChannel ?? 'Remember Last Channel',
+                subtitle: AppStrings.of(context)?.rememberLastChannelSubtitle ?? 'Resume playback from last watched channel',
+                icon: Icons.history_rounded,
+                value: settings.rememberLastChannel,
+                onChanged: (value) {
+                  settings.setRememberLastChannel(value);
+                  _showSuccess(context, value ? '已启用记住上次频道' : '已关闭记住上次频道');
+                },
+              ),
+            ]),
 
-              const SizedBox(height: 24),
+            const SizedBox(height: 24),
 
-              // Playlist Settings
-              _buildSectionHeader(
-                  AppStrings.of(context)?.playlists ?? 'Playlists'),
-              _buildSettingsCard([
-                _buildSwitchTile(
-                  context,
-                  title: AppStrings.of(context)?.autoRefresh ?? 'Auto-refresh',
-                  subtitle: '${AppStrings.of(context)?.autoRefreshSubtitle ?? 'Automatically update playlists periodically'} (未实现)',
-                  icon: Icons.refresh_rounded,
-                  value: settings.autoRefresh,
-                  onChanged: (value) {
-                    settings.setAutoRefresh(value);
-                    _showError(context, '自动刷新尚未实现，设置不会生效');
-                  },
-                ),
-                if (settings.autoRefresh) ...[
-                  _buildDivider(),
-                  _buildSelectTile(
-                    context,
-                    title: AppStrings.of(context)?.refreshInterval ??
-                        'Refresh Interval',
-                    subtitle:
-                        'Every ${settings.refreshInterval} ${AppStrings.of(context)?.hours ?? 'hours'} (未实现)',
-                    icon: Icons.schedule_rounded,
-                    onTap: () => _showRefreshIntervalDialog(context, settings),
-                  ),
-                ],
-                _buildDivider(),
-                _buildSwitchTile(
-                  context,
-                  title: AppStrings.of(context)?.rememberLastChannel ??
-                      'Remember Last Channel',
-                  subtitle:
-                      AppStrings.of(context)?.rememberLastChannelSubtitle ??
-                          'Resume playback from last watched channel',
-                  icon: Icons.history_rounded,
-                  value: settings.rememberLastChannel,
-                  onChanged: (value) {
-                    settings.setRememberLastChannel(value);
-                    _showSuccess(context, value ? '已启用记住上次频道' : '已关闭记住上次频道');
-                  },
-                ),
-              ]),
-
-              const SizedBox(height: 24),
-
-              // EPG Settings
-              _buildSectionHeader(AppStrings.of(context)?.epg ??
-                  'EPG (Electronic Program Guide)'),
-              _buildSettingsCard([
-                _buildSwitchTile(
-                  context,
-                  title: AppStrings.of(context)?.enableEpg ?? 'Enable EPG',
-                  subtitle: AppStrings.of(context)?.enableEpgSubtitle ??
-                      'Show program information for channels',
-                  icon: Icons.event_note_rounded,
-                  value: settings.enableEpg,
-                  onChanged: (value) async {
-                    await settings.setEnableEpg(value);
-                    if (value) {
-                      // 启用 EPG 时，如果有配置 URL 则加载
-                      if (settings.epgUrl != null && settings.epgUrl!.isNotEmpty) {
-                        final success = await context.read<EpgProvider>().loadEpg(settings.epgUrl!);
-                        if (success) {
-                          _showSuccess(context, 'EPG 已启用并加载成功');
-                        } else {
-                          _showError(context, 'EPG 已启用，但加载失败');
-                        }
+            // EPG Settings
+            _buildSectionHeader(AppStrings.of(context)?.epg ?? 'EPG (Electronic Program Guide)'),
+            _buildSettingsCard([
+              _buildSwitchTile(
+                context,
+                title: AppStrings.of(context)?.enableEpg ?? 'Enable EPG',
+                subtitle: AppStrings.of(context)?.enableEpgSubtitle ?? 'Show program information for channels',
+                icon: Icons.event_note_rounded,
+                value: settings.enableEpg,
+                onChanged: (value) async {
+                  await settings.setEnableEpg(value);
+                  if (value) {
+                    // 启用 EPG 时，如果有配置 URL 则加载
+                    if (settings.epgUrl != null && settings.epgUrl!.isNotEmpty) {
+                      final success = await context.read<EpgProvider>().loadEpg(settings.epgUrl!);
+                      if (success) {
+                        _showSuccess(context, 'EPG 已启用并加载成功');
                       } else {
-                        _showSuccess(context, 'EPG 已启用，请配置 EPG 链接');
+                        _showError(context, 'EPG 已启用，但加载失败');
                       }
                     } else {
-                      // 关闭 EPG 时清除已加载的数据
-                      context.read<EpgProvider>().clear();
-                      _showSuccess(context, 'EPG 已关闭');
+                      _showSuccess(context, 'EPG 已启用，请配置 EPG 链接');
                     }
-                  },
-                ),
-                if (settings.enableEpg) ...[
-                  _buildDivider(),
-                  _buildInputTile(
-                    context,
-                    title: AppStrings.of(context)?.epgUrl ?? 'EPG URL',
-                    subtitle: settings.epgUrl ??
-                        (AppStrings.of(context)?.notConfigured ??
-                            'Not configured'),
-                    icon: Icons.link_rounded,
-                    onTap: () => _showEpgUrlDialog(context, settings),
-                  ),
-                ],
-              ]),
-
-              const SizedBox(height: 24),
-
-              // Parental Control
-              _buildSectionHeader(AppStrings.of(context)?.parentalControl ??
-                  'Parental Control'),
-              _buildSettingsCard([
-                _buildSwitchTile(
+                  } else {
+                    // 关闭 EPG 时清除已加载的数据
+                    context.read<EpgProvider>().clear();
+                    _showSuccess(context, 'EPG 已关闭');
+                  }
+                },
+              ),
+              if (settings.enableEpg) ...[
+                _buildDivider(),
+                _buildInputTile(
                   context,
-                  title: AppStrings.of(context)?.enableParentalControl ??
-                      'Enable Parental Control',
-                  subtitle:
-                      '${AppStrings.of(context)?.enableParentalControlSubtitle ?? 'Require PIN to access certain content'} (未实现)',
-                  icon: Icons.lock_outline_rounded,
-                  value: settings.parentalControl,
-                  onChanged: (value) {
-                    settings.setParentalControl(value);
-                    _showError(context, '家长控制尚未实现，设置不会生效');
-                  },
+                  title: AppStrings.of(context)?.epgUrl ?? 'EPG URL',
+                  subtitle: settings.epgUrl ?? (AppStrings.of(context)?.notConfigured ?? 'Not configured'),
+                  icon: Icons.link_rounded,
+                  onTap: () => _showEpgUrlDialog(context, settings),
                 ),
-                if (settings.parentalControl) ...[
-                  _buildDivider(),
-                  _buildActionTile(
-                    context,
-                    title: AppStrings.of(context)?.changePin ?? 'Change PIN',
-                    subtitle: '${AppStrings.of(context)?.changePinSubtitle ?? 'Update your parental control PIN'} (未实现)',
-                    icon: Icons.pin_rounded,
-                    onTap: () => _showChangePinDialog(context, settings),
-                  ),
-                ],
-              ]),
+              ],
+            ]),
 
-              const SizedBox(height: 24),
+            const SizedBox(height: 24),
 
-              // About Section
-              _buildSectionHeader(AppStrings.of(context)?.about ?? 'About'),
-              _buildSettingsCard([
-                FutureBuilder<String>(
-                  future: _getCurrentVersion(),
-                  builder: (context, snapshot) {
-                    return _buildInfoTile(
-                      context,
-                      title: AppStrings.of(context)?.version ?? 'Version',
-                      value: snapshot.data ?? 'Loading...',
-                      icon: Icons.info_outline_rounded,
-                    );
-                  },
-                ),
+            // Parental Control
+            _buildSectionHeader(AppStrings.of(context)?.parentalControl ?? 'Parental Control'),
+            _buildSettingsCard([
+              _buildSwitchTile(
+                context,
+                title: AppStrings.of(context)?.enableParentalControl ?? 'Enable Parental Control',
+                subtitle: '${AppStrings.of(context)?.enableParentalControlSubtitle ?? 'Require PIN to access certain content'} (未实现)',
+                icon: Icons.lock_outline_rounded,
+                value: settings.parentalControl,
+                onChanged: (value) {
+                  settings.setParentalControl(value);
+                  _showError(context, '家长控制尚未实现，设置不会生效');
+                },
+              ),
+              if (settings.parentalControl) ...[
                 _buildDivider(),
                 _buildActionTile(
                   context,
-                  title: AppStrings.of(context)?.checkUpdate ?? 'Check for Updates',
-                  subtitle: AppStrings.of(context)?.checkUpdateSubtitle ?? 'Check if a new version is available',
-                  icon: Icons.system_update_rounded,
-                  onTap: () => _checkForUpdates(context),
+                  title: AppStrings.of(context)?.changePin ?? 'Change PIN',
+                  subtitle: '${AppStrings.of(context)?.changePinSubtitle ?? 'Update your parental control PIN'} (未实现)',
+                  icon: Icons.pin_rounded,
+                  onTap: () => _showChangePinDialog(context, settings),
                 ),
-                _buildDivider(),
-                _buildInfoTile(
-                  context,
-                  title: AppStrings.of(context)?.platform ?? 'Platform',
-                  value: _getPlatformName(),
-                  icon: Icons.devices_rounded,
-                ),
-              ]),
+              ],
+            ]),
 
-              const SizedBox(height: 24),
+            const SizedBox(height: 24),
 
-              // Reset Section
-              _buildSettingsCard([
-                _buildActionTile(
-                  context,
-                  title: AppStrings.of(context)?.resetAllSettings ??
-                      'Reset All Settings',
-                  subtitle: AppStrings.of(context)?.resetSettingsSubtitle ??
-                      'Restore all settings to default values',
-                  icon: Icons.restore_rounded,
-                  isDestructive: true,
-                  onTap: () => _confirmResetSettings(context, settings),
-                ),
-              ]),
+            // About Section
+            _buildSectionHeader(AppStrings.of(context)?.about ?? 'About'),
+            _buildSettingsCard([
+              FutureBuilder<String>(
+                future: _getCurrentVersion(),
+                builder: (context, snapshot) {
+                  return _buildInfoTile(
+                    context,
+                    title: AppStrings.of(context)?.version ?? 'Version',
+                    value: snapshot.data ?? 'Loading...',
+                    icon: Icons.info_outline_rounded,
+                  );
+                },
+              ),
+              _buildDivider(),
+              _buildActionTile(
+                context,
+                title: AppStrings.of(context)?.checkUpdate ?? 'Check for Updates',
+                subtitle: AppStrings.of(context)?.checkUpdateSubtitle ?? 'Check if a new version is available',
+                icon: Icons.system_update_rounded,
+                onTap: () => _checkForUpdates(context),
+              ),
+              _buildDivider(),
+              _buildInfoTile(
+                context,
+                title: AppStrings.of(context)?.platform ?? 'Platform',
+                value: _getPlatformName(),
+                icon: Icons.devices_rounded,
+              ),
+            ]),
 
-              const SizedBox(height: 40),
-            ],
-          );
-        },
-      );
+            const SizedBox(height: 24),
+
+            // Reset Section
+            _buildSettingsCard([
+              _buildActionTile(
+                context,
+                title: AppStrings.of(context)?.resetAllSettings ?? 'Reset All Settings',
+                subtitle: AppStrings.of(context)?.resetSettingsSubtitle ?? 'Restore all settings to default values',
+                icon: Icons.restore_rounded,
+                isDestructive: true,
+                onTap: () => _confirmResetSettings(context, settings),
+              ),
+            ]),
+
+            const SizedBox(height: 40),
+          ],
+        );
+      },
+    );
 
     if (isTV) {
       return Scaffold(
@@ -368,8 +348,7 @@ class SettingsScreen extends StatelessWidget {
     }
   }
 
-  void _showDecodingModeDialog(
-      BuildContext context, SettingsProvider settings) {
+  void _showDecodingModeDialog(BuildContext context, SettingsProvider settings) {
     final options = ['auto', 'hardware', 'software'];
 
     showDialog(
@@ -391,8 +370,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 subtitle: Text(
                   _getDecodingModeDescription(context, mode),
-                  style:
-                      const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
                 ),
                 value: mode,
                 groupValue: settings.decodingMode,
@@ -634,11 +612,7 @@ class SettingsScreen extends StatelessWidget {
       builder: (context, isFocused, child) {
         return Container(
           decoration: BoxDecoration(
-            color: isFocused
-                ? (isDestructive
-                    ? AppTheme.errorColor.withOpacity(0.1)
-                    : AppTheme.getCardColor(context))
-                : Colors.transparent,
+            color: isFocused ? (isDestructive ? AppTheme.errorColor.withOpacity(0.1) : AppTheme.getCardColor(context)) : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
           child: child,
@@ -653,17 +627,12 @@ class SettingsScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: (isDestructive
-                          ? AppTheme.errorColor
-                          : AppTheme.primaryColor)
-                      .withOpacity(0.15),
+                  color: (isDestructive ? AppTheme.errorColor : AppTheme.primaryColor).withOpacity(0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   icon,
-                  color: isDestructive
-                      ? AppTheme.errorColor
-                      : AppTheme.primaryColor,
+                  color: isDestructive ? AppTheme.errorColor : AppTheme.primaryColor,
                   size: 20,
                 ),
               ),
@@ -675,9 +644,7 @@ class SettingsScreen extends StatelessWidget {
                     Text(
                       title,
                       style: TextStyle(
-                        color: isDestructive
-                            ? AppTheme.errorColor
-                            : AppTheme.getTextPrimary(context),
+                        color: isDestructive ? AppTheme.errorColor : AppTheme.getTextPrimary(context),
                         fontSize: 15,
                         fontWeight: FontWeight.w500,
                       ),
@@ -830,8 +797,7 @@ class SettingsScreen extends StatelessWidget {
     return strings?.volumeBoostHigh ?? 'Significantly higher volume';
   }
 
-  void _showRefreshIntervalDialog(
-      BuildContext context, SettingsProvider settings) {
+  void _showRefreshIntervalDialog(BuildContext context, SettingsProvider settings) {
     final options = [6, 12, 24, 48, 72];
 
     showDialog(
@@ -887,8 +853,7 @@ class SettingsScreen extends StatelessWidget {
             controller: controller,
             style: const TextStyle(color: AppTheme.textPrimary),
             decoration: InputDecoration(
-              hintText:
-                  AppStrings.of(context)?.enterEpgUrl ?? 'Enter EPG XMLTV URL',
+              hintText: AppStrings.of(context)?.enterEpgUrl ?? 'Enter EPG XMLTV URL',
               hintStyle: const TextStyle(color: AppTheme.textMuted),
             ),
           ),
@@ -899,20 +864,18 @@ class SettingsScreen extends StatelessWidget {
             ),
             ElevatedButton(
               onPressed: () async {
-                final newUrl = controller.text.trim().isEmpty
-                    ? null
-                    : controller.text.trim();
+                final newUrl = controller.text.trim().isEmpty ? null : controller.text.trim();
                 final oldUrl = settings.epgUrl;
-                
+
                 // 保存新 URL
                 await settings.setEpgUrl(newUrl);
                 Navigator.pop(dialogContext);
-                
+
                 // 如果 URL 变化了，清除旧数据并加载新数据
                 if (newUrl != oldUrl) {
                   final epgProvider = context.read<EpgProvider>();
                   epgProvider.clear();
-                  
+
                   if (newUrl != null && newUrl.isNotEmpty && settings.enableEpg) {
                     final success = await epgProvider.loadEpg(newUrl);
                     if (success) {
@@ -992,8 +955,7 @@ class SettingsScreen extends StatelessWidget {
             style: const TextStyle(color: AppTheme.textPrimary),
           ),
           content: Text(
-            AppStrings.of(context)?.resetConfirm ??
-                'Are you sure you want to reset all settings to their default values?',
+            AppStrings.of(context)?.resetConfirm ?? 'Are you sure you want to reset all settings to their default values?',
             style: const TextStyle(color: AppTheme.textSecondary),
           ),
           actions: [
@@ -1022,7 +984,7 @@ class SettingsScreen extends StatelessWidget {
   void _showLanguageDialog(BuildContext context, SettingsProvider settings) {
     // 获取当前设置的语言代码，null 表示跟随系统
     final currentLang = settings.locale?.languageCode;
-    
+
     showDialog(
       context: context,
       builder: (dialogContext) {

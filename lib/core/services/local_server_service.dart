@@ -59,10 +59,8 @@ class LocalServerService {
   void _handleRequest(HttpRequest request) async {
     // Enable CORS
     request.response.headers.add('Access-Control-Allow-Origin', '*');
-    request.response.headers
-        .add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    request.response.headers
-        .add('Access-Control-Allow-Headers', 'Content-Type');
+    request.response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    request.response.headers.add('Access-Control-Allow-Headers', 'Content-Type');
 
     // Handle preflight
     if (request.method == 'OPTIONS') {
@@ -114,21 +112,18 @@ class LocalServerService {
 
       if (type == 'url') {
         final url = data['url'] as String?;
-        debugPrint(
-            'DEBUG: URL内容: ${url?.substring(0, math.min(100, url.length))}...');
+        debugPrint('DEBUG: URL内容: ${url?.substring(0, math.min(100, url.length))}...');
 
         if (url != null && url.isNotEmpty) {
           debugPrint('DEBUG: 调用URL接收回调...');
           onUrlReceived?.call(url, name);
 
           request.response.headers.contentType = ContentType.json;
-          request.response
-              .write(json.encode({'success': true, 'message': 'URL received'}));
+          request.response.write(json.encode({'success': true, 'message': 'URL received'}));
         } else {
           debugPrint('DEBUG: URL为空或无效');
           request.response.statusCode = 400;
-          request.response.write(
-              json.encode({'success': false, 'message': 'URL is required'}));
+          request.response.write(json.encode({'success': false, 'message': 'URL is required'}));
         }
       } else if (type == 'content') {
         final fileContent = data['content'] as String?;
@@ -139,26 +134,22 @@ class LocalServerService {
           onContentReceived?.call(fileContent, name);
 
           request.response.headers.contentType = ContentType.json;
-          request.response.write(
-              json.encode({'success': true, 'message': 'Content received'}));
+          request.response.write(json.encode({'success': true, 'message': 'Content received'}));
         } else {
           debugPrint('DEBUG: 文件内容为空');
           request.response.statusCode = 400;
-          request.response.write(json
-              .encode({'success': false, 'message': 'Content is required'}));
+          request.response.write(json.encode({'success': false, 'message': 'Content is required'}));
         }
       } else {
         debugPrint('DEBUG: 无效的请求类型: $type');
         request.response.statusCode = 400;
-        request.response
-            .write(json.encode({'success': false, 'message': 'Invalid type'}));
+        request.response.write(json.encode({'success': false, 'message': 'Invalid type'}));
       }
     } catch (e) {
       debugPrint('DEBUG: 处理提交请求时出错: $e');
       debugPrint('DEBUG: 错误堆栈: ${StackTrace.current}');
       request.response.statusCode = 400;
-      request.response.write(
-          json.encode({'success': false, 'message': 'Invalid request: $e'}));
+      request.response.write(json.encode({'success': false, 'message': 'Invalid request: $e'}));
     }
 
     await request.response.close();
@@ -200,9 +191,7 @@ class LocalServerService {
         if (name.contains('wi-fi') || name.contains('wlan')) {
           score += 50;
         }
-        if (name.contains('ethernet') ||
-            name.contains('以太网') ||
-            name.contains('本地连接')) {
+        if (name.contains('ethernet') || name.contains('以太网') || name.contains('本地连接')) {
           score += 40;
         }
 

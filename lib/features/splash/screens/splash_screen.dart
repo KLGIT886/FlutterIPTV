@@ -15,8 +15,7 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
-    with TickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMixin {
   late AnimationController _logoController;
   late AnimationController _textController;
   late Animation<double> _logoScale;
@@ -27,21 +26,13 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-    _logoController = AnimationController(
-        duration: const Duration(milliseconds: 1200), vsync: this);
-    _textController = AnimationController(
-        duration: const Duration(milliseconds: 800), vsync: this);
+    _logoController = AnimationController(duration: const Duration(milliseconds: 1200), vsync: this);
+    _textController = AnimationController(duration: const Duration(milliseconds: 800), vsync: this);
 
-    _logoScale = Tween<double>(begin: 0.5, end: 1.0).animate(
-        CurvedAnimation(parent: _logoController, curve: Curves.elasticOut));
-    _logoOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
-        parent: _logoController,
-        curve: const Interval(0.0, 0.5, curve: Curves.easeOut)));
-    _textOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-        CurvedAnimation(parent: _textController, curve: Curves.easeOut));
-    _textSlide = Tween<Offset>(begin: const Offset(0, 0.5), end: Offset.zero)
-        .animate(CurvedAnimation(
-            parent: _textController, curve: Curves.easeOutCubic));
+    _logoScale = Tween<double>(begin: 0.5, end: 1.0).animate(CurvedAnimation(parent: _logoController, curve: Curves.elasticOut));
+    _logoOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: _logoController, curve: const Interval(0.0, 0.5, curve: Curves.easeOut)));
+    _textOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: _textController, curve: Curves.easeOut));
+    _textSlide = Tween<Offset>(begin: const Offset(0, 0.5), end: Offset.zero).animate(CurvedAnimation(parent: _textController, curve: Curves.easeOutCubic));
 
     _startAnimations();
   }
@@ -182,8 +173,7 @@ class _SplashScreenState extends State<SplashScreen>
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        AppStrings.of(context)?.professionalIptvPlayer ??
-                            'Professional IPTV Player',
+                        AppStrings.of(context)?.professionalIptvPlayer ?? 'Professional IPTV Player',
                         style: TextStyle(
                           fontSize: 14,
                           color: AppTheme.textSecondaryDark.withOpacity(0.8),

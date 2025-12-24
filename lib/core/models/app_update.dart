@@ -26,14 +26,11 @@ class AppUpdate {
     String releaseNotes = json['body'] ?? '';
 
     // 获取发布时间
-    DateTime publishedAt =
-        DateTime.tryParse(json['published_at'] ?? '') ?? DateTime.now();
+    DateTime publishedAt = DateTime.tryParse(json['published_at'] ?? '') ?? DateTime.now();
 
     // 获取下载URL
     String downloadUrl = '';
-    if (json['assets'] != null &&
-        json['assets'] is List &&
-        json['assets'].isNotEmpty) {
+    if (json['assets'] != null && json['assets'] is List && json['assets'].isNotEmpty) {
       downloadUrl = json['assets'][0]['browser_download_url'] ?? '';
     }
 

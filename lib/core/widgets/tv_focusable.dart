@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
-import 'tv_sidebar.dart';
 
 /// A widget that provides D-Pad focus support for TV and desktop navigation
 class TVFocusable extends StatefulWidget {
   final Widget child;
-  final Widget Function(BuildContext context, bool isFocused, Widget child)?
-      builder;
+  final Widget Function(BuildContext context, bool isFocused, Widget child)? builder;
   final VoidCallback? onSelect;
   final VoidCallback? onFocus;
   final VoidCallback? onBlur;
@@ -45,8 +43,7 @@ class TVFocusable extends StatefulWidget {
   State<TVFocusable> createState() => _TVFocusableState();
 }
 
-class _TVFocusableState extends State<TVFocusable>
-    with SingleTickerProviderStateMixin {
+class _TVFocusableState extends State<TVFocusable> with SingleTickerProviderStateMixin {
   late FocusNode _focusNode;
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
@@ -96,9 +93,7 @@ class _TVFocusableState extends State<TVFocusable>
     final key = event.logicalKey;
 
     // Handle selection
-    if (key == LogicalKeyboardKey.select ||
-        key == LogicalKeyboardKey.enter ||
-        key == LogicalKeyboardKey.space) {
+    if (key == LogicalKeyboardKey.select || key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.space) {
       widget.onSelect?.call();
       return KeyEventResult.handled;
     }
@@ -140,9 +135,7 @@ class _TVFocusableState extends State<TVFocusable>
       child: GestureDetector(
         onTap: widget.onSelect,
         child: MouseRegion(
-          cursor: widget.enabled
-              ? SystemMouseCursors.click
-              : SystemMouseCursors.basic,
+          cursor: widget.enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
           onEnter: (_) {
             if (!_focusNode.hasFocus && widget.enabled) {
               _focusNode.requestFocus();
@@ -151,17 +144,14 @@ class _TVFocusableState extends State<TVFocusable>
           child: AnimatedBuilder(
             animation: _scaleAnimation,
             builder: (context, child) {
-              final focusedChild = widget.builder != null
-                  ? widget.builder!(context, _isFocused, widget.child)
-                  : widget.child;
+              final focusedChild = widget.builder != null ? widget.builder!(context, _isFocused, widget.child) : widget.child;
 
               return Transform.scale(
                 scale: _scaleAnimation.value,
                 child: Container(
                   decoration: widget.showFocusBorder && _isFocused
                       ? BoxDecoration(
-                          borderRadius: widget.borderRadius ??
-                              BorderRadius.circular(AppTheme.radiusMedium),
+                          borderRadius: widget.borderRadius ?? BorderRadius.circular(AppTheme.radiusMedium),
                           border: Border.all(
                             color: AppTheme.focusBorderColor,
                             width: 3,

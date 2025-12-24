@@ -125,8 +125,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   fontSize: 16,
                 ),
                 decoration: InputDecoration(
-                  hintText: AppStrings.of(context)?.searchHint ??
-                      'Search channels...',
+                  hintText: AppStrings.of(context)?.searchHint ?? 'Search channels...',
                   hintStyle: TextStyle(color: AppTheme.getTextMuted(context)),
                   prefixIcon: Icon(
                     Icons.search_rounded,
@@ -209,8 +208,7 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            AppStrings.of(context)?.typeToSearch ??
-                'Type to search by channel name or category',
+            AppStrings.of(context)?.typeToSearch ?? 'Type to search by channel name or category',
             style: TextStyle(
               color: AppTheme.getTextSecondary(context),
               fontSize: 14,
@@ -282,9 +280,7 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            (AppStrings.of(context)?.noChannelsMatch ??
-                    'No channels match "{query}"')
-                .replaceAll('{query}', _searchQuery),
+            (AppStrings.of(context)?.noChannelsMatch ?? 'No channels match "{query}"').replaceAll('{query}', _searchQuery),
             style: TextStyle(
               color: AppTheme.getTextSecondary(context),
               fontSize: 14,
@@ -306,10 +302,7 @@ class _SearchScreenState extends State<SearchScreen> {
         Padding(
           padding: const EdgeInsets.all(20),
           child: Text(
-            (AppStrings.of(context)?.resultsFor ??
-                    '{count} result(s) for "{query}"')
-                .replaceAll('{count}', '${results.length}')
-                .replaceAll('{query}', _searchQuery),
+            (AppStrings.of(context)?.resultsFor ?? '{count} result(s) for "{query}"').replaceAll('{count}', '${results.length}').replaceAll('{query}', _searchQuery),
             style: TextStyle(
               color: AppTheme.getTextSecondary(context),
               fontSize: 14,
@@ -330,8 +323,7 @@ class _SearchScreenState extends State<SearchScreen> {
             itemCount: results.length,
             itemBuilder: (context, index) {
               final channel = results[index];
-              final isFavorite =
-                  context.read<FavoritesProvider>().isFavorite(channel.id ?? 0);
+              final isFavorite = context.read<FavoritesProvider>().isFavorite(channel.id ?? 0);
 
               return ChannelCard(
                 name: channel.name,
@@ -348,7 +340,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   if (settingsProvider.rememberLastChannel && channel.id != null) {
                     settingsProvider.setLastChannelId(channel.id);
                   }
-                  
+
                   Navigator.pushNamed(
                     context,
                     AppRouter.player,

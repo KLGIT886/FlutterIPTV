@@ -40,25 +40,23 @@ class _HomeScreenState extends State<HomeScreen> {
       context.read<PlaylistProvider>().addListener(_onPlaylistProviderChanged);
     });
   }
-  
+
   @override
   void dispose() {
     // 移除监听器时需要小心，因为 context 可能已经不可用
     super.dispose();
   }
-  
+
   void _onChannelProviderChanged() {
     if (!mounted) return;
     final channelProvider = context.read<ChannelProvider>();
     // 只有当频道数量变化时才刷新
-    if (channelProvider.channels.length != _lastChannelCount && 
-        channelProvider.channels.isNotEmpty &&
-        !channelProvider.isLoading) {
+    if (channelProvider.channels.length != _lastChannelCount && channelProvider.channels.isNotEmpty && !channelProvider.isLoading) {
       _lastChannelCount = channelProvider.channels.length;
       _refreshRecommendedChannels();
     }
   }
-  
+
   void _onPlaylistProviderChanged() {
     if (!mounted) return;
     final playlistProvider = context.read<PlaylistProvider>();
@@ -94,15 +92,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _refreshRecommendedChannels() {
     if (!mounted) return;
-    
+
     final channelProvider = context.read<ChannelProvider>();
     if (channelProvider.channels.isEmpty) return;
-    
+
     // 随机打乱频道顺序，显示数量由 _buildChannelRow 根据宽度自动计算
     final shuffled = List<Channel>.from(channelProvider.channels)..shuffle();
     // 最多取20个作为候选，实际显示数量由宽度决定
     _recommendedChannels = shuffled.take(20).toList();
-    
+
     setState(() {});
   }
 
@@ -123,10 +121,18 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     switch (index) {
-      case 1: Navigator.pushNamed(context, AppRouter.channels); break;
-      case 2: Navigator.pushNamed(context, AppRouter.favorites); break;
-      case 3: Navigator.pushNamed(context, AppRouter.search); break;
-      case 4: Navigator.pushNamed(context, AppRouter.settings); break;
+      case 1:
+        Navigator.pushNamed(context, AppRouter.channels);
+        break;
+      case 2:
+        Navigator.pushNamed(context, AppRouter.favorites);
+        break;
+      case 3:
+        Navigator.pushNamed(context, AppRouter.search);
+        break;
+      case 4:
+        Navigator.pushNamed(context, AppRouter.settings);
+        break;
     }
   }
 
@@ -186,9 +192,9 @@ class _HomeScreenState extends State<HomeScreen> {
         if (channelProvider.isLoading) {
           return const Center(child: CircularProgressIndicator(color: AppTheme.primaryColor));
         }
-        
+
         final favChannels = _getFavoriteChannels(channelProvider);
-        
+
         return Column(
           children: [
             // 固定头部
@@ -241,7 +247,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final playlistProvider = context.watch<PlaylistProvider>();
     final activePlaylist = playlistProvider.activePlaylist;
     Channel? lastChannel;
-    
+
     if (settingsProvider.rememberLastChannel && settingsProvider.lastChannelId != null) {
       try {
         lastChannel = provider.channels.firstWhere(
@@ -346,7 +352,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildChannelRow(String title, List<Channel> channels, {bool showMore = false, bool showRefresh = false, VoidCallback? onMoreTap, VoidCallback? onRefresh}) {
     if (channels.isEmpty && !showRefresh) return const SizedBox.shrink();
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -406,23 +412,23 @@ class _HomeScreenState extends State<HomeScreen> {
             if (channels.isEmpty) {
               return const SizedBox.shrink();
             }
-            
+
             // 每个卡片宽度 160 + 间距 12
             const cardWidth = 160.0;
             const cardSpacing = 12.0;
             final availableWidth = constraints.maxWidth;
-            
+
             // 计算能显示多少个卡片，多加1个让布局更美观
             final maxCards = ((availableWidth + cardSpacing) / (cardWidth + cardSpacing)).floor() + 1;
             // 显示数量不能超过实际频道数量，最少显示1个
             final displayCount = maxCards.clamp(1, channels.length);
-            
+
             return SizedBox(
               height: 140,
               child: Row(
                 children: List.generate(displayCount, (index) {
                   final channel = channels[index];
-                  
+
                   return Padding(
                     padding: EdgeInsets.only(right: index < displayCount - 1 ? cardSpacing : 0),
                     child: SizedBox(
@@ -448,7 +454,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (settingsProvider.rememberLastChannel && channel.id != null) {
       settingsProvider.setLastChannelId(channel.id);
     }
-    
+
     context.read<PlayerProvider>().playChannel(channel);
     Navigator.pushNamed(context, AppRouter.player, arguments: {
       'channelUrl': channel.url,
@@ -522,17 +528,17 @@ class _ResponsiveCategoryChipsState extends State<_ResponsiveCategoryChips> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth - 48; // 减去左右 padding
-        
+
         // 计算每个 chip 的大致宽度（图标 + 文字 + padding）
         // 估算每个 chip 平均宽度约 100px
         const estimatedChipWidth = 110.0;
         final maxVisibleCount = (availableWidth / estimatedChipWidth).floor();
-        
+
         // 如果所有分类都能显示，直接用 Wrap
         if (widget.groups.length <= maxVisibleCount || _isExpanded) {
           return _buildExpandedView();
         }
-        
+
         // 否则显示部分 + 展开按钮
         return _buildCollapsedView(maxVisibleCount);
       },
@@ -560,7 +566,7 @@ class _ResponsiveCategoryChipsState extends State<_ResponsiveCategoryChips> {
   Widget _buildCollapsedView(int maxVisible) {
     // 至少显示 4 个，留一个位置给展开按钮
     final visibleCount = (maxVisible - 1).clamp(3, widget.groups.length);
-    
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Align(
@@ -663,7 +669,6 @@ class _ResponsiveCategoryChipsState extends State<_ResponsiveCategoryChips> {
   }
 }
 
-
 /// 优化的频道卡片组件 - 使用 Selector 精确控制重建
 class _OptimizedChannelCard extends StatelessWidget {
   final Channel channel;
@@ -684,7 +689,7 @@ class _OptimizedChannelCard extends StatelessWidget {
         final epgProvider = context.read<EpgProvider>();
         final currentProgram = epgProvider.getCurrentProgram(channel.epgId, channel.name);
         final nextProgram = epgProvider.getNextProgram(channel.epgId, channel.name);
-        
+
         return ChannelCard(
           name: channel.name,
           logoUrl: channel.logoUrl,
