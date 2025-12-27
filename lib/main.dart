@@ -175,6 +175,7 @@ class _DlnaAwareAppState extends State<_DlnaAwareApp> with WindowListener {
     // 立即触发 DlnaProvider 的创建（会自动启动 DLNA 服务）
     // 使用 addPostFrameCallback 确保 context 可用
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      debugPrint('DLNA: addPostFrameCallback 触发');
       _setupDlnaCallbacks();
     });
   }

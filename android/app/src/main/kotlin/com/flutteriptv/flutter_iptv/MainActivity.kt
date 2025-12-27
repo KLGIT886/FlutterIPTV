@@ -53,11 +53,12 @@ class MainActivity: FlutterFragmentActivity() {
                     val urls = call.argument<List<String>>("urls")
                     val names = call.argument<List<String>>("names")
                     val groups = call.argument<List<String>>("groups")
+                    val isDlnaMode = call.argument<Boolean>("isDlnaMode") ?: false
                     
                     if (url != null) {
-                        Log.d(TAG, "Launching native player fragment: $name (index $index of ${urls?.size ?: 0})")
+                        Log.d(TAG, "Launching native player fragment: $name (index $index of ${urls?.size ?: 0}, isDlna=$isDlnaMode)")
                         try {
-                            showPlayerFragment(url, name, index, urls, names, groups)
+                            showPlayerFragment(url, name, index, urls, names, groups, isDlnaMode)
                             result.success(true)
                         } catch (e: Exception) {
                             Log.e(TAG, "Failed to launch player", e)
@@ -140,9 +141,10 @@ class MainActivity: FlutterFragmentActivity() {
         index: Int,
         urls: List<String>?,
         names: List<String>?,
-        groups: List<String>?
+        groups: List<String>?,
+        isDlnaMode: Boolean = false
     ) {
-        Log.d(TAG, "showPlayerFragment")
+        Log.d(TAG, "showPlayerFragment isDlnaMode=$isDlnaMode")
         
         // Enable back press callback when player is showing
         backPressedCallback.isEnabled = true
@@ -169,7 +171,8 @@ class MainActivity: FlutterFragmentActivity() {
             index,
             urls?.let { ArrayList(it) },
             names?.let { ArrayList(it) },
-            groups?.let { ArrayList(it) }
+            groups?.let { ArrayList(it) },
+            isDlnaMode
         ).apply {
             onCloseListener = {
                 runOnUiThread {

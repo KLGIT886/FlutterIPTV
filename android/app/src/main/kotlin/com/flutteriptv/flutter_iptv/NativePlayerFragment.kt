@@ -72,6 +72,7 @@ class NativePlayerFragment : Fragment() {
     private var channelUrls: ArrayList<String> = arrayListOf()
     private var channelNames: ArrayList<String> = arrayListOf()
     private var channelGroups: ArrayList<String> = arrayListOf()
+    private var isDlnaMode: Boolean = false
     
     // Category data
     private var categories: MutableList<CategoryItem> = mutableListOf()
@@ -110,6 +111,7 @@ class NativePlayerFragment : Fragment() {
         private const val ARG_CHANNEL_URLS = "channel_urls"
         private const val ARG_CHANNEL_NAMES = "channel_names"
         private const val ARG_CHANNEL_GROUPS = "channel_groups"
+        private const val ARG_IS_DLNA_MODE = "is_dlna_mode"
 
         fun newInstance(
             videoUrl: String,
@@ -117,7 +119,8 @@ class NativePlayerFragment : Fragment() {
             channelIndex: Int = 0,
             channelUrls: ArrayList<String>? = null,
             channelNames: ArrayList<String>? = null,
-            channelGroups: ArrayList<String>? = null
+            channelGroups: ArrayList<String>? = null,
+            isDlnaMode: Boolean = false
         ): NativePlayerFragment {
             return NativePlayerFragment().apply {
                 arguments = Bundle().apply {
@@ -127,6 +130,7 @@ class NativePlayerFragment : Fragment() {
                     channelUrls?.let { putStringArrayList(ARG_CHANNEL_URLS, it) }
                     channelNames?.let { putStringArrayList(ARG_CHANNEL_NAMES, it) }
                     channelGroups?.let { putStringArrayList(ARG_CHANNEL_GROUPS, it) }
+                    putBoolean(ARG_IS_DLNA_MODE, isDlnaMode)
                 }
             }
         }
@@ -149,9 +153,10 @@ class NativePlayerFragment : Fragment() {
             channelUrls = it.getStringArrayList(ARG_CHANNEL_URLS) ?: arrayListOf()
             channelNames = it.getStringArrayList(ARG_CHANNEL_NAMES) ?: arrayListOf()
             channelGroups = it.getStringArrayList(ARG_CHANNEL_GROUPS) ?: arrayListOf()
+            isDlnaMode = it.getBoolean(ARG_IS_DLNA_MODE, false)
         }
         
-        Log.d(TAG, "Playing: $currentName (index $currentIndex of ${channelUrls.size})")
+        Log.d(TAG, "Playing: $currentName (index $currentIndex of ${channelUrls.size}, isDlna=$isDlnaMode)")
 
         playerView = view.findViewById(R.id.player_view)
         loadingIndicator = view.findViewById(R.id.loading_indicator)
@@ -198,7 +203,6 @@ class NativePlayerFragment : Fragment() {
         playerView.useController = false
         
         // DLNA 模式：显示进度条，隐藏帮助文字
-        val isDlnaMode = channelUrls.isEmpty()
         if (isDlnaMode) {
             progressContainer.visibility = View.VISIBLE
             helpText.visibility = View.GONE
@@ -564,10 +568,7 @@ class NativePlayerFragment : Fragment() {
     }
 
     private fun handleKeyDown(keyCode: Int): Boolean {
-        Log.d(TAG, "handleKeyDown: keyCode=$keyCode, categoryPanelVisible=$categoryPanelVisible")
-        
-        // DLNA 模式：没有频道列表时禁用频道切换，但启用进度拖动
-        val isDlnaMode = channelUrls.isEmpty()
+        Log.d(TAG, "handleKeyDown: keyCode=$keyCode, categoryPanelVisible=$categoryPanelVisible, isDlnaMode=$isDlnaMode")
         
         when (keyCode) {
             KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {

@@ -581,15 +581,20 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
       response = _createSoapResponse('SetAVTransportURI', '');
     } else if (body.contains('"Play"') || body.contains(':Play') || body.contains('Play</')) {
       debugPrint('DLNA: Play');
-      _transportState = 'TRANSITIONING';
-      _notifyAllSubscribers();
-      onPlayUrl?.call(_currentUri, _currentTitle);
-      
-      Future.delayed(const Duration(milliseconds: 300), () {
-        _transportState = 'PLAYING';
-        _playStartTime = DateTime.now();
+      // 只有在有 URL 时才触发播放
+      if (_currentUri.isNotEmpty) {
+        _transportState = 'TRANSITIONING';
         _notifyAllSubscribers();
-      });
+        onPlayUrl?.call(_currentUri, _currentTitle);
+        
+        Future.delayed(const Duration(milliseconds: 300), () {
+          _transportState = 'PLAYING';
+          _playStartTime = DateTime.now();
+          _notifyAllSubscribers();
+        });
+      } else {
+        debugPrint('DLNA: Play 忽略 - 没有 URL');
+      }
       
       response = _createSoapResponse('Play', '');
     } else if (body.contains('"Pause"') || body.contains(':Pause') || body.contains('Pause</')) {

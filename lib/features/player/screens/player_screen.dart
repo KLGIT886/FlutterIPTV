@@ -137,36 +137,31 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         try {
           final dlnaProvider = context.read<DlnaProvider>();
           isDlnaMode = dlnaProvider.isActiveSession;
+          debugPrint('PlayerScreen: DLNA isActiveSession=$isDlnaMode');
         } catch (e) {
-          // 忽略
+          debugPrint('PlayerScreen: Failed to get DlnaProvider: $e');
         }
 
-        // DLNA 模式下不传递频道列表，禁用频道切换
-        List<String>? urls;
-        List<String>? names;
-        List<String>? groups;
+        // 获取频道列表
+        final channelProvider = context.read<ChannelProvider>();
+        final channels = channelProvider.channels;
+
+        // Find current channel index
         int currentIndex = 0;
-        
-        if (!isDlnaMode) {
-          // Get channel list for native player (use all channels, not filtered)
-          final channelProvider = context.read<ChannelProvider>();
-          final channels = channelProvider.channels;
-
-          // Find current channel index
-          for (int i = 0; i < channels.length; i++) {
-            if (channels[i].url == widget.channelUrl) {
-              currentIndex = i;
-              break;
-            }
+        for (int i = 0; i < channels.length; i++) {
+          if (channels[i].url == widget.channelUrl) {
+            currentIndex = i;
+            break;
           }
-
-          // Prepare channel lists with groups
-          urls = channels.map((c) => c.url).toList();
-          names = channels.map((c) => c.name).toList();
-          groups = channels.map((c) => c.groupName ?? '').toList();
         }
 
-        debugPrint('PlayerScreen: Launching native player for ${widget.channelName} (isDlna=$isDlnaMode, index $currentIndex of ${urls?.length ?? 0})');
+        // Prepare channel lists with groups
+        // DLNA 模式下也传递频道列表，但通过 isDlnaMode 参数告诉原生播放器
+        final urls = channels.map((c) => c.url).toList();
+        final names = channels.map((c) => c.name).toList();
+        final groups = channels.map((c) => c.groupName ?? '').toList();
+
+        debugPrint('PlayerScreen: Launching native player for ${widget.channelName} (isDlna=$isDlnaMode, index $currentIndex of ${channels.length})');
 
         // Launch native player with channel list and callback for when it closes
         final launched = await NativePlayerChannel.launchPlayer(
@@ -176,6 +171,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
           urls: urls,
           names: names,
           groups: groups,
+          isDlnaMode: isDlnaMode,
           onClosed: () {
             debugPrint('PlayerScreen: Native player closed callback');
             // 停止 DLNA 同步定时器

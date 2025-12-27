@@ -37,15 +37,21 @@ class DlnaProvider extends ChangeNotifier {
   Future<void> _autoStart() async {
     try {
       final prefs = ServiceLocator.prefs;
+      // 打印所有 SharedPreferences 的 keys 用于调试
+      final allKeys = prefs.getKeys();
+      debugPrint('DLNA: SharedPreferences keys = $allKeys');
+      
       final wasEnabled = prefs.getBool(_keyDlnaEnabled) ?? false;
-      debugPrint('DLNA: 检查自动启动状态 - wasEnabled=$wasEnabled');
+      debugPrint('DLNA: 检查自动启动状态 - key=$_keyDlnaEnabled, wasEnabled=$wasEnabled');
+      
       if (wasEnabled) {
         debugPrint('DLNA: 后台自动启动服务...');
         final success = await setEnabled(true);
         debugPrint('DLNA: 自动启动${success ? '成功' : '失败'}');
       }
-    } catch (e) {
+    } catch (e, stack) {
       debugPrint('DLNA: 自动启动失败 - $e');
+      debugPrint('DLNA: Stack trace - $stack');
     }
   }
 
@@ -92,8 +98,12 @@ class DlnaProvider extends ChangeNotifier {
         try {
           final prefs = ServiceLocator.prefs;
           await prefs.setBool(_keyDlnaEnabled, true);
+          debugPrint('DLNA: 已保存启用状态 - key=$_keyDlnaEnabled, value=true');
+          // 验证保存是否成功
+          final saved = prefs.getBool(_keyDlnaEnabled);
+          debugPrint('DLNA: 验证保存结果 - saved=$saved');
         } catch (e) {
-          // 忽略保存错误
+          debugPrint('DLNA: 保存启用状态失败 - $e');
         }
         notifyListeners();
         return true;
@@ -110,8 +120,9 @@ class DlnaProvider extends ChangeNotifier {
       try {
         final prefs = ServiceLocator.prefs;
         await prefs.setBool(_keyDlnaEnabled, false);
+        debugPrint('DLNA: 已保存禁用状态 - key=$_keyDlnaEnabled, value=false');
       } catch (e) {
-        // 忽略保存错误
+        debugPrint('DLNA: 保存禁用状态失败 - $e');
       }
       notifyListeners();
       return true;
@@ -136,6 +147,8 @@ class DlnaProvider extends ChangeNotifier {
     _dlnaService.updatePlayState(state: 'STOPPED');
     _pendingUrl = null;
     _pendingTitle = null;
+    _isActiveSession = false;
+    notifyListeners();
   }
   
   /// 同步播放器状态到 DLNA（定期调用）
