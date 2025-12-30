@@ -192,12 +192,20 @@ class PlayerProvider extends ChangeNotifier {
     }
   }
 
-  void _initMediaKitPlayer({bool useSoftwareDecoding = false}) {
+  void _initMediaKitPlayer({bool useSoftwareDecoding = false, String bufferStrength = 'fast'}) {
     _mediaKitPlayer?.dispose();
     _debugInfoTimer?.cancel();
 
+    // 根据缓冲强度设置缓冲区大小
+    final bufferSize = switch (bufferStrength) {
+      'fast' => 32 * 1024 * 1024,      // 32MB - 快速启动
+      'balanced' => 64 * 1024 * 1024,  // 64MB - 平衡
+      'stable' => 128 * 1024 * 1024,   // 128MB - 稳定
+      _ => 32 * 1024 * 1024,
+    };
+
     _mediaKitPlayer = Player(
-      configuration: const PlayerConfiguration(bufferSize: 64 * 1024 * 1024),
+      configuration: PlayerConfiguration(bufferSize: bufferSize),
     );
 
     VideoControllerConfiguration config = VideoControllerConfiguration(

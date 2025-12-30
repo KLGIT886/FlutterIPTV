@@ -75,6 +75,7 @@ class NativePlayerFragment : Fragment() {
     private var channelNames: ArrayList<String> = arrayListOf()
     private var channelGroups: ArrayList<String> = arrayListOf()
     private var isDlnaMode: Boolean = false
+    private var bufferStrength: String = "fast"
     
     // Category data
     private var categories: MutableList<CategoryItem> = mutableListOf()
@@ -126,6 +127,7 @@ class NativePlayerFragment : Fragment() {
         private const val ARG_CHANNEL_NAMES = "channel_names"
         private const val ARG_CHANNEL_GROUPS = "channel_groups"
         private const val ARG_IS_DLNA_MODE = "is_dlna_mode"
+        private const val ARG_BUFFER_STRENGTH = "buffer_strength"
 
         fun newInstance(
             videoUrl: String,
@@ -134,7 +136,8 @@ class NativePlayerFragment : Fragment() {
             channelUrls: ArrayList<String>? = null,
             channelNames: ArrayList<String>? = null,
             channelGroups: ArrayList<String>? = null,
-            isDlnaMode: Boolean = false
+            isDlnaMode: Boolean = false,
+            bufferStrength: String = "fast"
         ): NativePlayerFragment {
             return NativePlayerFragment().apply {
                 arguments = Bundle().apply {
@@ -145,6 +148,7 @@ class NativePlayerFragment : Fragment() {
                     channelNames?.let { putStringArrayList(ARG_CHANNEL_NAMES, it) }
                     channelGroups?.let { putStringArrayList(ARG_CHANNEL_GROUPS, it) }
                     putBoolean(ARG_IS_DLNA_MODE, isDlnaMode)
+                    putString(ARG_BUFFER_STRENGTH, bufferStrength)
                 }
             }
         }
@@ -168,6 +172,7 @@ class NativePlayerFragment : Fragment() {
             channelNames = it.getStringArrayList(ARG_CHANNEL_NAMES) ?: arrayListOf()
             channelGroups = it.getStringArrayList(ARG_CHANNEL_GROUPS) ?: arrayListOf()
             isDlnaMode = it.getBoolean(ARG_IS_DLNA_MODE, false)
+            bufferStrength = it.getString(ARG_BUFFER_STRENGTH, "fast") ?: "fast"
         }
         
         Log.d(TAG, "Playing: $currentName (index $currentIndex of ${channelUrls.size}, isDlna=$isDlnaMode)")
@@ -679,14 +684,17 @@ class NativePlayerFragment : Fragment() {
         val renderersFactory = DefaultRenderersFactory(requireContext())
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
         
-        // 配置加载控制 - 增加缓冲区大小
+        // 配置加载控制 - 根据缓冲强度设置
+        val (minBuffer, maxBuffer, playbackBuffer, rebufferBuffer) = when (bufferStrength) {
+            "fast" -> arrayOf(15000, 30000, 500, 1500)      // 快速：0.5秒开始播放
+            "balanced" -> arrayOf(30000, 60000, 1500, 3000) // 平衡：1.5秒开始播放
+            "stable" -> arrayOf(50000, 120000, 2500, 5000)  // 稳定：2.5秒开始播放
+            else -> arrayOf(15000, 30000, 500, 1500)
+        }
+        Log.d(TAG, "Buffer strength: $bufferStrength (playback: ${playbackBuffer}ms)")
+        
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                50000,  // minBufferMs: 最小缓冲 50 秒
-                120000, // maxBufferMs: 最大缓冲 120 秒
-                2500,   // bufferForPlaybackMs: 开始播放需要 2.5 秒缓冲
-                5000    // bufferForPlaybackAfterRebufferMs: 重新缓冲后需要 5 秒
-            )
+            .setBufferDurationsMs(minBuffer, maxBuffer, playbackBuffer, rebufferBuffer)
             .build()
         
         player = ExoPlayer.Builder(requireContext(), renderersFactory)

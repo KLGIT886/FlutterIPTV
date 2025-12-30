@@ -86,11 +86,12 @@ class MainActivity: FlutterFragmentActivity() {
                     val names = call.argument<List<String>>("names")
                     val groups = call.argument<List<String>>("groups")
                     val isDlnaMode = call.argument<Boolean>("isDlnaMode") ?: false
+                    val bufferStrength = call.argument<String>("bufferStrength") ?: "fast"
                     
                     if (url != null) {
-                        Log.d(TAG, "Launching native player fragment: $name (index $index of ${urls?.size ?: 0}, isDlna=$isDlnaMode)")
+                        Log.d(TAG, "Launching native player fragment: $name (index $index of ${urls?.size ?: 0}, isDlna=$isDlnaMode, buffer=$bufferStrength)")
                         try {
-                            showPlayerFragment(url, name, index, urls, names, groups, isDlnaMode)
+                            showPlayerFragment(url, name, index, urls, names, groups, isDlnaMode, bufferStrength)
                             result.success(true)
                         } catch (e: Exception) {
                             Log.e(TAG, "Failed to launch player", e)
@@ -174,9 +175,10 @@ class MainActivity: FlutterFragmentActivity() {
         urls: List<String>?,
         names: List<String>?,
         groups: List<String>?,
-        isDlnaMode: Boolean = false
+        isDlnaMode: Boolean = false,
+        bufferStrength: String = "fast"
     ) {
-        Log.d(TAG, "showPlayerFragment isDlnaMode=$isDlnaMode")
+        Log.d(TAG, "showPlayerFragment isDlnaMode=$isDlnaMode, bufferStrength=$bufferStrength")
         
         // Enable back press callback when player is showing
         backPressedCallback.isEnabled = true
@@ -204,7 +206,8 @@ class MainActivity: FlutterFragmentActivity() {
             urls?.let { ArrayList(it) },
             names?.let { ArrayList(it) },
             groups?.let { ArrayList(it) },
-            isDlnaMode
+            isDlnaMode,
+            bufferStrength
         ).apply {
             onCloseListener = {
                 runOnUiThread {

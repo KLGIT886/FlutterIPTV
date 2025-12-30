@@ -19,6 +19,7 @@ import '../providers/player_provider.dart';
 import '../../favorites/providers/favorites_provider.dart';
 import '../../channels/providers/channel_provider.dart';
 import '../../settings/providers/settings_provider.dart';
+import '../../settings/providers/settings_provider.dart';
 import '../../settings/providers/dlna_provider.dart';
 import '../../epg/providers/epg_provider.dart';
 
@@ -163,6 +164,10 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
 
         debugPrint('PlayerScreen: Launching native player for ${widget.channelName} (isDlna=$isDlnaMode, index $currentIndex of ${channels.length})');
 
+        // 获取缓冲强度设置
+        final settingsProvider = context.read<SettingsProvider>();
+        final bufferStrength = settingsProvider.bufferStrength;
+
         // Launch native player with channel list and callback for when it closes
         final launched = await NativePlayerChannel.launchPlayer(
           url: widget.channelUrl,
@@ -172,6 +177,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
           names: names,
           groups: groups,
           isDlnaMode: isDlnaMode,
+          bufferStrength: bufferStrength,
           onClosed: () {
             debugPrint('PlayerScreen: Native player closed callback');
             // 停止 DLNA 同步定时器

@@ -99,6 +99,14 @@ class SettingsScreen extends StatelessWidget {
                 onTap: () => _showBufferSizeDialog(context, settings),
               ),
               _buildDivider(),
+              _buildSelectTile(
+                context,
+                title: '缓冲强度',
+                subtitle: _getBufferStrengthLabel(settings.bufferStrength),
+                icon: Icons.speed_rounded,
+                onTap: () => _showBufferStrengthDialog(context, settings),
+              ),
+              _buildDivider(),
               _buildSwitchTile(
                 context,
                 title: AppStrings.of(context)?.volumeNormalization ?? 'Volume Normalization',
@@ -733,6 +741,61 @@ class SettingsScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  String _getBufferStrengthLabel(String strength) {
+    switch (strength) {
+      case 'fast':
+        return '快速 (切换快，可能卡顿)';
+      case 'balanced':
+        return '平衡';
+      case 'stable':
+        return '稳定 (切换慢，不易卡顿)';
+      default:
+        return strength;
+    }
+  }
+
+  void _showBufferStrengthDialog(BuildContext context, SettingsProvider settings) {
+    final options = ['fast', 'balanced', 'stable'];
+    final labels = {
+      'fast': '快速 (切换快，可能卡顿)',
+      'balanced': '平衡',
+      'stable': '稳定 (切换慢，不易卡顿)',
+    };
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppTheme.surfaceColor,
+          title: const Text(
+            '缓冲强度',
+            style: TextStyle(color: AppTheme.textPrimary),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: options.map((strength) {
+              return RadioListTile<String>(
+                title: Text(
+                  labels[strength] ?? strength,
+                  style: const TextStyle(color: AppTheme.textPrimary),
+                ),
+                value: strength,
+                groupValue: settings.bufferStrength,
+                onChanged: (value) {
+                  if (value != null) {
+                    settings.setBufferStrength(value);
+                    Navigator.pop(dialogContext);
+                  }
+                },
+                activeColor: AppTheme.primaryColor,
+              );
+            }).toList(),
+          ),
+        );
+      },
     );
   }
 

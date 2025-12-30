@@ -66,13 +66,14 @@ class NativePlayerChannel {
     List<String>? names,
     List<String>? groups,
     bool isDlnaMode = false,
+    String bufferStrength = 'fast',
     Function? onClosed,
   }) async {
     try {
       init(); // Ensure initialized
       _onPlayerClosedCallback = onClosed;
 
-      debugPrint('NativePlayerChannel: launching player with url=$url, name=$name, index=$index, channels=${urls?.length ?? 0}, isDlna=$isDlnaMode');
+      debugPrint('NativePlayerChannel: launching player with url=$url, name=$name, index=$index, channels=${urls?.length ?? 0}, isDlna=$isDlnaMode, buffer=$bufferStrength');
       final result = await _channel.invokeMethod<bool>('launchPlayer', {
         'url': url,
         'name': name,
@@ -81,6 +82,7 @@ class NativePlayerChannel {
         'names': names,
         'groups': groups,
         'isDlnaMode': isDlnaMode,
+        'bufferStrength': bufferStrength,
       });
       debugPrint('NativePlayerChannel: launch result=$result');
       return result ?? false;

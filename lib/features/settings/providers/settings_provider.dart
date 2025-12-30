@@ -21,6 +21,7 @@ class SettingsProvider extends ChangeNotifier {
   static const String _keyLocale = 'locale';
   static const String _keyVolumeNormalization = 'volume_normalization';
   static const String _keyVolumeBoost = 'volume_boost';
+  static const String _keyBufferStrength = 'buffer_strength'; // fast, balanced, stable
 
   // Settings values
   String _themeMode = 'dark';
@@ -41,6 +42,7 @@ class SettingsProvider extends ChangeNotifier {
   Locale? _locale;
   bool _volumeNormalization = false;
   int _volumeBoost = 0; // -20 to +20 dB
+  String _bufferStrength = 'fast'; // fast, balanced, stable
 
   // Getters
   String get themeMode => _themeMode;
@@ -60,6 +62,7 @@ class SettingsProvider extends ChangeNotifier {
   Locale? get locale => _locale;
   bool get volumeNormalization => _volumeNormalization;
   int get volumeBoost => _volumeBoost;
+  String get bufferStrength => _bufferStrength;
 
   SettingsProvider() {
     _loadSettings();
@@ -91,6 +94,7 @@ class SettingsProvider extends ChangeNotifier {
     }
     _volumeNormalization = prefs.getBool(_keyVolumeNormalization) ?? false;
     _volumeBoost = prefs.getInt(_keyVolumeBoost) ?? 0;
+    _bufferStrength = prefs.getString(_keyBufferStrength) ?? 'fast';
     // 不在构造函数中调用 notifyListeners()，避免 build 期间触发重建
   }
 
@@ -127,6 +131,7 @@ class SettingsProvider extends ChangeNotifier {
     }
     await prefs.setBool(_keyVolumeNormalization, _volumeNormalization);
     await prefs.setInt(_keyVolumeBoost, _volumeBoost);
+    await prefs.setString(_keyBufferStrength, _bufferStrength);
   }
 
   // Setters with persistence
@@ -244,6 +249,12 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setBufferStrength(String strength) async {
+    _bufferStrength = strength;
+    await _saveSettings();
+    notifyListeners();
+  }
+
   // Reset all settings to defaults
   Future<void> resetSettings() async {
     _themeMode = 'dark';
@@ -260,6 +271,7 @@ class SettingsProvider extends ChangeNotifier {
     _rememberLastChannel = true;
     _volumeNormalization = false;
     _volumeBoost = 0;
+    _bufferStrength = 'fast';
 
     await _saveSettings();
     notifyListeners();
