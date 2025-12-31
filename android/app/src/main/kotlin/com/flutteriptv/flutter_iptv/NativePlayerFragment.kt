@@ -80,6 +80,7 @@ class NativePlayerFragment : Fragment() {
     // Long press detection for left key
     private var leftKeyDownTime = 0L
     private val LONG_PRESS_THRESHOLD = 500L // 500ms for long press
+    private var longPressHandled = false // 防止长按后继续触发
 
     private var currentUrl: String = ""
     private var currentName: String = ""
@@ -314,6 +315,11 @@ class NativePlayerFragment : Fragment() {
                     }
                     else -> false
                 }
+            } else if (event.action == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                // 松开左键时重置长按标志
+                longPressHandled = false
+                leftKeyDownTime = 0L
+                true
             } else {
                 false
             }
@@ -343,12 +349,24 @@ class NativePlayerFragment : Fragment() {
                 holder.itemView.setOnKeyListener { _, keyCode, event ->
                     if (event.action == KeyEvent.ACTION_DOWN) {
                         when (keyCode) {
-                            KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_DPAD_LEFT -> {
+                            KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
                                 handleBackKey()
+                                true
+                            }
+                            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                // 如果长按标志还在，忽略（用户还在长按）
+                                if (!longPressHandled) {
+                                    handleBackKey()
+                                }
                                 true
                             }
                             else -> false
                         }
+                    } else if (event.action == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                        // 松开左键时重置长按标志
+                        longPressHandled = false
+                        leftKeyDownTime = 0L
+                        true
                     } else {
                         false
                     }
@@ -428,12 +446,24 @@ class NativePlayerFragment : Fragment() {
                 holder.itemView.setOnKeyListener { _, keyCode, event ->
                     if (event.action == KeyEvent.ACTION_DOWN) {
                         when (keyCode) {
-                            KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_DPAD_LEFT -> {
+                            KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
                                 handleBackKey()
+                                true
+                            }
+                            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                // 如果长按标志还在，忽略（用户还在长按）
+                                if (!longPressHandled) {
+                                    handleBackKey()
+                                }
                                 true
                             }
                             else -> false
                         }
+                    } else if (event.action == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                        // 松开左键时重置长按标志
+                        longPressHandled = false
+                        leftKeyDownTime = 0L
+                        true
                     } else {
                         false
                     }
@@ -548,12 +578,24 @@ class NativePlayerFragment : Fragment() {
                 holder.itemView.setOnKeyListener { _, keyCode, event ->
                     if (event.action == KeyEvent.ACTION_DOWN) {
                         when (keyCode) {
-                            KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_DPAD_LEFT -> {
+                            KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
                                 handleBackKey()
+                                true
+                            }
+                            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                // 如果长按标志还在，忽略（用户还在长按）
+                                if (!longPressHandled) {
+                                    handleBackKey()
+                                }
                                 true
                             }
                             else -> false
                         }
+                    } else if (event.action == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                        // 松开左键时重置长按标志
+                        longPressHandled = false
+                        leftKeyDownTime = 0L
+                        true
                     } else {
                         false
                     }
@@ -594,7 +636,7 @@ class NativePlayerFragment : Fragment() {
     }
 
     fun handleBackKey(): Boolean {
-        Log.d(TAG, "handleBackKey: categoryPanelVisible=$categoryPanelVisible, showingChannelList=$showingChannelList")
+        Log.d(TAG, "handleBackKey: categoryPanelVisible=$categoryPanelVisible, showingChannelList=$showingChannelList, longPressHandled=$longPressHandled")
         
         if (categoryPanelVisible) {
             if (showingChannelList) {
@@ -646,26 +688,23 @@ class NativePlayerFragment : Fragment() {
                     player?.seekBack()
                     return true
                 }
-                if (categoryPanelVisible) {
-                    if (showingChannelList) {
-                        // Go back to category list
-                        channelListContainer.visibility = View.GONE
-                        showingChannelList = false
-                        categoryList.findViewHolderForAdapterPosition(selectedCategoryIndex.coerceAtLeast(0))?.itemView?.requestFocus()
-                        return true
-                    }
-                    // Close panel
-                    hideCategoryPanel()
+                // 如果长按已处理，忽略后续的重复事件直到松开
+                if (longPressHandled) {
                     return true
+                }
+                // 分类面板已打开时，不处理长按，让 item 的监听器处理
+                if (categoryPanelVisible) {
+                    return false
                 }
                 // 记录按下时间，用于长按检测
                 if (event.repeatCount == 0) {
                     leftKeyDownTime = System.currentTimeMillis()
+                    longPressHandled = false
                 }
                 // 检测长按 - 显示分类面板
-                if (event.repeatCount > 0 && System.currentTimeMillis() - leftKeyDownTime >= LONG_PRESS_THRESHOLD) {
+                if (event.repeatCount > 0 && !longPressHandled && System.currentTimeMillis() - leftKeyDownTime >= LONG_PRESS_THRESHOLD) {
+                    longPressHandled = true // 标记长按已处理，防止重复触发
                     showCategoryPanel()
-                    leftKeyDownTime = 0L // 重置，防止重复触发
                     return true
                 }
                 return true
@@ -730,10 +769,28 @@ class NativePlayerFragment : Fragment() {
     private fun handleKeyUp(keyCode: Int, event: KeyEvent): Boolean {
         when (keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT -> {
-                // DLNA 模式或分类面板可见时不处理
-                if (isDlnaMode || categoryPanelVisible) {
-                    return false
+                // 重置长按标志
+                val wasLongPressHandled = longPressHandled
+                longPressHandled = false
+                
+                // 如果是长按触发的，不再处理
+                if (wasLongPressHandled) {
+                    leftKeyDownTime = 0L
+                    return true
                 }
+                
+                // DLNA 模式不处理
+                if (isDlnaMode) {
+                    leftKeyDownTime = 0L
+                    return true
+                }
+                
+                // 分类面板已可见时不处理（可能是之前打开的）
+                if (categoryPanelVisible) {
+                    leftKeyDownTime = 0L
+                    return true
+                }
+                
                 // 短按左键 - 切换源或显示分类面板
                 val pressDuration = System.currentTimeMillis() - leftKeyDownTime
                 if (leftKeyDownTime > 0 && pressDuration < LONG_PRESS_THRESHOLD) {
