@@ -1105,10 +1105,12 @@ class NativePlayerFragment : Fragment() {
                 val speedKbps = speedBytesPerSecond / 1024f // KB/s
                 val speedMbps = speedKbps / 1024f // MB/s
 
-                val speedText = when {
-                    speedMbps >= 1.0f -> "%.2f MB/s".format(speedMbps)
-                    speedKbps >= 1.0f -> "%.0f KB/s".format(speedKbps)
-                    else -> "%.0f B/s".format(speedBytesPerSecond)
+                val speedText: String = if (speedMbps >= 1.0f) {
+                    "%.2f MB/s".format(speedMbps)
+                } else if (speedKbps >= 1.0f) {
+                    "%.0f KB/s".format(speedKbps)
+                } else {
+                    "%.0f B/s".format(speedBytesPerSecond)
                 }
 
                 activity?.runOnUiThread {
