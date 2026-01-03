@@ -1097,7 +1097,7 @@ class NativePlayerFragment : Fragment() {
 
         try {
             // 从 ExoPlayer 的 LoadControl 获取已加载的字节数
-            val currentBytes = p.totalBufferedBytes
+            val currentBytes = p.getTotalBufferedBytes()
 
             if (lastBytesLoaded > 0 && currentBytes > lastBytesLoaded) {
                 val bytesDelta = currentBytes - lastBytesLoaded
