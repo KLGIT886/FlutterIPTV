@@ -1,23 +1,23 @@
 {
-  "version": "1.1.91",
-  "build": 91,
-  "releaseDate": "2026-01-03",
+  "version": "1.1.92",
+  "build": 92,
+  "releaseDate": "2026-01-05",
   "assets": {
-    "windows": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.1.91/flutteriptv-Windows-x64-Setup.exe",
+    "windows": "https://f08e4224-85e2-4ae2-859a-aeaff4053b4d.xxxxl.ink/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.1.92/flutteriptv-Windows-x64-Setup.exe",
     "android_mobile": {
-      "arm64-v8a": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.1.91/flutteriptv-Android-Mobile-arm64-v8a.apk",
-      "armeabi-v7a": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.1.91/flutteriptv-Android-Mobile-armeabi-v7a.apk",
-      "x86_64": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.1.91/flutteriptv-Android-Mobile-x86_64.apk"
+      "arm64-v8a": "https://f08e4224-85e2-4ae2-859a-aeaff4053b4d.xxxxl.ink/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.1.92/flutteriptv-Android-Mobile-arm64-v8a.apk",
+      "armeabi-v7a": "https://f08e4224-85e2-4ae2-859a-aeaff4053b4d.xxxxl.ink/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.1.92/flutteriptv-Android-Mobile-armeabi-v7a.apk",
+      "x86_64": "https://f08e4224-85e2-4ae2-859a-aeaff4053b4d.xxxxl.ink/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.1.92/flutteriptv-Android-Mobile-x86_64.apk"
     },
     "android_tv": {
-      "arm64-v8a": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.1.91/flutteriptv-AndroidTV-arm64-v8a.apk",
-      "armeabi-v7a": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.1.91/flutteriptv-AndroidTV-armeabi-v7a.apk",
-      "x86_64": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.1.91/flutteriptv-AndroidTV-x86_64.apk"
+      "arm64-v8a": "https://f08e4224-85e2-4ae2-859a-aeaff4053b4d.xxxxl.ink/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.1.92/flutteriptv-AndroidTV-arm64-v8a.apk",
+      "armeabi-v7a": "https://f08e4224-85e2-4ae2-859a-aeaff4053b4d.xxxxl.ink/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.1.92/flutteriptv-AndroidTV-armeabi-v7a.apk",
+      "x86_64": "https://f08e4224-85e2-4ae2-859a-aeaff4053b4d.xxxxl.ink/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.1.92/flutteriptv-AndroidTV-x86_64.apk"
     }
   },
   "changelog": {
-    "zh": "- Android TV: 播放器信息显示字体更小\n- Android TV: HDR模式下背景更清晰可见\n- Android TV: 分辨率和码率固定宽度显示",
-    "en": "- Android TV: Smaller font for player info display\n- Android TV: Better visibility in HDR mode\n- Android TV: Fixed width for resolution and bitrate display"
+    "zh": "- 修复 EPG 解析支持 display-name 属性和 program 标签\n- 更换 EPG 数据源为 baoer.org.cn\n- 移除 pp.xml EPG 源",
+    "en": "- Fix EPG parsing to support display-name attribute and program tag\n- Change EPG source to baoer.org.cn\n- Remove pp.xml EPG source"
   },
   "minVersion": "1.0.0"
 }

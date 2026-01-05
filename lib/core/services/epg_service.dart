@@ -231,7 +231,12 @@ class EpgService {
         final id = channel.getAttribute('id');
         if (id == null) continue;
 
-        final displayName = channel.findElements('display-name').firstOrNull?.innerText;
+        // 支持两种格式：
+        // 1. <channel id="11"><display-name>CCTV1</display-name></channel>
+        // 2. <channel id="11" display-name="CCTV1"></channel>
+        var displayName = channel.findElements('display-name').firstOrNull?.innerText;
+        displayName ??= channel.getAttribute('display-name');
+        
         if (displayName != null) {
           channelNames[id] = displayName;
           nameIndex[_normalizeNameStatic(displayName)] = id;
@@ -239,8 +244,11 @@ class EpgService {
         }
       }
 
-      // 解析节目
-      for (final programme in tv.findElements('programme')) {
+      // 解析节目 (支持 programme 和 program 两种标签)
+      final programmes = tv.findElements('programme').toList();
+      programmes.addAll(tv.findElements('program'));
+      
+      for (final programme in programmes) {
         final channelId = programme.getAttribute('channel');
         final startStr = programme.getAttribute('start');
         final stopStr = programme.getAttribute('stop');
