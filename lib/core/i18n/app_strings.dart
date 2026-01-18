@@ -348,6 +348,11 @@ class AppStrings {
   String get colorSchemeDescViolet => _localizedValues['colorSchemeDescViolet']!;
   String get colorSchemeDescClassic => _localizedValues['colorSchemeDescClassic']!;
   String get colorSchemeChanged => _localizedValues['colorSchemeChanged']!;
+  String get customColorPicker => _localizedValues['customColorPicker']!;
+  String get selectedColor => _localizedValues['selectedColor']!;
+  String get apply => _localizedValues['apply']!;
+  String get customColorApplied => _localizedValues['customColorApplied']!;
+  String get colorSchemeCustom => _localizedValues['colorSchemeCustom']!;
 
   // Map access for dynamic keys if needed
   String operator [](String key) => _localizedValues[key] ?? key;
@@ -700,6 +705,11 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'colorSchemeDescViolet': '优雅、柔和、高贵',
     'colorSchemeDescClassic': '简洁、专业、通用',
     'colorSchemeChanged': '配色方案已切换为: {scheme}',
+    'customColorPicker': '自定义颜色选择器',
+    'selectedColor': '选中的颜色',
+    'apply': '应用',
+    'customColorApplied': '自定义颜色已应用',
+    'colorSchemeCustom': '自定义',
   };
 
   static const Map<String, String> _enValues = {
@@ -1027,5 +1037,10 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'colorSchemeDescViolet': 'Elegant, soft, noble',
     'colorSchemeDescClassic': 'Simple, professional, universal',
     'colorSchemeChanged': 'Color scheme changed to: {scheme}',
+    'customColorPicker': 'Custom Color Picker',
+    'selectedColor': 'Selected Color',
+    'apply': 'Apply',
+    'customColorApplied': 'Custom color applied',
+    'colorSchemeCustom': 'Custom',
   };
 }

@@ -6,6 +6,7 @@ import '../theme/color_scheme_manager.dart';
 import '../i18n/app_strings.dart';
 import '../../features/settings/providers/settings_provider.dart';
 import 'color_scheme_card.dart';
+import 'custom_color_picker_dialog.dart';
 import 'tv_focusable.dart';
 
 /// 配色方案选择对话框
@@ -106,9 +107,69 @@ class _ColorSchemeDialogState extends State<ColorSchemeDialog> {
                 },
               ),
             ),
+            
+            const SizedBox(height: 16),
+            
+            // 自定义颜色按钮
+            TVFocusable(
+              onSelect: () => _showCustomColorPicker(context),
+              focusScale: 1.0,
+              showFocusBorder: false,
+              builder: (context, isFocused, child) {
+                return Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: isFocused 
+                          ? AppTheme.getPrimaryColor(context).withOpacity(0.8)
+                          : AppTheme.getPrimaryColor(context),
+                      width: isFocused ? 2 : 1,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: child,
+                );
+              },
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => _showCustomColorPicker(context),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.palette_rounded,
+                          color: AppTheme.getPrimaryColor(context),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          strings?.customColorPicker ?? 'Custom Color Picker',
+                          style: TextStyle(
+                            color: AppTheme.getPrimaryColor(context),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  /// 显示自定义颜色选择器
+  Future<void> _showCustomColorPicker(BuildContext context) async {
+    await showDialog(
+      context: context,
+      builder: (context) => const CustomColorPickerDialog(),
     );
   }
 
@@ -157,6 +218,12 @@ class _ColorSchemeDialogState extends State<ColorSchemeDialog> {
   /// 获取配色方案名称
   String _getSchemeName(BuildContext context, ColorSchemeData scheme) {
     final strings = AppStrings.of(context);
+    
+    // 检查是否为自定义颜色
+    if (scheme.id.startsWith('custom_')) {
+      return strings?.colorSchemeCustom ?? 'Custom';
+    }
+    
     switch (scheme.nameKey) {
       case 'colorSchemeLotus':
         return strings?.colorSchemeLotus ?? 'Lotus';

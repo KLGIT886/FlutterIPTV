@@ -141,6 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final playlistProvider = context.read<PlaylistProvider>();
     final channelProvider = context.read<ChannelProvider>();
     final favoritesProvider = context.read<FavoritesProvider>();
+    final settingsProvider = context.read<SettingsProvider>();
 
     if (playlistProvider.hasPlaylists) {
       final activePlaylist = playlistProvider.activePlaylist;
@@ -152,6 +153,36 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       await favoritesProvider.loadFavorites();
       _refreshRecommendedChannels();
+      
+      // 自动播放功能：数据加载完成后延迟500ms自动播放
+      if (settingsProvider.autoPlay && mounted) {
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (!mounted) return;
+          
+          // 获取上次播放状态
+          final isMultiScreenMode = settingsProvider.lastPlayMode == 'multi' && settingsProvider.hasMultiScreenState;
+          Channel? lastChannel;
+          
+          if (settingsProvider.rememberLastChannel && settingsProvider.lastChannelId != null) {
+            try {
+              lastChannel = channelProvider.channels.firstWhere(
+                (c) => c.id == settingsProvider.lastChannelId,
+              );
+            } catch (_) {
+              // 频道不存在，使用第一个频道
+              lastChannel = channelProvider.channels.isNotEmpty ? channelProvider.channels.first : null;
+            }
+          } else {
+            lastChannel = channelProvider.channels.isNotEmpty ? channelProvider.channels.first : null;
+          }
+          
+          // 自动触发继续播放
+          if (lastChannel != null || isMultiScreenMode) {
+            debugPrint('HomeScreen: Auto-play triggered - isMultiScreen=$isMultiScreenMode');
+            _continuePlayback(channelProvider, lastChannel, isMultiScreenMode, settingsProvider);
+          }
+        });
+      }
     }
   }
 
