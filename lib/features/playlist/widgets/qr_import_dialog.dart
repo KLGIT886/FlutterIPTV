@@ -99,21 +99,22 @@ class _QrImportDialogState extends State<QrImportDialog> {
           await channelProvider.loadChannels(playlist.id!);
         }
 
-        // 自动应用 EPG URL（如果 M3U 中包含）
-        if (provider.lastExtractedEpgUrl != null) {
-          debugPrint('DEBUG: 发现 EPG URL，自动应用: ${provider.lastExtractedEpgUrl}');
+        // Auto-load EPG: Try playlist EPG URL first, fallback to settings EPG URL
+        if (mounted) {
           final settingsProvider = context.read<SettingsProvider>();
-          final epgApplied = await provider.applyExtractedEpgUrl(settingsProvider);
-          if (epgApplied && mounted) {
-            await context.read<EpgProvider>().loadEpg(provider.lastExtractedEpgUrl!);
-            debugPrint('DEBUG: EPG 数据加载完成');
-          }
-        } else {
-          // 如果没有提取到 EPG URL，尝试使用已配置的 EPG URL
-          final settingsProvider = context.read<SettingsProvider>();
-          if (settingsProvider.enableEpg && settingsProvider.epgUrl != null && settingsProvider.epgUrl!.isNotEmpty) {
-            debugPrint('DEBUG: 使用已配置的 EPG URL: ${settingsProvider.epgUrl}');
-            await context.read<EpgProvider>().loadEpg(settingsProvider.epgUrl!);
+          final epgProvider = context.read<EpgProvider>();
+          
+          if (settingsProvider.enableEpg) {
+            final playlistEpgUrl = provider.lastExtractedEpgUrl;
+            final fallbackEpgUrl = settingsProvider.epgUrl;
+            
+            if (playlistEpgUrl != null && playlistEpgUrl.isNotEmpty) {
+              debugPrint('DEBUG: 加载播放列表EPG: $playlistEpgUrl (兜底: $fallbackEpgUrl)');
+              await epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl);
+            } else if (fallbackEpgUrl != null && fallbackEpgUrl.isNotEmpty) {
+              debugPrint('DEBUG: 使用兜底EPG URL: $fallbackEpgUrl');
+              await epgProvider.loadEpg(fallbackEpgUrl);
+            }
           }
         }
 
@@ -174,21 +175,22 @@ class _QrImportDialogState extends State<QrImportDialog> {
           await channelProvider.loadChannels(playlist.id!);
         }
 
-        // 自动应用 EPG URL（如果 M3U 中包含）
-        if (provider.lastExtractedEpgUrl != null) {
-          debugPrint('DEBUG: 发现 EPG URL，自动应用: ${provider.lastExtractedEpgUrl}');
+        // Auto-load EPG: Try playlist EPG URL first, fallback to settings EPG URL
+        if (mounted) {
           final settingsProvider = context.read<SettingsProvider>();
-          final epgApplied = await provider.applyExtractedEpgUrl(settingsProvider);
-          if (epgApplied && mounted) {
-            await context.read<EpgProvider>().loadEpg(provider.lastExtractedEpgUrl!);
-            debugPrint('DEBUG: EPG 数据加载完成');
-          }
-        } else {
-          // 如果没有提取到 EPG URL，尝试使用已配置的 EPG URL
-          final settingsProvider = context.read<SettingsProvider>();
-          if (settingsProvider.enableEpg && settingsProvider.epgUrl != null && settingsProvider.epgUrl!.isNotEmpty) {
-            debugPrint('DEBUG: 使用已配置的 EPG URL: ${settingsProvider.epgUrl}');
-            await context.read<EpgProvider>().loadEpg(settingsProvider.epgUrl!);
+          final epgProvider = context.read<EpgProvider>();
+          
+          if (settingsProvider.enableEpg) {
+            final playlistEpgUrl = provider.lastExtractedEpgUrl;
+            final fallbackEpgUrl = settingsProvider.epgUrl;
+            
+            if (playlistEpgUrl != null && playlistEpgUrl.isNotEmpty) {
+              debugPrint('DEBUG: 加载播放列表EPG: $playlistEpgUrl (兜底: $fallbackEpgUrl)');
+              await epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl);
+            } else if (fallbackEpgUrl != null && fallbackEpgUrl.isNotEmpty) {
+              debugPrint('DEBUG: 使用兜底EPG URL: $fallbackEpgUrl');
+              await epgProvider.loadEpg(fallbackEpgUrl);
+            }
           }
         }
 
@@ -221,12 +223,15 @@ class _QrImportDialogState extends State<QrImportDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    
     return Dialog(
       backgroundColor: AppTheme.getSurfaceColor(context),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
-        width: 520,
-        padding: const EdgeInsets.all(24),
+        width: isMobile ? null : 520,
+        constraints: isMobile ? const BoxConstraints(maxWidth: 400) : null,
+        padding: EdgeInsets.all(isMobile ? 16 : 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -246,12 +251,14 @@ class _QrImportDialogState extends State<QrImportDialog> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  AppStrings.of(context)?.scanToImport ?? 'Scan to Import Playlist',
-                  style: TextStyle(
-                    color: AppTheme.getTextPrimary(context),
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                Expanded(
+                  child: Text(
+                    AppStrings.of(context)?.scanToImport ?? 'Scan to Import Playlist',
+                    style: TextStyle(
+                      color: AppTheme.getTextPrimary(context),
+                      fontSize: isMobile ? 16 : 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ],
@@ -260,7 +267,7 @@ class _QrImportDialogState extends State<QrImportDialog> {
             const SizedBox(height: 20),
 
             // Content
-            if (_isLoading) _buildLoadingState() else if (_error != null) _buildErrorState() else if (_isServerRunning) _buildQrCodeState(),
+            if (_isLoading) _buildLoadingState() else if (_error != null) _buildErrorState() else if (_isServerRunning) _buildQrCodeState(isMobile),
 
             const SizedBox(height: 20),
 
@@ -340,7 +347,128 @@ class _QrImportDialogState extends State<QrImportDialog> {
     );
   }
 
-  Widget _buildQrCodeState() {
+  Widget _buildQrCodeState(bool isMobile) {
+    if (isMobile) {
+      // 手机端：纵向布局
+      return Column(
+        children: [
+          // QR Code
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: QrImageView(
+              data: _serverService.serverUrl,
+              version: QrVersions.auto,
+              size: 200,
+              backgroundColor: Colors.white,
+              errorCorrectionLevel: QrErrorCorrectLevel.M,
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Instructions
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.getCardColor(context),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(
+              children: [
+                _buildStep('1', AppStrings.of(context)?.qrStep1 ?? 'Scan the QR code with your phone'),
+                const SizedBox(height: 8),
+                _buildStep('2', AppStrings.of(context)?.qrStep2 ?? 'Enter URL or upload file on the webpage'),
+                const SizedBox(height: 8),
+                _buildStep('3', AppStrings.of(context)?.qrStep3 ?? 'Click import, TV receives automatically'),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Server URL
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppTheme.getCardColor(context).withAlpha(128),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.wifi_rounded,
+                  color: AppTheme.getTextMuted(context),
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _serverService.serverUrl,
+                    style: TextStyle(
+                      color: AppTheme.getTextMuted(context),
+                      fontSize: 11,
+                      fontFamily: 'monospace',
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Status message
+          if (_receivedMessage != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: _receivedMessage!.contains('✓')
+                    ? Colors.green.withAlpha(51)
+                    : _receivedMessage!.contains('✗')
+                        ? Colors.red.withAlpha(51)
+                        : AppTheme.primaryColor.withAlpha(51),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  if (_isImporting)
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppTheme.primaryColor,
+                      ),
+                    ),
+                  if (_isImporting) const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _receivedMessage!,
+                      style: TextStyle(
+                        color: _receivedMessage!.contains('✓')
+                            ? Colors.green
+                            : _receivedMessage!.contains('✗')
+                                ? Colors.red
+                                : AppTheme.getTextPrimary(context),
+                        fontWeight: FontWeight.w500,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+    
+    // TV/桌面端：横向布局
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

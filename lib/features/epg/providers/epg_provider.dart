@@ -28,7 +28,7 @@ class EpgProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> loadEpg(String url) async {
+  Future<bool> loadEpg(String url, {String? fallbackUrl}) async {
     if (_isLoading) return false;
 
     _isLoading = true;
@@ -36,15 +36,33 @@ class EpgProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Try primary URL first
+      debugPrint('EPG: Attempting to load from primary URL: $url');
       final success = await _epgService.loadFromUrl(url);
+      
       if (success) {
         _lastUpdate = DateTime.now();
-      } else {
-        _error = 'Failed to load EPG data';
+        debugPrint('EPG: Successfully loaded from primary URL');
+        return true;
       }
-      return success;
+      
+      // If primary failed and fallback is available, try fallback
+      if (fallbackUrl != null && fallbackUrl.isNotEmpty && fallbackUrl != url) {
+        debugPrint('EPG: Primary URL failed, trying fallback URL: $fallbackUrl');
+        final fallbackSuccess = await _epgService.loadFromUrl(fallbackUrl);
+        
+        if (fallbackSuccess) {
+          _lastUpdate = DateTime.now();
+          debugPrint('EPG: Successfully loaded from fallback URL');
+          return true;
+        }
+      }
+      
+      _error = 'Failed to load EPG data from all sources';
+      return false;
     } catch (e) {
       _error = e.toString();
+      debugPrint('EPG: Error loading: $e');
       return false;
     } finally {
       _isLoading = false;

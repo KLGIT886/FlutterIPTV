@@ -7,7 +7,6 @@ import '../../../core/models/channel.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/utils/m3u_parser.dart';
 import '../../favorites/providers/favorites_provider.dart';
-import '../../settings/providers/settings_provider.dart';
 
 class PlaylistProvider extends ChangeNotifier {
   List<Playlist> _playlists = [];
@@ -16,26 +15,9 @@ class PlaylistProvider extends ChangeNotifier {
   String? _error;
   double _importProgress = 0.0;
 
-  /// Last extracted EPG URL from M3U file
+  /// Last extracted EPG URL from M3U file (for UI display only)
   String? _lastExtractedEpgUrl;
   String? get lastExtractedEpgUrl => _lastExtractedEpgUrl;
-
-  /// Apply extracted EPG URL to settings if available
-  Future<bool> applyExtractedEpgUrl(SettingsProvider settingsProvider) async {
-    if (_lastExtractedEpgUrl == null || _lastExtractedEpgUrl!.isEmpty) {
-      return false;
-    }
-
-    try {
-      debugPrint('DEBUG: 自动应用EPG URL: $_lastExtractedEpgUrl');
-      await settingsProvider.setEpgUrl(_lastExtractedEpgUrl!);
-      await settingsProvider.setEnableEpg(true);
-      return true;
-    } catch (e) {
-      debugPrint('DEBUG: 应用EPG URL失败: $e');
-      return false;
-    }
-  }
 
   // Getters
   List<Playlist> get playlists => _playlists;
@@ -133,6 +115,13 @@ class PlaylistProvider extends ChangeNotifier {
       _lastExtractedEpgUrl = M3UParser.lastParseResult?.epgUrl;
       if (_lastExtractedEpgUrl != null) {
         debugPrint('DEBUG: 从M3U提取到EPG URL: $_lastExtractedEpgUrl');
+        // Save EPG URL to playlist
+        await ServiceLocator.database.update(
+          'playlists',
+          {'epg_url': _lastExtractedEpgUrl},
+          where: 'id = ?',
+          whereArgs: [playlistId],
+        );
       }
 
       _importProgress = 0.6;
@@ -211,6 +200,13 @@ class PlaylistProvider extends ChangeNotifier {
       _lastExtractedEpgUrl = M3UParser.lastParseResult?.epgUrl;
       if (_lastExtractedEpgUrl != null) {
         debugPrint('DEBUG: 从M3U提取到EPG URL: $_lastExtractedEpgUrl');
+        // Save EPG URL to playlist
+        await ServiceLocator.database.update(
+          'playlists',
+          {'epg_url': _lastExtractedEpgUrl},
+          where: 'id = ?',
+          whereArgs: [playlistId],
+        );
       }
 
       _importProgress = 0.6;
@@ -394,31 +390,44 @@ class PlaylistProvider extends ChangeNotifier {
       _importProgress = 0.5;
       notifyListeners();
 
-      // Delete existing channels
-      debugPrint('DEBUG: 开始删除现有频道数据...');
-      final deleteResult = await ServiceLocator.database.delete(
-        'channels',
-        where: 'playlist_id = ?',
-        whereArgs: [playlist.id],
-      );
-      debugPrint('DEBUG: 已删除 $deleteResult 个旧频道记录');
+      // 使用事务确保数据一致性：先删除旧数据，再插入新数据
+      // 如果插入失败，事务会回滚，旧数据不会丢失
+      await ServiceLocator.database.db.transaction((txn) async {
+        // Delete existing channels
+        debugPrint('DEBUG: 开始删除现有频道数据...');
+        final deleteResult = await txn.delete(
+          'channels',
+          where: 'playlist_id = ?',
+          whereArgs: [playlist.id],
+        );
+        debugPrint('DEBUG: 已删除 $deleteResult 个旧频道记录');
 
-      // Insert new channels - 改为使用批量插入以提高性能
-      final batch = ServiceLocator.database.db.batch();
-      for (final channel in channels) {
-        final channelMap = channel.toMap();
-        batch.insert('channels', channelMap);
+        // Insert new channels - 使用批量插入以提高性能
+        final batch = txn.batch();
+        for (final channel in channels) {
+          final channelMap = channel.toMap();
+          batch.insert('channels', channelMap);
+        }
+        await batch.commit(noResult: true);
+        debugPrint('DEBUG: 已插入 ${channels.length} 个新频道记录');
+      });
+
+      // Update playlist timestamp and EPG URL
+      debugPrint('DEBUG: 更新播放列表时间戳和EPG URL...');
+      final updateData = <String, dynamic>{
+        'last_updated': DateTime.now().millisecondsSinceEpoch,
+        'channel_count': channels.length,
+      };
+      
+      // 如果提取到了 EPG URL，也更新到数据库
+      if (_lastExtractedEpgUrl != null) {
+        updateData['epg_url'] = _lastExtractedEpgUrl;
+        debugPrint('DEBUG: 保存EPG URL到数据库: $_lastExtractedEpgUrl');
       }
-      await batch.commit(noResult: true);
-
-      // Update playlist timestamp
-      debugPrint('DEBUG: 更新播放列表时间戳...');
+      
       await ServiceLocator.database.update(
         'playlists',
-        {
-          'last_updated': DateTime.now().millisecondsSinceEpoch,
-          'channel_count': channels.length,
-        },
+        updateData,
         where: 'id = ?',
         whereArgs: [playlist.id],
       );
@@ -448,6 +457,7 @@ class PlaylistProvider extends ChangeNotifier {
     try {
       // Find the playlist before deletion to check for temp files
       final playlist = _playlists.firstWhere((p) => p.id == playlistId, orElse: () => Playlist(name: ''));
+      final wasActive = _activePlaylist?.id == playlistId;
 
       // Delete channels first (cascade should handle this, but being explicit)
       await ServiceLocator.database.delete(
@@ -479,8 +489,18 @@ class PlaylistProvider extends ChangeNotifier {
       // Update local state
       _playlists.removeWhere((p) => p.id == playlistId);
 
-      if (_activePlaylist?.id == playlistId) {
-        _activePlaylist = _playlists.isNotEmpty ? _playlists.first : null;
+      // If the deleted playlist was active, switch to the first available playlist
+      if (wasActive) {
+        if (_playlists.isNotEmpty) {
+          _activePlaylist = _playlists.first;
+          // Save the new active playlist to database
+          await ServiceLocator.prefs.setInt('active_playlist_id', _activePlaylist!.id!);
+          debugPrint('DEBUG: 删除后切换到播放列表: ${_activePlaylist!.name} (ID: ${_activePlaylist!.id})');
+        } else {
+          _activePlaylist = null;
+          await ServiceLocator.prefs.remove('active_playlist_id');
+          debugPrint('DEBUG: 没有剩余播放列表');
+        }
       }
 
       notifyListeners();

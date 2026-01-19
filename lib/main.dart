@@ -12,6 +12,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'core/theme/app_theme.dart';
 import 'core/navigation/app_router.dart';
 import 'core/services/service_locator.dart';
+import 'core/services/auto_refresh_service.dart';
 import 'core/platform/native_player_channel.dart';
 import 'core/platform/platform_detector.dart';
 import 'features/channels/providers/channel_provider.dart';
@@ -131,8 +132,14 @@ void main() async {
   }
 }
 
-class FlutterIPTVApp extends StatelessWidget {
+class FlutterIPTVApp extends StatefulWidget {
   const FlutterIPTVApp({super.key});
+
+  @override
+  State<FlutterIPTVApp> createState() => _FlutterIPTVAppState();
+}
+
+class _FlutterIPTVAppState extends State<FlutterIPTVApp> {
 
   @override
   Widget build(BuildContext context) {
@@ -156,7 +163,7 @@ class FlutterIPTVApp extends StatelessWidget {
   }
 }
 
-/// 包装 MaterialApp，监听 DLNA 播放请求
+/// 包装 MaterialApp，监听 DLNA 播放请求和管理自动刷新服务
 class _DlnaAwareApp extends StatefulWidget {
   final SettingsProvider settings;
   
@@ -169,10 +176,17 @@ class _DlnaAwareApp extends StatefulWidget {
 class _DlnaAwareAppState extends State<_DlnaAwareApp> with WindowListener {
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   String? _currentDlnaUrl; // 记录当前 DLNA 播放的 URL
+  
+  // 自动刷新服务
+  final AutoRefreshService _autoRefreshService = AutoRefreshService();
+  bool _lastAutoRefreshState = false;
+  int _lastRefreshInterval = 24;
 
   @override
   void initState() {
     super.initState();
+    debugPrint('AutoRefresh: _DlnaAwareApp.initState() 被调用');
+    
     // Windows 窗口关闭监听
     if (Platform.isWindows) {
       windowManager.addListener(this);
@@ -182,6 +196,9 @@ class _DlnaAwareAppState extends State<_DlnaAwareApp> with WindowListener {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       debugPrint('DLNA: addPostFrameCallback 触发');
       _setupDlnaCallbacks();
+      // 初始化自动刷新服务
+      debugPrint('AutoRefresh: addPostFrameCallback 执行');
+      _initAutoRefresh();
     });
   }
   
@@ -190,7 +207,129 @@ class _DlnaAwareAppState extends State<_DlnaAwareApp> with WindowListener {
     if (Platform.isWindows) {
       windowManager.removeListener(this);
     }
+    _autoRefreshService.stop();
     super.dispose();
+  }
+  
+  Future<void> _initAutoRefresh() async {
+    debugPrint('AutoRefresh: _initAutoRefresh() 开始执行');
+    
+    if (!mounted) {
+      debugPrint('AutoRefresh: Widget 未挂载，退出初始化');
+      return;
+    }
+
+    try {
+      // 加载上次刷新时间
+      await _autoRefreshService.loadLastRefreshTime();
+
+      // 获取设置
+      final settings = context.read<SettingsProvider>();
+      _lastAutoRefreshState = settings.autoRefresh;
+      _lastRefreshInterval = settings.refreshInterval;
+      
+      debugPrint('AutoRefresh: 读取设置 - autoRefresh=${settings.autoRefresh}, interval=${settings.refreshInterval}');
+      
+      if (settings.autoRefresh) {
+        debugPrint('AutoRefresh: 启用自动刷新，间隔: ${settings.refreshInterval}小时');
+        _startAutoRefresh(settings);
+      } else {
+        debugPrint('AutoRefresh: 自动刷新已禁用');
+      }
+
+      // 监听设置变化
+      settings.addListener(() {
+        if (!mounted) return;
+        
+        // 只在 autoRefresh 状态或间隔变化时才处理
+        final currentAutoRefresh = settings.autoRefresh;
+        final currentInterval = settings.refreshInterval;
+        
+        if (currentAutoRefresh != _lastAutoRefreshState || 
+            (currentAutoRefresh && currentInterval != _lastRefreshInterval)) {
+          _lastAutoRefreshState = currentAutoRefresh;
+          _lastRefreshInterval = currentInterval;
+          
+          if (currentAutoRefresh) {
+            debugPrint('AutoRefresh: 设置已更改，重新启动服务 - 间隔: $currentInterval小时');
+            _startAutoRefresh(settings);
+          } else {
+            debugPrint('AutoRefresh: 自动刷新已禁用');
+            _autoRefreshService.stop();
+          }
+        }
+      });
+      
+      debugPrint('AutoRefresh: _initAutoRefresh() 完成');
+    } catch (e, stackTrace) {
+      debugPrint('AutoRefresh: 初始化失败 - $e');
+      debugPrint('AutoRefresh: 堆栈跟踪 - $stackTrace');
+    }
+  }
+
+  void _startAutoRefresh(SettingsProvider settings) {
+    _autoRefreshService.start(
+      intervalHours: settings.refreshInterval,
+      onRefresh: () => _performAutoRefresh(),
+    );
+  }
+
+  Future<void> _performAutoRefresh() async {
+    if (!mounted) return;
+
+    debugPrint('AutoRefresh: 开始执行自动刷新');
+    
+    try {
+      final playlistProvider = context.read<PlaylistProvider>();
+      final playlists = playlistProvider.playlists;
+
+      if (playlists.isEmpty) {
+        debugPrint('AutoRefresh: 没有播放列表需要刷新');
+        return;
+      }
+
+      int successCount = 0;
+      int failCount = 0;
+
+      // 刷新所有播放列表（即使某个失败也继续刷新其他的）
+      for (final playlist in playlists) {
+        if (playlist.id != null) {
+          try {
+            debugPrint('AutoRefresh: 刷新播放列表: ${playlist.name}');
+            final success = await playlistProvider.refreshPlaylist(playlist);
+            if (success) {
+              successCount++;
+            } else {
+              failCount++;
+              debugPrint('AutoRefresh: 播放列表刷新失败: ${playlist.name}');
+            }
+          } catch (e) {
+            failCount++;
+            debugPrint('AutoRefresh: 播放列表刷新异常: ${playlist.name} - $e');
+          }
+        }
+      }
+
+      // 重新加载当前激活播放列表的频道
+      if (playlistProvider.activePlaylist?.id != null) {
+        try {
+          final channelProvider = context.read<ChannelProvider>();
+          await channelProvider.loadChannels(playlistProvider.activePlaylist!.id!);
+        } catch (e) {
+          debugPrint('AutoRefresh: 重新加载频道失败: $e');
+        }
+      }
+
+      debugPrint('AutoRefresh: 自动刷新完成 - 成功: $successCount, 失败: $failCount');
+      
+      // 如果有失败的，记录但不影响下次刷新时间
+      if (failCount > 0) {
+        debugPrint('AutoRefresh: 部分播放列表刷新失败，将在下次定时刷新时重试');
+      }
+    } catch (e) {
+      debugPrint('AutoRefresh: 自动刷新过程发生严重错误: $e');
+      // 即使出错，也不影响下次刷新（计时器已经重置）
+    }
   }
   
   @override

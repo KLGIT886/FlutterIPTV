@@ -246,13 +246,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildSwitchTile(
                 context,
                 title: AppStrings.of(context)?.autoRefresh ?? 'Auto-refresh',
-                subtitle: '${AppStrings.of(context)?.autoRefreshSubtitle ?? 'Automatically update playlists periodically'} ${AppStrings.of(context)?.notImplemented ?? '(Not implemented)'}',
+                subtitle: AppStrings.of(context)?.autoRefreshSubtitle ?? 'Automatically update playlists periodically',
                 icon: Icons.refresh_rounded,
                 value: settings.autoRefresh,
                 onChanged: (value) {
                   settings.setAutoRefresh(value);
-                  final strings = AppStrings.of(context);
-                  _showError(context, strings?.autoRefreshNotImplemented ?? 'Auto-refresh not implemented, setting will not take effect');
+                  _showSuccess(context, value 
+                    ? 'Auto-refresh enabled' 
+                    : 'Auto-refresh disabled');
                 },
               ),
               if (settings.autoRefresh) ...[
@@ -260,7 +261,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _buildSelectTile(
                   context,
                   title: AppStrings.of(context)?.refreshInterval ?? 'Refresh Interval',
-                  subtitle: 'Every ${settings.refreshInterval} ${AppStrings.of(context)?.hours ?? 'hours'} ${AppStrings.of(context)?.notImplemented ?? '(Not implemented)'}',
+                  subtitle: 'Every ${settings.refreshInterval} ${AppStrings.of(context)?.hours ?? 'hours'}',
                   icon: Icons.schedule_rounded,
                   onTap: () => _showRefreshIntervalDialog(context, settings),
                 ),
@@ -1127,7 +1128,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     settings.setRefreshInterval(value);
                     Navigator.pop(dialogContext);
                     final strings = AppStrings.of(context);
-                    _showError(context, strings?.autoRefreshNotImplemented ?? 'Auto-refresh not implemented, setting will not take effect');
+                    _showSuccess(context, 'Refresh interval: $value ${strings?.hours ?? 'hours'}');
                   }
                 },
                 activeColor: AppTheme.getPrimaryColor(dialogContext),

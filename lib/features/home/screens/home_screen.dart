@@ -109,10 +109,17 @@ class _HomeScreenState extends State<HomeScreen> {
     final playlistProvider = context.read<PlaylistProvider>();
     final currentPlaylistId = playlistProvider.activePlaylist?.id;
     
-    // 播放列表ID变化时清空推荐频道
+    // 播放列表ID变化时清空推荐频道并重新加载
     if (_lastPlaylistId != currentPlaylistId) {
       _lastPlaylistId = currentPlaylistId;
       _recommendedChannels = [];
+      _lastChannelCount = 0;
+      
+      // 播放列表切换时，重新加载频道
+      if (currentPlaylistId != null) {
+        final channelProvider = context.read<ChannelProvider>();
+        channelProvider.loadChannels(currentPlaylistId);
+      }
     }
     
     // 当播放列表刷新完成时（isLoading 从 true 变为 false），触发频道重新加载
@@ -192,7 +199,15 @@ class _HomeScreenState extends State<HomeScreen> {
     final channelProvider = context.read<ChannelProvider>();
     final favoritesProvider = context.read<FavoritesProvider>();
     
-    if (channelProvider.channels.isEmpty) return;
+    // 如果频道列表为空，清空推荐列表
+    if (channelProvider.channels.isEmpty) {
+      if (_recommendedChannels.isNotEmpty) {
+        setState(() {
+          _recommendedChannels = [];
+        });
+      }
+      return;
+    }
 
     // 分离收藏和非收藏频道
     final favoriteChannels = <Channel>[];
@@ -472,8 +487,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     ? () => _continuePlayback(provider, lastChannel, isMultiScreenMode, settingsProvider) 
                     : null
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: isMobile ? 6 : 10),
               _buildHeaderButton(Icons.playlist_add_rounded, AppStrings.of(context)?.playlists ?? 'Playlists', false, () => Navigator.pushNamed(context, AppRouter.playlistManager)),
+              SizedBox(width: isMobile ? 6 : 10),
+              _buildHeaderButton(Icons.refresh_rounded, AppStrings.of(context)?.refresh ?? 'Refresh', false, activePlaylist != null ? () => _refreshCurrentPlaylist(playlistProvider, provider) : null),
+              SizedBox(width: isMobile ? 6 : 10),
+              _buildThemeToggleButton(),
             ],
           ),
         ],
@@ -490,6 +509,70 @@ class _HomeScreenState extends State<HomeScreen> {
     } else if (lastChannel != null) {
       // 恢复单频道播放
       _playChannel(lastChannel);
+    }
+  }
+
+  /// 刷新当前播放列表
+  Future<void> _refreshCurrentPlaylist(PlaylistProvider playlistProvider, ChannelProvider channelProvider) async {
+    final activePlaylist = playlistProvider.activePlaylist;
+    if (activePlaylist == null) return;
+
+    // 显示加载提示
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('刷新中 ${activePlaylist.name}...'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+
+    // 执行刷新
+    final success = await playlistProvider.refreshPlaylist(activePlaylist);
+
+    if (!mounted) return;
+
+    if (success) {
+      // 刷新成功，重新加载频道
+      if (activePlaylist.id != null) {
+        await channelProvider.loadChannels(activePlaylist.id!);
+        // 刷新推荐列表
+        _refreshRecommendedChannels();
+        
+        // 重新加载 EPG（使用播放列表的 EPG URL，如果失败则使用设置中的兜底 URL）
+        final epgProvider = context.read<EpgProvider>();
+        final settingsProvider = context.read<SettingsProvider>();
+        
+        // 重新加载播放列表以获取最新的 EPG URL
+        await playlistProvider.loadPlaylists();
+        final updatedPlaylist = playlistProvider.activePlaylist;
+        
+        if (updatedPlaylist?.epgUrl != null) {
+          debugPrint('HomeScreen: 使用播放列表的 EPG URL 重新加载: ${updatedPlaylist!.epgUrl}');
+          await epgProvider.loadEpg(
+            updatedPlaylist.epgUrl!,
+            fallbackUrl: settingsProvider.epgUrl,
+          );
+        } else if (settingsProvider.epgUrl != null) {
+          debugPrint('HomeScreen: 使用设置中的兜底 EPG URL 重新加载: ${settingsProvider.epgUrl}');
+          await epgProvider.loadEpg(settingsProvider.epgUrl!);
+        }
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('刷新成功'),
+          duration: const Duration(seconds: 2),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('刷新失败'),
+          duration: const Duration(seconds: 2),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -617,7 +700,7 @@ class _HomeScreenState extends State<HomeScreen> {
       showFocusBorder: false,
       builder: (context, isFocused, child) {
         return Container(
-          padding: EdgeInsets.symmetric(horizontal: isMobile ? 10 : 14, vertical: isMobile ? 6 : 8),
+          padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 14, vertical: isMobile ? 6 : 8),
           decoration: BoxDecoration(
             gradient: isPrimary || isFocused ? AppTheme.getGradient(context) : null,
             color: isPrimary || isFocused ? null : AppTheme.getGlassColor(context),
@@ -633,7 +716,7 @@ class _HomeScreenState extends State<HomeScreen> {
           final textColor = isPrimary ? Colors.white : (isDark ? Colors.white : AppTheme.textPrimaryLight);
           // 手机端只显示图标，节省空间
           if (isMobile) {
-            return Icon(icon, color: textColor, size: 18);
+            return Icon(icon, color: textColor, size: 16);
           }
           return Row(
             mainAxisSize: MainAxisSize.min,
@@ -641,6 +724,66 @@ class _HomeScreenState extends State<HomeScreen> {
               Icon(icon, color: textColor, size: 16),
               const SizedBox(width: 6),
               Text(label, style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w500)),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildThemeToggleButton() {
+    final settingsProvider = context.watch<SettingsProvider>();
+    final isDarkMode = settingsProvider.themeMode == 'dark';
+    final isMobile = PlatformDetector.isMobile;
+    
+    return TVFocusable(
+      onSelect: () {
+        // 切换黑暗/明亮模式
+        settingsProvider.setThemeMode(isDarkMode ? 'light' : 'dark');
+      },
+      focusScale: 1.0,
+      showFocusBorder: false,
+      builder: (context, isFocused, child) {
+        return Container(
+          padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 14, vertical: isMobile ? 6 : 8),
+          decoration: BoxDecoration(
+            color: isFocused ? AppTheme.getGlassColor(context) : AppTheme.getGlassColor(context).withOpacity(0.5),
+            borderRadius: BorderRadius.circular(AppTheme.radiusPill),
+            border: Border.all(
+              color: isFocused ? AppTheme.getPrimaryColor(context) : AppTheme.getGlassBorderColor(context), 
+              width: isFocused ? 2 : 1
+            ),
+          ),
+          child: child,
+        );
+      },
+      child: Builder(
+        builder: (context) {
+          final themeIsDark = Theme.of(context).brightness == Brightness.dark;
+          final textColor = themeIsDark ? Colors.white : AppTheme.textPrimaryLight;
+          
+          // 手机端只显示图标
+          if (isMobile) {
+            return Icon(
+              isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded, 
+              color: textColor, 
+              size: 16
+            );
+          }
+          
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded, 
+                color: textColor, 
+                size: 16
+              ),
+              const SizedBox(width: 6),
+              Text(
+                isDarkMode ? '明亮' : '黑暗', 
+                style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w500)
+              ),
             ],
           );
         },
@@ -847,7 +990,10 @@ class _HomeScreenState extends State<HomeScreen> {
           Container(
             width: 100,
             height: 100,
-            decoration: BoxDecoration(gradient: AppTheme.lotusSoftGradient, borderRadius: BorderRadius.circular(24)),
+            decoration: BoxDecoration(
+              gradient: AppTheme.getGradient(context), 
+              borderRadius: BorderRadius.circular(24)
+            ),
             child: const Icon(Icons.playlist_add_rounded, size: 48, color: Colors.white),
           ),
           const SizedBox(height: 20),
@@ -858,10 +1004,29 @@ class _HomeScreenState extends State<HomeScreen> {
           TVFocusable(
             autofocus: true,
             onSelect: () => Navigator.pushNamed(context, AppRouter.playlistManager),
-            child: ElevatedButton.icon(
-              onPressed: () => Navigator.pushNamed(context, AppRouter.playlistManager),
-              icon: const Icon(Icons.add_rounded, size: 18),
-              label: Text(AppStrings.of(context)?.addPlaylist ?? 'Add Playlist'),
+            focusScale: 1.0,
+            showFocusBorder: false,
+            builder: (context, isFocused, child) {
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                decoration: BoxDecoration(
+                  gradient: AppTheme.getGradient(context),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusPill),
+                  border: isFocused ? Border.all(color: AppTheme.getPrimaryColor(context), width: 2) : null,
+                ),
+                child: child,
+              );
+            },
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                const SizedBox(width: 8),
+                Text(
+                  AppStrings.of(context)?.addPlaylist ?? 'Add Playlist',
+                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+              ],
             ),
           ),
         ],

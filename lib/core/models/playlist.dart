@@ -4,6 +4,7 @@ class Playlist {
   final String name;
   final String? url;
   final String? filePath;
+  final String? epgUrl; // EPG URL extracted from M3U header
   final bool isActive;
   final DateTime? lastUpdated;
   final DateTime createdAt;
@@ -17,6 +18,7 @@ class Playlist {
     required this.name,
     this.url,
     this.filePath,
+    this.epgUrl,
     this.isActive = true,
     this.lastUpdated,
     DateTime? createdAt,
@@ -30,6 +32,7 @@ class Playlist {
       name: map['name'] as String,
       url: map['url'] as String?,
       filePath: map['file_path'] as String?,
+      epgUrl: map['epg_url'] as String?,
       isActive: (map['is_active'] as int?) == 1,
       lastUpdated: map['last_updated'] != null ? DateTime.fromMillisecondsSinceEpoch(map['last_updated'] as int) : null,
       createdAt: map['created_at'] != null ? DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int) : DateTime.now(),
@@ -42,6 +45,7 @@ class Playlist {
       'name': name,
       'url': url,
       'file_path': filePath,
+      'epg_url': epgUrl,
       'is_active': isActive ? 1 : 0,
       'last_updated': lastUpdated?.millisecondsSinceEpoch,
       'created_at': createdAt.millisecondsSinceEpoch,
@@ -53,6 +57,7 @@ class Playlist {
     String? name,
     String? url,
     String? filePath,
+    String? epgUrl,
     bool? isActive,
     DateTime? lastUpdated,
     DateTime? createdAt,
@@ -64,6 +69,7 @@ class Playlist {
       name: name ?? this.name,
       url: url ?? this.url,
       filePath: filePath ?? this.filePath,
+      epgUrl: epgUrl ?? this.epgUrl,
       isActive: isActive ?? this.isActive,
       lastUpdated: lastUpdated ?? this.lastUpdated,
       createdAt: createdAt ?? this.createdAt,

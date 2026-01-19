@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart';
 class DatabaseHelper {
   static Database? _database;
   static const String _databaseName = 'flutter_iptv.db';
-  static const int _databaseVersion = 3; // Upgraded for sources column
+  static const int _databaseVersion = 4; // Upgraded for epg_url column
 
   Future<void> initialize() async {
     if (_database != null) return;
@@ -34,6 +34,7 @@ class DatabaseHelper {
         name TEXT NOT NULL,
         url TEXT,
         file_path TEXT,
+        epg_url TEXT,
         is_active INTEGER DEFAULT 1,
         last_updated INTEGER,
         channel_count INTEGER DEFAULT 0,
@@ -117,6 +118,15 @@ class DatabaseHelper {
       // Add sources column to channels table for multi-source support
       try {
         await db.execute('ALTER TABLE channels ADD COLUMN sources TEXT');
+      } catch (e) {
+        // Ignore if column already exists
+        debugPrint('Migration error (ignored): $e');
+      }
+    }
+    if (oldVersion < 4) {
+      // Add epg_url column to playlists table
+      try {
+        await db.execute('ALTER TABLE playlists ADD COLUMN epg_url TEXT');
       } catch (e) {
         // Ignore if column already exists
         debugPrint('Migration error (ignored): $e');

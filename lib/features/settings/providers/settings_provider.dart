@@ -36,7 +36,7 @@ class SettingsProvider extends ChangeNotifier {
 
   // Settings values
   String _themeMode = 'dark';
-  bool _autoRefresh = true;
+  bool _autoRefresh = false;
   int _refreshInterval = 24; // hours
   String _defaultQuality = 'auto';
   bool _hardwareDecoding = true;
@@ -114,7 +114,7 @@ class SettingsProvider extends ChangeNotifier {
     final prefs = ServiceLocator.prefs;
 
     _themeMode = prefs.getString(_keyThemeMode) ?? 'dark';
-    _autoRefresh = prefs.getBool(_keyAutoRefresh) ?? true;
+    _autoRefresh = prefs.getBool(_keyAutoRefresh) ?? false;
     _refreshInterval = prefs.getInt(_keyRefreshInterval) ?? 24;
     _defaultQuality = prefs.getString(_keyDefaultQuality) ?? 'auto';
     _hardwareDecoding = prefs.getBool(_keyHardwareDecoding) ?? true;
@@ -444,7 +444,7 @@ class SettingsProvider extends ChangeNotifier {
   // Reset all settings to defaults
   Future<void> resetSettings() async {
     _themeMode = 'dark';
-    _autoRefresh = true;
+    _autoRefresh = false;
     _refreshInterval = 24;
     _defaultQuality = 'auto';
     _hardwareDecoding = true;

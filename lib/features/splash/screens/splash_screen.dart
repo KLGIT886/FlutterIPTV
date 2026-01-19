@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/navigation/app_router.dart';
 import '../../../core/services/service_locator.dart';
+import '../../../core/services/auto_refresh_service.dart';
 import '../../../core/platform/tv_detection_channel.dart';
 import '../../../core/i18n/app_strings.dart';
 import '../../playlist/providers/playlist_provider.dart';
@@ -54,6 +55,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       if (mounted) {
         final playlistProvider = context.read<PlaylistProvider>();
         await playlistProvider.loadPlaylists();
+        
+        // 播放列表加载完成后，通知自动刷新服务进行检查
+        AutoRefreshService().checkOnStartup();
       }
     } catch (e) {
       debugPrint('Initialization failed: $e');

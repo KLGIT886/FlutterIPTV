@@ -701,6 +701,22 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
                 ),
               ),
               const SizedBox(width: 12),
+              // 复制URL按钮（仅远程播放列表显示）
+              if (playlist.isRemote && playlist.url != null) ...[
+                TVFocusable(
+                  onSelect: () => _copyUrl(playlist.url!),
+                  focusScale: 1.1,
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.getCardColor(context),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.copy_rounded, color: AppTheme.getTextSecondary(context), size: 22),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               // 刷新按钮
               TVFocusable(
                 onSelect: () => _refreshPlaylist(provider, playlist),
@@ -788,107 +804,127 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
           child: child,
         );
       },
-      child: Row(
+      child: Column(
         children: [
-          // Icon
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppTheme.getPrimaryColor(context).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              playlist.isRemote ? Icons.cloud_outlined : Icons.folder_outlined,
-              color: AppTheme.getPrimaryColor(context),
-              size: 24,
-            ),
-          ),
-          const SizedBox(width: 16),
+          Row(
+            children: [
+              // Icon
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppTheme.getPrimaryColor(context).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  playlist.isRemote ? Icons.cloud_outlined : Icons.folder_outlined,
+                  color: AppTheme.getPrimaryColor(context),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
 
-          // Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+              // Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        playlist.name,
-                        style: TextStyle(
-                          color: AppTheme.getTextPrimary(context),
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (provider.activePlaylist?.id == playlist.id)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppTheme.getPrimaryColor(context),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          AppStrings.of(context)?.active ?? 'ACTIVE',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            playlist.name,
+                            style: TextStyle(
+                              color: AppTheme.getTextPrimary(context),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        if (provider.activePlaylist?.id == playlist.id)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppTheme.getPrimaryColor(context),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              AppStrings.of(context)?.active ?? 'ACTIVE',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          playlist.isRemote ? Icons.cloud_outlined : Icons.folder_outlined,
+                          color: AppTheme.getTextMuted(context),
+                          size: 12,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            '${playlist.isRemote ? 'URL' : (AppStrings.of(context)?.localFile ?? 'Local File')} · ${playlist.channelCount} ${AppStrings.of(context)?.channels ?? 'channels'} · ${playlist.groupCount} ${AppStrings.of(context)?.categories ?? 'groups'}',
+                            style: TextStyle(
+                              color: AppTheme.getTextSecondary(context),
+                              fontSize: 11,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (playlist.lastUpdated != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '${AppStrings.of(context)?.updated ?? 'Updated'}: ${_formatDate(playlist.lastUpdated!)}',
+                        style: TextStyle(
+                          color: AppTheme.getTextMuted(context),
+                          fontSize: 11,
+                        ),
                       ),
+                    ],
                   ],
                 ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(
-                      playlist.isRemote ? Icons.cloud_outlined : Icons.folder_outlined,
-                      color: AppTheme.getTextMuted(context),
-                      size: 12,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      playlist.isRemote ? 'URL' : (AppStrings.of(context)?.localFile ?? 'Local File'),
-                      style: TextStyle(color: AppTheme.getTextMuted(context), fontSize: 11),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${playlist.channelCount} ${AppStrings.of(context)?.channels ?? 'channels'} • ${playlist.groupCount} ${AppStrings.of(context)?.categories ?? 'groups'}',
-                      style: TextStyle(
-                        color: AppTheme.getTextSecondary(context),
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
-                if (playlist.lastUpdated != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    '${AppStrings.of(context)?.updated ?? 'Updated'}: ${_formatDate(playlist.lastUpdated!)}',
-                    style: TextStyle(
-                      color: AppTheme.getTextMuted(context),
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ],
-            ),
+              ),
+            ],
           ),
 
-          // Actions
+          // Actions - 手机端放到下面一行
+          const SizedBox(height: 12),
           Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
               // Refresh Button
               if (PlatformDetector.isTV) ...[
+                // 复制URL按钮（仅远程播放列表显示）
+                if (playlist.isRemote && playlist.url != null) ...[
+                  TVFocusable(
+                    onSelect: () => _copyUrl(playlist.url!),
+                    focusScale: 1.1,
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.getCardColor(context),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(Icons.copy_rounded, color: AppTheme.getTextSecondary(context), size: 20),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 TVFocusable(
                   onSelect: () => _refreshPlaylist(provider, playlist),
                   focusScale: 1.1,
@@ -915,8 +951,23 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
                   ),
                 ),
               ] else ...[
+                // 手机端：使用更紧凑的按钮
+                // 复制URL按钮（仅远程播放列表显示）
+                if (playlist.isRemote && playlist.url != null)
+                  IconButton(
+                    icon: const Icon(Icons.copy_rounded),
+                    iconSize: 20,
+                    padding: const EdgeInsets.all(8),
+                    constraints: const BoxConstraints(),
+                    color: AppTheme.getTextSecondary(context),
+                    onPressed: () => _copyUrl(playlist.url!),
+                    tooltip: '复制URL',
+                  ),
                 IconButton(
                   icon: const Icon(Icons.refresh_rounded),
+                  iconSize: 20,
+                  padding: const EdgeInsets.all(8),
+                  constraints: const BoxConstraints(),
                   color: AppTheme.getTextSecondary(context),
                   onPressed: () => _refreshPlaylist(provider, playlist),
                   tooltip: AppStrings.of(context)?.refresh ?? 'Refresh',
@@ -924,6 +975,9 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
                 // Delete Button
                 IconButton(
                   icon: const Icon(Icons.delete_outline_rounded),
+                  iconSize: 20,
+                  padding: const EdgeInsets.all(8),
+                  constraints: const BoxConstraints(),
                   color: AppTheme.errorColor,
                   onPressed: () => _confirmDelete(provider, playlist),
                   tooltip: AppStrings.of(context)?.delete ?? 'Delete',
@@ -983,26 +1037,22 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
         provider.setActivePlaylist(playlist, favoritesProvider: context.read<FavoritesProvider>());
         await context.read<ChannelProvider>().loadChannels(playlist.id!);
 
-        // Auto-apply EPG URL if extracted from M3U
-        if (provider.lastExtractedEpgUrl != null) {
+        // Auto-load EPG: Try playlist EPG URL first, fallback to settings EPG URL
+        if (mounted) {
           final settingsProvider = context.read<SettingsProvider>();
-          final epgApplied = await provider.applyExtractedEpgUrl(settingsProvider);
-          if (epgApplied && mounted) {
-            // Reload EPG data
-            await context.read<EpgProvider>().loadEpg(provider.lastExtractedEpgUrl!);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('${AppStrings.of(context)?.epgAutoApplied ?? "EPG source auto-applied"}: ${provider.lastExtractedEpgUrl}'),
-                backgroundColor: AppTheme.successColor,
-                duration: const Duration(seconds: 3),
-              ),
-            );
-          }
-        } else {
-          // 如果 M3U 没有 EPG URL，但设置中已配置，则加载已配置的 EPG
-          final settingsProvider = context.read<SettingsProvider>();
-          if (settingsProvider.enableEpg && settingsProvider.epgUrl != null) {
-            context.read<EpgProvider>().loadEpg(settingsProvider.epgUrl!);
+          final epgProvider = context.read<EpgProvider>();
+          
+          if (settingsProvider.enableEpg) {
+            final playlistEpgUrl = provider.lastExtractedEpgUrl;
+            final fallbackEpgUrl = settingsProvider.epgUrl;
+            
+            if (playlistEpgUrl != null && playlistEpgUrl.isNotEmpty) {
+              debugPrint('DEBUG: 加载播放列表EPG: $playlistEpgUrl (兜底: $fallbackEpgUrl)');
+              await epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl);
+            } else if (fallbackEpgUrl != null && fallbackEpgUrl.isNotEmpty) {
+              debugPrint('DEBUG: 使用兜底EPG URL: $fallbackEpgUrl');
+              await epgProvider.loadEpg(fallbackEpgUrl);
+            }
           }
         }
 
@@ -1038,22 +1088,32 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
 
     if (mounted) {
       if (success) {
-        // 后台加载频道，不阻塞 UI
-        context.read<ChannelProvider>().loadAllChannels();
-
-        // Auto-apply EPG URL if extracted from M3U
-        if (provider.lastExtractedEpgUrl != null) {
-          final settingsProvider = context.read<SettingsProvider>();
-          final epgApplied = await provider.applyExtractedEpgUrl(settingsProvider);
-          if (epgApplied && mounted) {
-            // Reload EPG data (后台加载)
-            context.read<EpgProvider>().loadEpg(provider.lastExtractedEpgUrl!);
-          }
+        final channelProvider = context.read<ChannelProvider>();
+        
+        // 如果刷新的是当前激活的播放列表，重新加载频道
+        if (provider.activePlaylist?.id == playlist.id) {
+          debugPrint('DEBUG: 刷新的是激活播放列表，重新加载频道');
+          await channelProvider.loadChannels(playlist.id);
         } else {
-          // 如果 M3U 没有 EPG URL，但设置中已配置，则加载已配置的 EPG
+          debugPrint('DEBUG: 刷新的不是激活播放列表，不重新加载频道');
+        }
+
+        // Auto-load EPG: Try playlist EPG URL first, fallback to settings EPG URL
+        if (mounted) {
           final settingsProvider = context.read<SettingsProvider>();
-          if (settingsProvider.enableEpg && settingsProvider.epgUrl != null) {
-            context.read<EpgProvider>().loadEpg(settingsProvider.epgUrl!);
+          final epgProvider = context.read<EpgProvider>();
+          
+          if (settingsProvider.enableEpg) {
+            final playlistEpgUrl = provider.lastExtractedEpgUrl;
+            final fallbackEpgUrl = settingsProvider.epgUrl;
+            
+            if (playlistEpgUrl != null && playlistEpgUrl.isNotEmpty) {
+              debugPrint('DEBUG: 加载播放列表EPG: $playlistEpgUrl (兜底: $fallbackEpgUrl)');
+              epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl);
+            } else if (fallbackEpgUrl != null && fallbackEpgUrl.isNotEmpty) {
+              debugPrint('DEBUG: 使用兜底EPG URL: $fallbackEpgUrl');
+              epgProvider.loadEpg(fallbackEpgUrl);
+            }
           }
         }
       }
@@ -1068,6 +1128,19 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
           ),
         );
       }
+    }
+  }
+
+  void _copyUrl(String url) {
+    Clipboard.setData(ClipboardData(text: url));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('URL已复制到剪贴板'),
+          duration: const Duration(seconds: 2),
+          backgroundColor: AppTheme.successColor,
+        ),
+      );
     }
   }
 
@@ -1096,11 +1169,18 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
             ElevatedButton(
               onPressed: () async {
                 Navigator.pop(context);
-                await provider.deletePlaylist(playlist.id);
+                final success = await provider.deletePlaylist(playlist.id);
 
-                if (mounted) {
-                  // Refresh channels
-                  context.read<ChannelProvider>().loadAllChannels();
+                if (mounted && success) {
+                  final channelProvider = context.read<ChannelProvider>();
+                  
+                  // 如果还有播放列表，加载新的激活播放列表的频道
+                  if (provider.activePlaylist != null && provider.activePlaylist!.id != null) {
+                    await channelProvider.loadChannels(provider.activePlaylist!.id!);
+                  } else {
+                    // 没有播放列表了，清空频道
+                    await channelProvider.loadAllChannels();
+                  }
 
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -1169,19 +1249,22 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
               provider.setActivePlaylist(playlist, favoritesProvider: context.read<FavoritesProvider>());
               await context.read<ChannelProvider>().loadChannels(playlist.id!);
 
-              // Auto-apply EPG URL if extracted from M3U
-              if (provider.lastExtractedEpgUrl != null) {
+              // Auto-load EPG: Try playlist EPG URL first, fallback to settings EPG URL
+              if (mounted) {
                 final settingsProvider = context.read<SettingsProvider>();
-                final epgApplied = await provider.applyExtractedEpgUrl(settingsProvider);
-                if (epgApplied && mounted) {
-                  // Reload EPG data
-                  context.read<EpgProvider>().loadEpg(provider.lastExtractedEpgUrl!);
-                }
-              } else {
-                // 如果 M3U 没有 EPG URL，但设置中已配置，则加载已配置的 EPG
-                final settingsProvider = context.read<SettingsProvider>();
-                if (settingsProvider.enableEpg && settingsProvider.epgUrl != null) {
-                  context.read<EpgProvider>().loadEpg(settingsProvider.epgUrl!);
+                final epgProvider = context.read<EpgProvider>();
+                
+                if (settingsProvider.enableEpg) {
+                  final playlistEpgUrl = provider.lastExtractedEpgUrl;
+                  final fallbackEpgUrl = settingsProvider.epgUrl;
+                  
+                  if (playlistEpgUrl != null && playlistEpgUrl.isNotEmpty) {
+                    debugPrint('DEBUG: 加载播放列表EPG: $playlistEpgUrl (兜底: $fallbackEpgUrl)');
+                    await epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl);
+                  } else if (fallbackEpgUrl != null && fallbackEpgUrl.isNotEmpty) {
+                    debugPrint('DEBUG: 使用兜底EPG URL: $fallbackEpgUrl');
+                    await epgProvider.loadEpg(fallbackEpgUrl);
+                  }
                 }
               }
             }
