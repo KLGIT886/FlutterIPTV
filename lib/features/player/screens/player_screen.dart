@@ -198,6 +198,28 @@ class _PlayerScreenState extends State<PlayerScreen>
     debugPrint('PlayerScreen: AppLifecycleState changed to $state');
   }
 
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    if (!PlatformDetector.isWindows) return;
+    
+    // 只在非防抖状态下检查
+    if (_isTogglingFullScreen) return;
+    
+    // 延迟检查，避免频繁触发
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (!mounted) return;
+      
+      final playerProvider = context.read<PlayerProvider>();
+      
+      // 如果播放器意外停止了，尝试恢复播放
+      if (playerProvider.state != PlayerState.playing && playerProvider.currentChannel != null && !playerProvider.hasError) {
+        debugPrint('PlayerScreen: Window size changed, playback stopped unexpectedly, attempting to resume');
+        playerProvider.play();
+      }
+    });
+  }
+
   Future<void> _checkAndLaunchPlayer() async {
     // 分屏模式下不启动PlayerProvider播放，由MultiScreenProvider处理
     if (_isMultiScreenMode()) {
@@ -2373,7 +2395,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   // 切换全屏模式 (仅 Windows)
-  void _toggleFullScreen() {
+  void _toggleFullScreen() async {
     if (!PlatformDetector.isWindows) return;
     
     // 防抖：如果正在切换中，忽略新的请求
@@ -2391,25 +2413,22 @@ class _PlayerScreenState extends State<PlayerScreen>
       _isFullScreen = newFullScreenState;
     });
     
-    // 完全异步执行全屏切换，不阻塞主线程
-    Future.delayed(const Duration(milliseconds: 50)).then((_) async {
-      try {
-        await windowManager.setFullScreen(newFullScreenState);
-        debugPrint('Fullscreen set successfully: $newFullScreenState');
-      } catch (e) {
-        debugPrint('setFullScreen error: $e');
-        // 如果失败，恢复状态
-        if (mounted) {
-          setState(() {
-            _isFullScreen = !newFullScreenState;
-          });
-        }
-      } finally {
-        // 延迟重置防抖标志，避免过快切换
-        await Future.delayed(const Duration(milliseconds: 500));
-        _isTogglingFullScreen = false;
+    try {
+      await windowManager.setFullScreen(newFullScreenState);
+      debugPrint('Fullscreen set successfully: $newFullScreenState');
+    } catch (e) {
+      debugPrint('setFullScreen error: $e');
+      // 如果失败，恢复状态
+      if (mounted) {
+        setState(() {
+          _isFullScreen = !newFullScreenState;
+        });
       }
-    });
+    } finally {
+      // 延迟重置防抖标志，避免过快切换
+      await Future.delayed(const Duration(milliseconds: 300));
+      _isTogglingFullScreen = false;
+    }
   }
 
   void _showSettingsSheet(BuildContext context) {
