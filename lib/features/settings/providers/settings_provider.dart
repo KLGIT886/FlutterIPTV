@@ -33,6 +33,7 @@ class SettingsProvider extends ChangeNotifier {
   static const String _keyLastMultiScreenChannels = 'last_multi_screen_channels'; // JSON string of channel IDs
   static const String _keyDarkColorScheme = 'dark_color_scheme';
   static const String _keyLightColorScheme = 'light_color_scheme';
+  static const String _keyFontFamily = 'font_family';
 
   // Settings values
   String _themeMode = 'dark';
@@ -65,6 +66,7 @@ class SettingsProvider extends ChangeNotifier {
   List<int?> _lastMultiScreenChannels = [null, null, null, null]; // 分屏频道ID列表
   String _darkColorScheme = 'lotus'; // 黑暗模式配色方案
   String _lightColorScheme = 'lotus-light'; // 明亮模式配色方案
+  String _fontFamily = 'Arial'; // 字体设置（默认Arial，英文环境）
 
   // Getters
   String get themeMode => _themeMode;
@@ -96,6 +98,7 @@ class SettingsProvider extends ChangeNotifier {
   List<int?> get lastMultiScreenChannels => _lastMultiScreenChannels;
   String get darkColorScheme => _darkColorScheme;
   String get lightColorScheme => _lightColorScheme;
+  String get fontFamily => _fontFamily;
   
   /// 获取当前应该使用的配色方案
   String get currentColorScheme {
@@ -166,6 +169,9 @@ class SettingsProvider extends ChangeNotifier {
     _darkColorScheme = prefs.getString(_keyDarkColorScheme) ?? 'lotus';
     _lightColorScheme = prefs.getString(_keyLightColorScheme) ?? 'lotus-light';
     
+    // 加载字体设置
+    _fontFamily = prefs.getString(_keyFontFamily) ?? 'System';
+    
     // 不在构造函数中调用 notifyListeners()，避免 build 期间触发重建
   }
 
@@ -214,6 +220,7 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setString(_keyLastMultiScreenChannels, _lastMultiScreenChannels.map((e) => e?.toString() ?? '').join(','));
     await prefs.setString(_keyDarkColorScheme, _darkColorScheme);
     await prefs.setString(_keyLightColorScheme, _lightColorScheme);
+    await prefs.setString(_keyFontFamily, _fontFamily);
   }
 
   // Setters with persistence
@@ -441,6 +448,14 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 设置字体
+  Future<void> setFontFamily(String fontFamily) async {
+    debugPrint('SettingsProvider: 设置字体 - $fontFamily');
+    _fontFamily = fontFamily;
+    await _saveSettings();
+    notifyListeners();
+  }
+
   // Reset all settings to defaults
   Future<void> resetSettings() async {
     _themeMode = 'dark';
@@ -467,6 +482,7 @@ class SettingsProvider extends ChangeNotifier {
     _activeScreenIndex = 0;
     _darkColorScheme = 'lotus';
     _lightColorScheme = 'lotus-light';
+    _fontFamily = 'Arial';
 
     await _saveSettings();
     notifyListeners();

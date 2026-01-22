@@ -453,13 +453,14 @@ class _DlnaAwareAppState extends State<_DlnaAwareApp> with WindowListener {
     // 监听 settings 变化，确保主题能够更新
     return Consumer<SettingsProvider>(
       builder: (context, settings, _) {
-        debugPrint('MaterialApp 重建 - 黑暗配色: ${settings.darkColorScheme}, 明亮配色: ${settings.lightColorScheme}, 主题模式: ${settings.themeMode}');
+        debugPrint('MaterialApp 重建 - 黑暗配色: ${settings.darkColorScheme}, 明亮配色: ${settings.lightColorScheme}, 主题模式: ${settings.themeMode}, 字体: ${settings.fontFamily}');
+        final fontFamily = AppTheme.resolveFontFamily(settings.fontFamily);
         return MaterialApp(
           navigatorKey: _navigatorKey,
           title: AppStrings.of(context)?.lotusIptv ?? 'Lotus IPTV',
           debugShowCheckedModeBanner: false,
-          theme: AppThemeDynamic.getLightTheme(settings.lightColorScheme),
-          darkTheme: AppThemeDynamic.getDarkTheme(settings.darkColorScheme),
+          theme: AppThemeDynamic.getLightTheme(settings.lightColorScheme, fontFamily),
+          darkTheme: AppThemeDynamic.getDarkTheme(settings.darkColorScheme, fontFamily),
           themeMode: settings.themeMode == 'light'
               ? ThemeMode.light
               : settings.themeMode == 'system'

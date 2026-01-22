@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'color_scheme_data.dart';
 import 'color_scheme_manager.dart';
@@ -152,6 +153,69 @@ class AppTheme {
   );
 
   // Card Gradient - Glassmorphism
+
+  /// 字体映射（使用项目内字体文件）
+  static const Map<String, String?> fontMap = {
+    'System': null, // 系统字体（所有平台）
+    // 中文字体
+    'Microsoft YaHei': 'MicrosoftYaHei',
+    'SimHei': 'SimHei',
+    'SimSun': 'SimSun',
+    'KaiTi': 'KaiTi',
+    'FangSong': 'FangSong',
+    // 英文字体
+    'Arial': 'Arial',
+    'Calibri': 'Calibri',
+    'Georgia': 'Georgia',
+    'Verdana': 'Verdana',
+    'Tahoma': 'Tahoma',
+    'Times New Roman': 'TimesNewRoman',
+    'Segoe UI': 'SegoeUI',
+    'Impact': 'Impact',
+  };
+  
+  /// 根据平台和语言获取可用的字体列表
+  /// 所有平台都显示相同的字体选项（使用项目内字体文件）
+  static List<String> getAvailableFonts([String? languageCode]) {
+    final isChinese = languageCode == null || languageCode.startsWith('zh');
+    
+    if (isChinese) {
+      return [
+        'System',
+        'Microsoft YaHei',
+        'SimHei',
+        'SimSun',
+        'KaiTi',
+        'FangSong',
+        // 添加常用英文字体
+        'Arial',
+        'Segoe UI',
+      ];
+    } else {
+      return [
+        'System',
+        // 英文字体
+        'Arial',
+        'Segoe UI',
+        'Calibri',
+        'Georgia',
+        'Verdana',
+        'Tahoma',
+        'Times New Roman',
+        'Impact',
+      ];
+    }
+  }
+  
+  /// 根据字体名称获取fontFamily
+  /// 使用项目内字体文件，确保所有平台一致
+  static String? resolveFontFamily(String fontName) {
+    if (fontName == 'System' || fontName == null) {
+      return null;
+    }
+    return fontMap[fontName];
+  }
+
   static const LinearGradient cardGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
@@ -208,7 +272,6 @@ class AppTheme {
       brightness: Brightness.dark,
       primaryColor: primaryColor,
       scaffoldBackgroundColor: backgroundColor,
-      fontFamily: 'NotoSansSC', // 思源黑体
       colorScheme: const ColorScheme.dark(
         primary: primaryColor,
         secondary: secondaryColor,
@@ -415,7 +478,6 @@ class AppTheme {
       brightness: Brightness.light,
       primaryColor: primaryColor,
       scaffoldBackgroundColor: backgroundColorLight,
-      fontFamily: 'NotoSansSC',
       colorScheme: const ColorScheme.light(
         primary: primaryColor,
         secondary: secondaryColor,
@@ -635,27 +697,27 @@ class GlassCard extends StatelessWidget {
 
 extension AppThemeDynamic on AppTheme {
   /// 根据配色方案 ID 生成黑暗主题
-  static ThemeData getDarkTheme(String schemeId) {
+  static ThemeData getDarkTheme(String schemeId, [String? fontFamily]) {
     final scheme = ColorSchemeManager.instance.getDarkScheme(schemeId);
-    debugPrint('AppTheme: 生成黑暗主题 - schemeId=$schemeId, primaryColor=${scheme.primaryColor}, secondaryColor=${scheme.secondaryColor}');
-    return _buildDarkTheme(scheme);
+    debugPrint('AppTheme: 生成黑暗主题 - schemeId=$schemeId, primaryColor=${scheme.primaryColor}, secondaryColor=${scheme.secondaryColor}, fontFamily=$fontFamily');
+    return _buildDarkTheme(scheme, fontFamily);
   }
   
   /// 根据配色方案 ID 生成明亮主题
-  static ThemeData getLightTheme(String schemeId) {
+  static ThemeData getLightTheme(String schemeId, [String? fontFamily]) {
     final scheme = ColorSchemeManager.instance.getLightScheme(schemeId);
-    debugPrint('AppTheme: 生成明亮主题 - schemeId=$schemeId, primaryColor=${scheme.primaryColor}, secondaryColor=${scheme.secondaryColor}');
-    return _buildLightTheme(scheme);
+    debugPrint('AppTheme: 生成明亮主题 - schemeId=$schemeId, primaryColor=${scheme.primaryColor}, secondaryColor=${scheme.secondaryColor}, fontFamily=$fontFamily');
+    return _buildLightTheme(scheme, fontFamily);
   }
   
   /// 构建黑暗主题（使用配色方案）
-  static ThemeData _buildDarkTheme(ColorSchemeData scheme) {
+  static ThemeData _buildDarkTheme(ColorSchemeData scheme, [String? fontFamily]) {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       primaryColor: scheme.primaryColor,
       scaffoldBackgroundColor: AppTheme.backgroundColorDark,
-      fontFamily: 'NotoSansSC',
+      fontFamily: fontFamily,
       colorScheme: ColorScheme.dark(
         primary: scheme.primaryColor,
         secondary: scheme.secondaryColor,
@@ -784,7 +846,7 @@ extension AppThemeDynamic on AppTheme {
   }
   
   /// 构建明亮主题（使用配色方案）
-  static ThemeData _buildLightTheme(ColorSchemeData scheme) {
+  static ThemeData _buildLightTheme(ColorSchemeData scheme, [String? fontFamily]) {
     final bgColor = scheme.backgroundColor ?? AppTheme.backgroundColorLight;
     
     return ThemeData(
@@ -792,7 +854,7 @@ extension AppThemeDynamic on AppTheme {
       brightness: Brightness.light,
       primaryColor: scheme.primaryColor,
       scaffoldBackgroundColor: bgColor,
-      fontFamily: 'NotoSansSC',
+      fontFamily: fontFamily,
       colorScheme: ColorScheme.light(
         primary: scheme.primaryColor,
         secondary: scheme.secondaryColor,

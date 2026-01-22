@@ -93,6 +93,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.color_lens_rounded,
                 onTap: () => _showColorSchemeDialog(context),
               ),
+              _buildDivider(),
+              _buildSelectTile(
+                context,
+                title: '字体',
+                subtitle: _getFontFamilyLabel(context, settings.fontFamily, settings),
+                icon: Icons.text_fields_rounded,
+                onTap: () => _showFontFamilyDialog(context, settings),
+              ),
             ]),
 
             const SizedBox(height: 24),
@@ -1576,6 +1584,103 @@ class _SettingsScreenState extends State<SettingsScreen> {
       },
     );
   }
+
+  String _getFontFamilyLabel(BuildContext context, String fontFamily, SettingsProvider settings) {
+    // 获取当前语言代码，如果设置为跟随系统则使用系统语言
+    final languageCode = settings.locale?.languageCode ?? WidgetsBinding.instance.platformDispatcher.locale.languageCode;
+    final isChinese = languageCode.startsWith('zh');
+    
+    switch (fontFamily) {
+      case 'System':
+        return isChinese ? '系统字体' : 'System Font';
+      // 中文字体
+      case 'Microsoft YaHei':
+        return isChinese ? '微软雅黑' : 'Microsoft YaHei';
+      case 'SimHei':
+        return isChinese ? '黑体' : 'SimHei';
+      case 'SimSun':
+        return isChinese ? '宋体' : 'SimSun';
+      case 'KaiTi':
+        return isChinese ? '楷体' : 'KaiTi';
+      case 'FangSong':
+        return isChinese ? '仿宋' : 'FangSong';
+      // 英文字体
+      case 'Arial':
+        return 'Arial';
+      case 'Calibri':
+        return 'Calibri';
+      case 'Georgia':
+        return 'Georgia';
+      case 'Verdana':
+        return 'Verdana';
+      case 'Tahoma':
+        return 'Tahoma';
+      case 'Times New Roman':
+        return 'Times New Roman';
+      case 'Segoe UI':
+        return 'Segoe UI';
+      case 'Impact':
+        return 'Impact';
+      default:
+        return fontFamily;
+    }
+  }
+
+  void _showFontFamilyDialog(BuildContext context, SettingsProvider settings) {
+    final languageCode = settings.locale?.languageCode ?? WidgetsBinding.instance.platformDispatcher.locale.languageCode;
+    final fonts = AppTheme.getAvailableFonts(languageCode);
+    final isChinese = languageCode.startsWith('zh');
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppTheme.surfaceColor,
+          title: Text(
+            isChinese ? '字体' : 'Font Family',
+            style: const TextStyle(color: AppTheme.textPrimary),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: fonts.length,
+              itemBuilder: (context, index) {
+                final font = fonts[index];
+                final resolvedFont = AppTheme.resolveFontFamily(font);
+                return RadioListTile<String>(
+                  title: Text(
+                    _getFontFamilyLabel(context, font, settings),
+                    style: TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontFamily: resolvedFont,
+                    ),
+                  ),
+                  value: font,
+                  groupValue: settings.fontFamily,
+                  onChanged: (value) {
+                    if (value != null) {
+                      settings.setFontFamily(value);
+                      Navigator.pop(dialogContext);
+                      _showSuccess(context, isChinese ? '字体已更改为 ${_getFontFamilyLabel(context, value, settings)}' : 'Font changed to ${_getFontFamilyLabel(context, value, settings)}');
+                    }
+                  },
+                  activeColor: AppTheme.getPrimaryColor(dialogContext),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(AppStrings.of(context)?.cancel ?? 'Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
+
 
 
