@@ -226,7 +226,7 @@ class _QrImportDialogState extends State<QrImportDialog> {
     final isMobile = MediaQuery.of(context).size.width < 600;
     
     return Dialog(
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppTheme.getSurfaceColor(context),
       insetPadding: EdgeInsets.zero,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
@@ -234,21 +234,7 @@ class _QrImportDialogState extends State<QrImportDialog> {
           width: isMobile ? null : 520,
           constraints: isMobile ? const BoxConstraints(maxWidth: 400) : null,
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: Theme.of(context).brightness == Brightness.dark
-                  ? [
-                      AppTheme.getBackgroundColor(context),
-                      AppTheme.getPrimaryColor(context).withOpacity(0.15),
-                      AppTheme.getBackgroundColor(context),
-                    ]
-                  : [
-                      AppTheme.getBackgroundColor(context),
-                      AppTheme.getBackgroundColor(context).withOpacity(0.9),
-                      AppTheme.getPrimaryColor(context).withOpacity(0.08),
-                    ],
-            ),
+            color: AppTheme.getSurfaceColor(context),
           ),
           padding: EdgeInsets.all(isMobile ? 16 : 24),
           child: Column(
@@ -380,7 +366,7 @@ class _QrImportDialogState extends State<QrImportDialog> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: QrImageView(
-              data: _serverService.serverUrl,
+              data: _serverService.importUrl,
               version: QrVersions.auto,
               size: 200,
               backgroundColor: Colors.white,
@@ -427,7 +413,7 @@ class _QrImportDialogState extends State<QrImportDialog> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    _serverService.serverUrl,
+                    _serverService.importUrl,
                     style: TextStyle(
                       color: AppTheme.getTextMuted(context),
                       fontSize: 11,
@@ -500,7 +486,7 @@ class _QrImportDialogState extends State<QrImportDialog> {
             borderRadius: BorderRadius.circular(12),
           ),
           child: QrImageView(
-            data: _serverService.serverUrl,
+            data: _serverService.importUrl,
             version: QrVersions.auto,
             size: 160,
             backgroundColor: Colors.white,
@@ -552,7 +538,7 @@ class _QrImportDialogState extends State<QrImportDialog> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        _serverService.serverUrl,
+                        _serverService.importUrl,
                         style: TextStyle(
                           color: AppTheme.getTextMuted(context),
                           fontSize: 13,

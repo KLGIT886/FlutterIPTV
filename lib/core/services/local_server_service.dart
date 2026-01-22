@@ -3,9 +3,15 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
-/// A simple local HTTP server for receiving playlist data from mobile devices
+/// A simple local HTTP server for receiving playlist data and search queries from mobile devices
 class LocalServerService {
+  // 单例模式
+  static final LocalServerService _instance = LocalServerService._internal();
+  factory LocalServerService() => _instance;
+  LocalServerService._internal();
+  
   HttpServer? _server;
   String? _localIp;
   final int _port = 38888;
@@ -13,19 +19,52 @@ class LocalServerService {
   // Callbacks
   Function(String url, String name)? onUrlReceived;
   Function(String content, String name)? onContentReceived;
+  Function(String query)? onSearchReceived;
 
   bool get isRunning => _server != null;
   String get serverUrl => 'http://$_localIp:$_port';
+  String get importUrl => 'http://$_localIp:$_port/import';
+  String get searchUrl => 'http://$_localIp:$_port/search';
   String? get localIp => _localIp;
   int get port => _port;
 
   String? _lastError;
   String? get lastError => _lastError;
+  
+  String? _cachedImportHtml;
+  String? _cachedSearchHtml;
 
   /// Start the local HTTP server
   Future<bool> start() async {
+    // 如果服务器已经在运行，直接返回成功
+    if (_server != null) {
+      debugPrint('LocalServer: 服务器已在运行');
+      return true;
+    }
+    
     try {
       _lastError = null;
+      
+      // Load HTML templates if not cached
+      if (_cachedImportHtml == null) {
+        try {
+          _cachedImportHtml = await rootBundle.loadString('assets/html/import_playlist.html');
+          debugPrint('LocalServer: 导入HTML模板加载成功');
+        } catch (e) {
+          debugPrint('LocalServer: 导入HTML模板加载失败: $e');
+          _lastError = '无法加载页面模板';
+          return false;
+        }
+      }
+      
+      if (_cachedSearchHtml == null) {
+        try {
+          _cachedSearchHtml = await rootBundle.loadString('assets/html/search_channels.html');
+          debugPrint('LocalServer: 搜索HTML模板加载成功');
+        } catch (e) {
+          debugPrint('LocalServer: 搜索HTML模板加载失败: $e');
+        }
+      }
       
       // Get local IP address
       _localIp = await _getLocalIpAddress();
@@ -88,28 +127,57 @@ class LocalServerService {
     }
 
     try {
+      debugPrint('DEBUG: 收到请求 - 路径: ${request.uri.path}, 方法: ${request.method}');
+      
       if (request.uri.path == '/' && request.method == 'GET') {
-        // Serve the web page
-        await _serveWebPage(request);
+        // Serve the import page by default
+        debugPrint('DEBUG: 提供导入页面 (/)');
+        await _serveImportPage(request);
+      } else if (request.uri.path == '/import' && request.method == 'GET') {
+        // Serve the import page
+        debugPrint('DEBUG: 提供导入页面 (/import)');
+        await _serveImportPage(request);
+      } else if (request.uri.path == '/search' && request.method == 'GET') {
+        // Serve the search page
+        debugPrint('DEBUG: 提供搜索页面 (/search)');
+        await _serveSearchPage(request);
       } else if (request.uri.path == '/submit' && request.method == 'POST') {
         // Handle playlist submission
+        debugPrint('DEBUG: 处理播放列表提交');
         await _handleSubmission(request);
+      } else if (request.uri.path == '/api/search' && request.method == 'POST') {
+        // Handle search submission
+        debugPrint('DEBUG: 处理搜索提交');
+        await _handleSearchSubmission(request);
       } else {
+        debugPrint('DEBUG: 404 - 未找到路径: ${request.uri.path}');
         request.response.statusCode = 404;
         request.response.write('Not Found');
         await request.response.close();
       }
     } catch (e) {
+      debugPrint('DEBUG: 请求处理错误: $e');
       request.response.statusCode = 500;
       request.response.write('Error: $e');
       await request.response.close();
     }
   }
 
-  /// Serve the web page for mobile input
-  Future<void> _serveWebPage(HttpRequest request) async {
+  /// Serve the import web page
+  Future<void> _serveImportPage(HttpRequest request) async {
     request.response.headers.contentType = ContentType.html;
-    request.response.write(_getWebPageHtml());
+    request.response.write(_cachedImportHtml ?? _getImportPageHtml());
+    await request.response.close();
+  }
+
+  /// Serve the search web page
+  Future<void> _serveSearchPage(HttpRequest request) async {
+    debugPrint('DEBUG: _serveSearchPage 被调用');
+    debugPrint('DEBUG: _cachedSearchHtml 是否为空: ${_cachedSearchHtml == null}');
+    request.response.headers.contentType = ContentType.html;
+    final html = _cachedSearchHtml ?? _getSearchPageHtml();
+    debugPrint('DEBUG: 发送搜索页面，长度: ${html.length}');
+    request.response.write(html);
     await request.response.close();
   }
 
@@ -172,6 +240,41 @@ class LocalServerService {
 
     await request.response.close();
     debugPrint('DEBUG: 请求处理完成');
+  }
+
+  /// Handle search submission from mobile
+  Future<void> _handleSearchSubmission(HttpRequest request) async {
+    try {
+      debugPrint('DEBUG: 收到来自 ${request.requestedUri} 的搜索请求');
+
+      final content = await utf8.decoder.bind(request).join();
+      debugPrint('DEBUG: 请求内容长度: ${content.length}');
+
+      final data = json.decode(content) as Map<String, dynamic>;
+      final query = data['query'] as String?;
+
+      debugPrint('DEBUG: 搜索内容: $query');
+
+      if (query != null && query.isNotEmpty) {
+        debugPrint('DEBUG: 调用搜索接收回调...');
+        onSearchReceived?.call(query);
+
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(json.encode({'success': true, 'message': 'Search query received'}));
+      } else {
+        debugPrint('DEBUG: 搜索内容为空');
+        request.response.statusCode = 400;
+        request.response.write(json.encode({'success': false, 'message': 'Query is required'}));
+      }
+    } catch (e) {
+      debugPrint('DEBUG: 处理搜索请求时出错: $e');
+      debugPrint('DEBUG: 错误堆栈: ${StackTrace.current}');
+      request.response.statusCode = 400;
+      request.response.write(json.encode({'success': false, 'message': 'Invalid request: $e'}));
+    }
+
+    await request.response.close();
+    debugPrint('DEBUG: 搜索请求处理完成');
   }
 
   /// Get the local IP address
@@ -262,300 +365,63 @@ class LocalServerService {
     }
   }
 
-  /// Generate the HTML page for mobile input
-  String _getWebPageHtml() {
+  /// Generate the HTML page for mobile input (fallback)
+  String _getImportPageHtml() {
     return r'''
 <!DOCTYPE html>
-<html lang="zh">
+<html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>导入播放列表 - Lotus IPTV</title>
+    <title>Lotus IPTV - Import Playlist</title>
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
             min-height: 100vh;
             padding: 20px;
             color: #fff;
-        }
-        .container {
-            max-width: 500px;
-            margin: 0 auto;
-        }
-        h1 {
-            text-align: center;
-            margin-bottom: 10px;
-            font-size: 24px;
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .subtitle {
-            text-align: center;
-            color: #888;
-            margin-bottom: 30px;
-            font-size: 14px;
-        }
-        .card {
-            background: rgba(255,255,255,0.05);
-            border-radius: 16px;
-            padding: 24px;
-            margin-bottom: 20px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        .card h2 {
-            font-size: 16px;
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .card h2::before {
-            content: '';
-            display: inline-block;
-            width: 4px;
-            height: 20px;
-            background: linear-gradient(180deg, #667eea, #764ba2);
-            border-radius: 2px;
-        }
-        input, textarea {
-            width: 100%;
-            padding: 14px 16px;
-            border: none;
-            border-radius: 12px;
-            background: rgba(255,255,255,0.08);
-            color: #fff;
-            font-size: 16px;
-            margin-bottom: 12px;
-            outline: none;
-            transition: all 0.3s;
-        }
-        input:focus, textarea:focus {
-            background: rgba(255,255,255,0.12);
-            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.5);
-        }
-        input::placeholder, textarea::placeholder {
-            color: #666;
-        }
-        button {
-            width: 100%;
-            padding: 16px;
-            border: none;
-            border-radius: 12px;
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            color: #fff;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
-        }
-        button:active {
-            transform: translateY(0);
-        }
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
-        .file-input-wrapper {
-            position: relative;
-            margin-bottom: 12px;
-        }
-        .file-input-wrapper input[type="file"] {
-            position: absolute;
-            opacity: 0;
-            width: 100%;
-            height: 100%;
-            cursor: pointer;
-        }
-        .file-label {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 40px 16px;
-            border: 2px dashed rgba(255,255,255,0.2);
-            border-radius: 12px;
-            color: #888;
-            transition: all 0.3s;
             text-align: center;
         }
-        .file-label.has-file {
-            border-color: #667eea;
-            color: #667eea;
-        }
-        .message {
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-top: 12px;
-            text-align: center;
-            font-size: 14px;
-        }
-        .message.success {
-            background: rgba(34, 197, 94, 0.2);
-            color: #22c55e;
-        }
-        .message.error {
-            background: rgba(239, 68, 68, 0.2);
-            color: #ef4444;
-        }
-        .divider {
-            display: flex;
-            align-items: center;
-            margin: 20px 0;
-            color: #666;
-            font-size: 14px;
-        }
-        .divider::before, .divider::after {
-            content: '';
-            flex: 1;
-            height: 1px;
-            background: rgba(255,255,255,0.1);
-        }
-        .divider span {
-            padding: 0 16px;
-        }
+        h1 { margin-top: 50px; }
+        p { color: #888; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🎬 Lotus IPTV</h1>
-        <p class="subtitle">导入播放列表到您的电视</p>
-        
-        <div class="card">
-            <h2>从链接导入</h2>
-            <input type="text" id="playlistName" placeholder="播放列表名称 (可选)">
-            <input type="url" id="playlistUrl" placeholder="请输入 M3U/M3U8/TXT 链接">
-            <button onclick="submitUrl()" id="urlBtn">导入链接</button>
-            <div id="urlMessage"></div>
-        </div>
-        
-        <div class="divider"><span>或者</span></div>
-        
-        <div class="card">
-            <h2>从文件导入</h2>
-            <input type="text" id="fileName" placeholder="播放列表名称 (可选)">
-            <div class="file-input-wrapper">
-                <input type="file" id="fileInput" accept=".m3u,.m3u8,.txt" onchange="handleFileSelect(event)">
-                <div class="file-label" id="fileLabel">
-                    📁 点击选择 M3U/M3U8/TXT 文件
-                </div>
-            </div>
-            <button onclick="submitFile()" id="fileBtn" disabled>上传文件</button>
-            <div id="fileMessage"></div>
-        </div>
-    </div>
+    <h1>🎬 Lotus IPTV</h1>
+    <p>Import Playlist</p>
+    <p>Please reload the page</p>
+</body>
+</html>
+''';
+  }
 
-    <script>
-        let selectedFile = null;
-        
-        function handleFileSelect(event) {
-            const file = event.target.files[0];
-            if (file) {
-                selectedFile = file;
-                document.getElementById('fileLabel').textContent = '📄 ' + file.name;
-                document.getElementById('fileLabel').classList.add('has-file');
-                document.getElementById('fileBtn').disabled = false;
-                if (!document.getElementById('fileName').value) {
-                    document.getElementById('fileName').value = file.name.replace(/\\.m3u8?$/i, '');
-                }
-            }
+  /// Generate the search HTML page (fallback)
+  String _getSearchPageHtml() {
+    return r'''
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lotus IPTV - Search Channels</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #fff;
+            text-align: center;
         }
-        
-        async function submitUrl() {
-            const url = document.getElementById('playlistUrl').value.trim();
-            const name = document.getElementById('playlistName').value.trim() || 'Imported Playlist';
-            const btn = document.getElementById('urlBtn');
-            const msg = document.getElementById('urlMessage');
-            
-            if (!url) {
-                showMessage(msg, '请输入链接', 'error');
-                return;
-            }
-            
-            btn.disabled = true;
-            btn.textContent = '正在导入...';
-            
-            try {
-                const response = await fetch('/submit', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({type: 'url', url: url, name: name})
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    showMessage(msg, '✓ 已发送到电视，请在电视上查看', 'success');
-                    document.getElementById('playlistUrl').value = '';
-                    document.getElementById('playlistName').value = '';
-                } else {
-                    showMessage(msg, '发送失败: ' + result.message, 'error');
-                }
-            } catch (e) {
-                showMessage(msg, '网络错误，请确保设备在同一局域网', 'error');
-            }
-            
-            btn.disabled = false;
-            btn.textContent = '导入链接';
-        }
-        
-        async function submitFile() {
-            if (!selectedFile) return;
-            
-            const name = document.getElementById('fileName').value.trim() || selectedFile.name.replace(/\\.m3u8?$/i, '');
-            const btn = document.getElementById('fileBtn');
-            const msg = document.getElementById('fileMessage');
-            
-            btn.disabled = true;
-            btn.textContent = '正在上传...';
-            
-            try {
-                const content = await selectedFile.text();
-                
-                const response = await fetch('/submit', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({type: 'content', content: content, name: name})
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    showMessage(msg, '✓ 已发送到电视，请在电视上查看', 'success');
-                    selectedFile = null;
-                    document.getElementById('fileInput').value = '';
-                    document.getElementById('fileLabel').textContent = '📁 点击选择 M3U/M3U8/TXT 文件';
-                    document.getElementById('fileLabel').classList.remove('has-file');
-                    document.getElementById('fileName').value = '';
-                } else {
-                    showMessage(msg, '发送失败: ' + result.message, 'error');
-                }
-            } catch (e) {
-                showMessage(msg, '网络错误，请确保设备在同一局域网', 'error');
-            }
-            
-            btn.disabled = false;
-            btn.textContent = '上传文件';
-        }
-        
-        function showMessage(el, text, type) {
-            el.textContent = text;
-            el.className = 'message ' + type;
-            setTimeout(() => { el.textContent = ''; el.className = ''; }, 5000);
-        }
-    </script>
+        h1 { margin-top: 50px; }
+        p { color: #888; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Lotus IPTV</h1>
+    <p>Search Channels</p>
+    <p>Please reload the page</p>
 </body>
 </html>
 ''';

@@ -198,6 +198,10 @@ class AppStrings {
   String get qrStep1 => _localizedValues['qrStep1']!;
   String get qrStep2 => _localizedValues['qrStep2']!;
   String get qrStep3 => _localizedValues['qrStep3']!;
+  String get qrSearchStep1 => _localizedValues['qrSearchStep1']!;
+  String get qrSearchStep2 => _localizedValues['qrSearchStep2']!;
+  String get qrSearchStep3 => _localizedValues['qrSearchStep3']!;
+  String get scanToSearch => _localizedValues['scanToSearch']!;
 
   // Player gestures and EPG
   String get nextChannel => _localizedValues['nextChannel']!;
@@ -583,6 +587,10 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'qrStep1': '使用手机扫描左侧二维码',
     'qrStep2': '在网页中输入链接或上传文件',
     'qrStep3': '点击导入，电视自动接收',
+    'qrSearchStep1': '使用手机扫描左侧二维码',
+    'qrSearchStep2': '在网页中输入搜索内容',
+    'qrSearchStep3': '搜索结果将自动显示在电视上',
+    'scanToSearch': '扫码搜索',
     // Player gestures and EPG
     'nextChannel': '下一频道',
     'previousChannel': '上一频道',
@@ -935,6 +943,10 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'qrStep1': 'Scan the QR code with your phone',
     'qrStep2': 'Enter URL or upload file on the webpage',
     'qrStep3': 'Click import, TV receives automatically',
+    'qrSearchStep1': 'Scan the QR code with your phone',
+    'qrSearchStep2': 'Enter search query on the webpage',
+    'qrSearchStep3': 'Results will appear on TV automatically',
+    'scanToSearch': 'Scan to Search',
     // Player gestures and EPG
     'nextChannel': 'Next channel',
     'previousChannel': 'Previous channel',

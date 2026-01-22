@@ -16,6 +16,7 @@ import '../../settings/providers/settings_provider.dart';
 import '../../epg/providers/epg_provider.dart';
 import '../../multi_screen/providers/multi_screen_provider.dart';
 import '../../../core/platform/native_player_channel.dart';
+import '../widgets/qr_search_dialog.dart';
 
 class SearchScreen extends StatefulWidget {
   final bool embedded;
@@ -117,10 +118,10 @@ class _SearchScreenState extends State<SearchScreen> {
     
     return Container(
       padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 16,
+        top: MediaQuery.of(context).padding.top + 12,
         left: 20,
         right: 20,
-        bottom: 16,
+        bottom: 12,
       ),
       decoration: BoxDecoration(
         color: AppTheme.getSurfaceColor(context),
@@ -160,6 +161,31 @@ class _SearchScreenState extends State<SearchScreen> {
                 ? _buildTVSearchField()
                 : _buildMobileSearchField(),
           ),
+          
+          // QR Code Scan Button (TV only)
+          if (isTV) ...[
+            const SizedBox(width: 12),
+            TVFocusable(
+              onSelect: _showQrSearchDialog,
+              focusScale: 1.0,
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.getPrimaryColor(context).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: AppTheme.getPrimaryColor(context).withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Icon(
+                  Icons.qr_code_scanner_rounded,
+                  color: AppTheme.getPrimaryColor(context),
+                  size: 22,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -171,7 +197,7 @@ class _SearchScreenState extends State<SearchScreen> {
       onSelect: () => _showTVSearchDialog(),
       focusScale: 1.02,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           color: AppTheme.getCardColor(context),
           borderRadius: BorderRadius.circular(12),
@@ -248,7 +274,7 @@ class _SearchScreenState extends State<SearchScreen> {
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,
-            vertical: 14,
+            vertical: 8,
           ),
         ),
         onChanged: (value) {
@@ -457,6 +483,20 @@ class _SearchScreenState extends State<SearchScreen> {
       cancelButtonFocusNode.dispose();
       inputFocusNode.dispose();
     });
+  }
+
+  void _showQrSearchDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => QrSearchDialog(
+        onSearchReceived: (query) {
+          setState(() {
+            _searchQuery = query;
+            _searchController.text = query;
+          });
+        },
+      ),
+    );
   }
 
   Widget _buildSearchResults() {

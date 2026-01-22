@@ -378,7 +378,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: AppTheme.getCardColor(context),
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? AppTheme.getCardColor(context)
+                    : Colors.grey[200],
                 borderRadius: BorderRadius.circular(10),
                 image: channel.logoUrl != null
                     ? DecorationImage(

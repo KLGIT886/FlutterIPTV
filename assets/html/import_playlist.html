@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lotus IPTV - Import Playlist</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #fff;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 24px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .card {
+            background: #1e2a3a;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .card h2 {
+            font-size: 16px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card h2::before {
+            content: '';
+            display: inline-block;
+            width: 4px;
+            height: 20px;
+            background: linear-gradient(180deg, #667eea, #764ba2);
+            border-radius: 2px;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 14px 16px;
+            border: none;
+            border-radius: 12px;
+            background: #2a3a4a;
+            color: #fff;
+            font-size: 16px;
+            margin-bottom: 12px;
+            outline: none;
+            transition: all 0.3s;
+        }
+        input:focus, textarea:focus {
+            background: #344556;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.5);
+        }
+        input::placeholder, textarea::placeholder {
+            color: #666;
+        }
+        button {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .file-input-wrapper {
+            position: relative;
+            margin-bottom: 12px;
+        }
+        .file-input-wrapper input[type="file"] {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        .file-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 40px 16px;
+            border: 2px dashed rgba(255,255,255,0.3);
+            border-radius: 12px;
+            background: #2a3a4a;
+            color: #888;
+            transition: all 0.3s;
+            text-align: center;
+        }
+        .file-label.has-file {
+            border-color: #667eea;
+            background: #344556;
+            color: #667eea;
+        }
+        .message {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-top: 12px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .message.success {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+        .message.error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 20px 0;
+            color: #666;
+            font-size: 14px;
+        }
+        .divider::before, .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(255,255,255,0.1);
+        }
+        .divider span {
+            padding: 0 16px;
+        }
+        .lang-switch {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #2a3a4a;
+            border-radius: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .lang-switch:hover {
+            background: #344556;
+        }
+    </style>
+</head>
+<body>
+    <div class="lang-switch" onclick="toggleLanguage()" id="langSwitch">EN</div>
+    
+    <div class="container">
+        <h1 id="appTitle">🎬 Lotus IPTV</h1>
+        <p class="subtitle" id="subtitle">Import playlist to your TV</p>
+        
+        <div class="card">
+            <h2 id="urlTitle">Import from URL</h2>
+            <input type="text" id="playlistName" placeholder="Playlist name (optional)">
+            <input type="url" id="playlistUrl" placeholder="Please enter M3U/M3U8/TXT URL">
+            <button onclick="submitUrl()" id="urlBtn">Import URL</button>
+            <div id="urlMessage"></div>
+        </div>
+        
+        <div class="divider"><span id="divider">or</span></div>
+        
+        <div class="card">
+            <h2 id="fileTitle">Import from File</h2>
+            <input type="text" id="fileName" placeholder="Playlist name (optional)">
+            <div class="file-input-wrapper">
+                <input type="file" id="fileInput" accept=".m3u,.m3u8,.txt" onchange="handleFileSelect(event)">
+                <div class="file-label" id="fileLabel">
+                    📁 Click to select M3U/M3U8/TXT file
+                </div>
+            </div>
+            <button onclick="submitFile()" id="fileBtn" disabled>Upload File</button>
+            <div id="fileMessage"></div>
+        </div>
+    </div>
+
+    <script>
+        const i18n = {
+            'zh': {
+                title: 'Lotus IPTV - 导入播放列表',
+                subtitle: '导入播放列表到您的电视',
+                urlTitle: '从链接导入',
+                fileTitle: '从文件导入',
+                namePlaceholder: '播放列表名称 (可选)',
+                urlPlaceholder: '请输入 M3U/M3U8/TXT 链接',
+                urlButton: '导入链接',
+                fileButton: '上传文件',
+                divider: '或者',
+                fileLabel: '📁 点击选择 M3U/M3U8/TXT 文件',
+                urlInputError: '请输入链接',
+                importing: '正在导入...',
+                success: '✓ 已发送到电视，请在电视上查看',
+                failed: '发送失败',
+                networkError: '网络错误，请确保设备在同一局域网',
+                uploading: '正在上传...',
+                langSwitch: 'EN'
+            },
+            'en': {
+                title: 'Lotus IPTV - Import Playlist',
+                subtitle: 'Import playlist to your TV',
+                urlTitle: 'Import from URL',
+                fileTitle: 'Import from File',
+                namePlaceholder: 'Playlist name (optional)',
+                urlPlaceholder: 'Please enter M3U/M3U8/TXT URL',
+                urlButton: 'Import URL',
+                fileButton: 'Upload File',
+                divider: 'or',
+                fileLabel: '📁 Click to select M3U/M3U8/TXT file',
+                urlInputError: 'Please enter a URL',
+                importing: 'Importing...',
+                success: '✓ Sent to TV, please check on your TV',
+                failed: 'Failed to send',
+                networkError: 'Network error, please ensure devices are on the same LAN',
+                uploading: 'Uploading...',
+                langSwitch: '中文'
+            }
+        };
+        
+        // 检测浏览器语言
+        function detectLanguage() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const langParam = urlParams.get('lang');
+            
+            if (langParam && i18n[langParam]) {
+                return langParam;
+            }
+            
+            const browserLang = navigator.language || navigator.userLanguage;
+            return browserLang.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+        }
+        
+        let currentLang = detectLanguage();
+        let t = i18n[currentLang];
+        
+        // 初始化页面语言
+        function initLanguage() {
+            document.documentElement.lang = currentLang;
+            document.title = t.title;
+            document.getElementById('subtitle').textContent = t.subtitle;
+            document.getElementById('urlTitle').textContent = t.urlTitle;
+            document.getElementById('fileTitle').textContent = t.fileTitle;
+            document.getElementById('playlistName').placeholder = t.namePlaceholder;
+            document.getElementById('fileName').placeholder = t.namePlaceholder;
+            document.getElementById('playlistUrl').placeholder = t.urlPlaceholder;
+            document.getElementById('urlBtn').textContent = t.urlButton;
+            document.getElementById('fileBtn').textContent = t.fileButton;
+            document.getElementById('divider').textContent = t.divider;
+            document.getElementById('fileLabel').textContent = t.fileLabel;
+            document.getElementById('langSwitch').textContent = t.langSwitch;
+        }
+        
+        let selectedFile = null;
+        
+        function toggleLanguage() {
+            currentLang = currentLang === 'zh' ? 'en' : 'zh';
+            t = i18n[currentLang];
+            initLanguage();
+            
+            // 更新URL参数
+            const url = new URL(window.location);
+            url.searchParams.set('lang', currentLang);
+            window.history.pushState({}, '', url);
+        }
+        
+        // 页面加载时初始化语言
+        initLanguage();
+        
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                selectedFile = file;
+                document.getElementById('fileLabel').textContent = '📄 ' + file.name;
+                document.getElementById('fileLabel').classList.add('has-file');
+                document.getElementById('fileBtn').disabled = false;
+                if (!document.getElementById('fileName').value) {
+                    document.getElementById('fileName').value = file.name.replace(/\.m3u8?$/i, '');
+                }
+            }
+        }
+        
+        async function submitUrl() {
+            const url = document.getElementById('playlistUrl').value.trim();
+            const name = document.getElementById('playlistName').value.trim() || 'Imported Playlist';
+            const btn = document.getElementById('urlBtn');
+            const msg = document.getElementById('urlMessage');
+            
+            if (!url) {
+                showMessage(msg, t.urlInputError, 'error');
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.textContent = t.importing;
+            
+            try {
+                const response = await fetch('/submit', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({type: 'url', url: url, name: name})
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage(msg, t.success, 'success');
+                    document.getElementById('playlistUrl').value = '';
+                    document.getElementById('playlistName').value = '';
+                } else {
+                    showMessage(msg, t.failed + ': ' + result.message, 'error');
+                }
+            } catch (e) {
+                showMessage(msg, t.networkError, 'error');
+            }
+            
+            btn.disabled = false;
+            btn.textContent = t.urlButton;
+        }
+        
+        async function submitFile() {
+            if (!selectedFile) return;
+            
+            const name = document.getElementById('fileName').value.trim() || selectedFile.name.replace(/\.m3u8?$/i, '');
+            const btn = document.getElementById('fileBtn');
+            const msg = document.getElementById('fileMessage');
+            
+            btn.disabled = true;
+            btn.textContent = t.uploading;
+            
+            try {
+                const content = await selectedFile.text();
+                
+                const response = await fetch('/submit', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({type: 'content', content: content, name: name})
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage(msg, t.success, 'success');
+                    selectedFile = null;
+                    document.getElementById('fileInput').value = '';
+                    document.getElementById('fileLabel').textContent = t.fileLabel;
+                    document.getElementById('fileLabel').classList.remove('has-file');
+                    document.getElementById('fileName').value = '';
+                } else {
+                    showMessage(msg, t.failed + ': ' + result.message, 'error');
+                }
+            } catch (e) {
+                showMessage(msg, t.networkError, 'error');
+            }
+            
+            btn.disabled = false;
+            btn.textContent = t.fileButton;
+        }
+        
+        function showMessage(el, text, type) {
+            el.textContent = text;
+            el.className = 'message ' + type;
+            setTimeout(() => { el.textContent = ''; el.className = ''; }, 5000);
+        }
+    </script>
+</body>
+</html>

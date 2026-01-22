@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lotus IPTV - Search Channels</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #fff;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 24px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .card {
+            background: #1e2a3a;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .card h2 {
+            font-size: 16px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card h2::before {
+            content: '';
+            display: inline-block;
+            width: 4px;
+            height: 20px;
+            background: linear-gradient(180deg, #667eea, #764ba2);
+            border-radius: 2px;
+        }
+        input {
+            width: 100%;
+            padding: 14px 16px;
+            border: none;
+            border-radius: 12px;
+            background: #2a3a4a;
+            color: #fff;
+            font-size: 16px;
+            margin-bottom: 12px;
+            outline: none;
+            transition: all 0.3s;
+        }
+        input:focus {
+            background: #344556;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.5);
+        }
+        input::placeholder {
+            color: #666;
+        }
+        button {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .message {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-top: 12px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .message.success {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+        .message.error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        .lang-switch {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #2a3a4a;
+            border-radius: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .lang-switch:hover {
+            background: #344556;
+        }
+    </style>
+</head>
+<body>
+    <div class="lang-switch" onclick="toggleLanguage()" id="langSwitch">EN</div>
+    
+    <div class="container">
+        <h1 id="appTitle">🔍 Lotus IPTV</h1>
+        <p class="subtitle" id="subtitle">Search channels on your TV</p>
+        
+        <div class="card">
+            <h2 id="searchTitle">Search Channels</h2>
+            <input type="text" id="searchInput" placeholder="Enter channel name or category">
+            <button onclick="submitSearch()" id="searchBtn">Search</button>
+            <div id="searchMessage"></div>
+        </div>
+    </div>
+
+    <script>
+        const i18n = {
+            'zh': {
+                title: 'Lotus IPTV - 搜索频道',
+                subtitle: '在电视上搜索频道',
+                searchTitle: '搜索频道',
+                searchPlaceholder: '输入频道名称或分类',
+                searchButton: '搜索',
+                searchInputError: '请输入搜索内容',
+                searching: '正在搜索...',
+                success: '✓ 已发送到电视，请在电视上查看结果',
+                failed: '发送失败',
+                networkError: '网络错误，请确保设备在同一局域网',
+                langSwitch: 'EN'
+            },
+            'en': {
+                title: 'Lotus IPTV - Search Channels',
+                subtitle: 'Search channels on your TV',
+                searchTitle: 'Search Channels',
+                searchPlaceholder: 'Enter channel name or category',
+                searchButton: 'Search',
+                searchInputError: 'Please enter search query',
+                searching: 'Searching...',
+                success: '✓ Sent to TV, please check results on your TV',
+                failed: 'Failed to send',
+                networkError: 'Network error, please ensure devices are on the same LAN',
+                langSwitch: '中文'
+            }
+        };
+        
+        // 检测浏览器语言
+        function detectLanguage() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const langParam = urlParams.get('lang');
+            
+            if (langParam && i18n[langParam]) {
+                return langParam;
+            }
+            
+            const browserLang = navigator.language || navigator.userLanguage;
+            return browserLang.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+        }
+        
+        let currentLang = detectLanguage();
+        let t = i18n[currentLang];
+        
+        // 初始化页面语言
+        function initLanguage() {
+            document.documentElement.lang = currentLang;
+            document.title = t.title;
+            document.getElementById('subtitle').textContent = t.subtitle;
+            document.getElementById('searchTitle').textContent = t.searchTitle;
+            document.getElementById('searchInput').placeholder = t.searchPlaceholder;
+            document.getElementById('searchBtn').textContent = t.searchButton;
+            document.getElementById('langSwitch').textContent = t.langSwitch;
+        }
+        
+        function toggleLanguage() {
+            currentLang = currentLang === 'zh' ? 'en' : 'zh';
+            t = i18n[currentLang];
+            initLanguage();
+            
+            // 更新URL参数
+            const url = new URL(window.location);
+            url.searchParams.set('lang', currentLang);
+            window.history.pushState({}, '', url);
+        }
+        
+        // 页面加载时初始化语言
+        initLanguage();
+        
+        // 自动聚焦搜索框
+        document.getElementById('searchInput').focus();
+        
+        // 支持回车键搜索
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                submitSearch();
+            }
+        });
+        
+        async function submitSearch() {
+            const query = document.getElementById('searchInput').value.trim();
+            const btn = document.getElementById('searchBtn');
+            const msg = document.getElementById('searchMessage');
+            
+            if (!query) {
+                showMessage(msg, t.searchInputError, 'error');
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.textContent = t.searching;
+            
+            try {
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({query: query})
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage(msg, t.success, 'success');
+                    document.getElementById('searchInput').value = '';
+                } else {
+                    showMessage(msg, t.failed + ': ' + result.message, 'error');
+                }
+            } catch (e) {
+                showMessage(msg, t.networkError, 'error');
+            }
+            
+            btn.disabled = false;
+            btn.textContent = t.searchButton;
+        }
+        
+        function showMessage(el, text, type) {
+            el.textContent = text;
+            el.className = 'message ' + type;
+            setTimeout(() => { el.textContent = ''; el.className = ''; }, 5000);
+        }
+    </script>
+</body>
+</html>
