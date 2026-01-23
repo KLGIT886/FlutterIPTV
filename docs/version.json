@@ -1,23 +1,23 @@
 {
-  "version": "1.4.9",
-  "build": 129,
+  "version": "1.4.10",
+  "build": 130,
   "releaseDate": "2026-01-23",
   "assets": {
-    "windows": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.9/flutteriptv-Windows-x64-Setup.exe",
+    "windows": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.10/flutteriptv-Windows-x64-Setup.exe",
     "android_mobile": {
-      "arm64-v8a": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.9/flutteriptv-Android-Mobile-arm64-v8a.apk",
-      "armeabi-v8a": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.9/flutteriptv-Android-Mobile-armeabi-v7a.apk",
-      "x86_64": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.9/flutteriptv-Android-Mobile-x86_64.apk"
+      "arm64-v8a": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.10/flutteriptv-Android-Mobile-arm64-v8a.apk",
+      "armeabi-v8a": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.10/flutteriptv-Android-Mobile-armeabi-v7a.apk",
+      "x86_64": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.10/flutteriptv-Android-Mobile-x86_64.apk"
     },
     "android_tv": {
-      "arm64-v8a": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.9/flutteriptv-AndroidTV-arm64-v8a.apk",
-      "armeabi-v7a": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.9/flutteriptv-AndroidTV-armeabi-v7a.apk",
-      "x86_64": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.9/flutteriptv-AndroidTV-x86_64.apk"
+      "arm64-v8a": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.10/flutteriptv-AndroidTV-arm64-v8a.apk",
+      "armeabi-v7a": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.10/flutteriptv-AndroidTV-armeabi-v7a.apk",
+      "x86_64": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.10/flutteriptv-AndroidTV-x86_64.apk"
     }
   },
   "changelog": {
-    "zh": "- 修复：TV端遥控器焦点导航问题，现在可以正常选择设置菜单\n- 优化：侧边栏焦点遍历策略，提升导航体验",
-    "en": "- Fixed: TV remote control focus navigation issue, settings menu now accessible\n- Improved: Sidebar focus traversal policy for better navigation experience"
+    "zh": "- 修复：TV端遥控器焦点导航问题，恢复v1.4.6的焦点遍历策略\n- 优化：侧边栏焦点处理，确保所有菜单项可访问",
+    "en": "- Fixed: TV remote control focus navigation issue by restoring v1.4.6 focus traversal policy\n- Improved: Sidebar focus handling to ensure all menu items are accessible"
   },
   "minVersion": "1.0.0"
 }

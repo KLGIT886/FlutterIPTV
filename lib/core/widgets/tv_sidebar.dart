@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../navigation/app_router.dart';
 import '../i18n/app_strings.dart';
+import 'tv_focusable.dart';
 import '../../features/settings/providers/settings_provider.dart';
 
 /// TV端共享侧边栏组件
@@ -147,13 +148,10 @@ class _TVSidebarState extends State<TVSidebar> {
                 const SizedBox(height: 16),
                 // Nav Items
                 Expanded(
-                  child: FocusTraversalGroup(
-                    policy: WidgetOrderTraversalPolicy(),
+                  child: TVFocusTraversalGroup(
                     child: ListView.builder(
                       padding: EdgeInsets.symmetric(horizontal: shouldExpand ? 6 : 4),
                       itemCount: navItems.length,
-                      physics: const ClampingScrollPhysics(), // 确保可以滚动
-                      shrinkWrap: false, // 不收缩包裹
                       itemBuilder: (context, index) => _buildNavItem(index, navItems[index]),
                     ),
                   ),
@@ -213,8 +211,6 @@ class _TVSidebarState extends State<TVSidebar> {
       child: Focus(
         focusNode: focusNode,
         autofocus: index == widget.selectedIndex,
-        canRequestFocus: true, // 确保可以接收焦点
-        skipTraversal: false, // 确保不会被跳过
         onFocusChange: (hasFocus) {
           // 强制刷新UI
           if (mounted) setState(() {});
