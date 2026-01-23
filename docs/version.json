@@ -1,23 +1,23 @@
 {
-  "version": "1.4.7",
-  "build": 127,
+  "version": "1.4.8",
+  "build": 128,
   "releaseDate": "2026-01-23",
   "assets": {
-    "windows": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.7/flutteriptv-Windows-x64-Setup.exe",
+    "windows": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.8/flutteriptv-Windows-x64-Setup.exe",
     "android_mobile": {
-      "arm64-v8a": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.7/flutteriptv-Android-Mobile-arm64-v8a.apk",
-      "armeabi-v8a": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.7/flutteriptv-Android-Mobile-armeabi-v7a.apk",
-      "x86_64": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.7/flutteriptv-Android-Mobile-x86_64.apk"
+      "arm64-v8a": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.8/flutteriptv-Android-Mobile-arm64-v8a.apk",
+      "armeabi-v8a": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.8/flutteriptv-Android-Mobile-armeabi-v7a.apk",
+      "x86_64": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.8/flutteriptv-Android-Mobile-x86_64.apk"
     },
     "android_tv": {
-      "arm64-v8a": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.7/flutteriptv-AndroidTV-arm64-v8a.apk",
-      "armeabi-v7a": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.7/flutteriptv-AndroidTV-armeabi-v7a.apk",
-      "x86_64": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.7/flutteriptv-AndroidTV-x86_64.apk"
+      "arm64-v8a": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.8/flutteriptv-AndroidTV-arm64-v8a.apk",
+      "armeabi-v7a": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.8/flutteriptv-AndroidTV-armeabi-v7a.apk",
+      "x86_64": "https://github.boki.moe/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.8/flutteriptv-AndroidTV-x86_64.apk"
     }
   },
   "changelog": {
-    "zh": "- 新增：播放列表管理改为对话框形式，无需跳转页面\n- 新增：独立的播放列表页面，显示所有已保存的播放列表\n- 优化：播放列表按导入时间倒序排列，最新的在前\n- 优化：完善国际化支持，修复中文环境下的英文文本\n- 优化：TV端简化导入选项，只显示文件和扫码导入\n- 修复：播放列表管理页面的FocusNode循环引用错误\n- 界面：侧边栏菜单项名称优化（直播源列表→直播源）",
-    "en": "- New: Playlist management as dialog, no page navigation needed\n- New: Dedicated playlist page showing all saved playlists\n- Improved: Playlists sorted by import time (newest first)\n- Improved: Complete i18n support, fixed English text in Chinese mode\n- Improved: Simplified TV import options (file and QR only)\n- Fixed: FocusNode circular reference error in playlist manager\n- UI: Optimized sidebar menu item names (Playlist List→Sources)"
+    "zh": "- 新增：手机端底部导航栏添加直播源菜单\n- 修复：对话框按钮文字过长导致溢出的问题\n- 优化：对话框按钮布局和文字大小\n- 优化：手机端导航体验，所有功能一键直达",
+    "en": "- New: Added Sources menu to mobile bottom navigation\n- Fixed: Dialog button text overflow issue\n- Improved: Dialog button layout and text size\n- Improved: Mobile navigation experience with quick access to all features"
   },
   "minVersion": "1.0.0"
 }

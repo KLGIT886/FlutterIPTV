@@ -17,6 +17,7 @@ import '../../channels/providers/channel_provider.dart';
 import '../../channels/screens/channels_screen.dart';
 import '../../playlist/providers/playlist_provider.dart';
 import '../../playlist/widgets/add_playlist_dialog.dart';
+import '../../playlist/screens/playlist_list_screen.dart';
 import '../../favorites/providers/favorites_provider.dart';
 import '../../favorites/screens/favorites_screen.dart';
 import '../../player/providers/player_provider.dart';
@@ -252,6 +253,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return [
       _NavItem(icon: Icons.home_rounded, label: strings?.home ?? 'Home'),
       _NavItem(icon: Icons.live_tv_rounded, label: strings?.channels ?? 'Channels'),
+      _NavItem(icon: Icons.playlist_play_rounded, label: strings?.playlistList ?? 'Sources'),
       _NavItem(icon: Icons.favorite_rounded, label: strings?.favorites ?? 'Favorites'),
       _NavItem(icon: Icons.search_rounded, label: strings?.searchChannels ?? 'Search'),
       _NavItem(icon: Icons.settings_rounded, label: strings?.settings ?? 'Settings'),
@@ -323,10 +325,12 @@ class _HomeScreenState extends State<HomeScreen> {
       case 1:
         return const _EmbeddedChannelsScreen();
       case 2:
-        return const _EmbeddedFavoritesScreen();
+        return const _EmbeddedPlaylistListScreen();
       case 3:
-        return const _EmbeddedSearchScreen();
+        return const _EmbeddedFavoritesScreen();
       case 4:
+        return const _EmbeddedSearchScreen();
+      case 5:
         return const _EmbeddedSettingsScreen();
       default:
         return _buildMainContent(context);
@@ -1357,6 +1361,16 @@ class _EmbeddedFavoritesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const FavoritesScreen(embedded: true);
+  }
+}
+
+/// 嵌入式播放列表页面
+class _EmbeddedPlaylistListScreen extends StatelessWidget {
+  const _EmbeddedPlaylistListScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return const PlaylistListScreen();
   }
 }
 

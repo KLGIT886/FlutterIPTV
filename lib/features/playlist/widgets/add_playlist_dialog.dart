@@ -271,7 +271,7 @@ class _AddPlaylistDialogState extends State<AddPlaylistDialog> {
               child: _buildSecondaryButton(
                 onPressed: () => _pickFile(provider),
                 icon: Icons.folder_open_rounded,
-                label: AppStrings.of(context)?.fromFile ?? 'From File',
+                label: AppStrings.of(context)?.fromFile ?? 'File',
               ),
             ),
             const SizedBox(width: 12),
@@ -279,7 +279,7 @@ class _AddPlaylistDialogState extends State<AddPlaylistDialog> {
               child: _buildSecondaryButton(
                 onPressed: () => _showQrImportDialog(context),
                 icon: Icons.qr_code_scanner_rounded,
-                label: AppStrings.of(context)?.scanToImport ?? 'Scan QR',
+                label: AppStrings.of(context)?.scanToImport ?? 'QR',
               ),
             ),
           ],
@@ -381,15 +381,23 @@ class _AddPlaylistDialogState extends State<AddPlaylistDialog> {
         style: OutlinedButton.styleFrom(
           foregroundColor: AppTheme.getPrimaryColor(context),
           side: BorderSide(color: AppTheme.getPrimaryColor(context).withOpacity(0.5)),
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 18),
-            const SizedBox(width: 8),
-            Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
           ],
         ),
       ),
