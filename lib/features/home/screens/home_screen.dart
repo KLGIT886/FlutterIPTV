@@ -10,7 +10,7 @@ import '../../../core/widgets/category_card.dart';
 import '../../../core/widgets/channel_card.dart';
 import '../../../core/platform/platform_detector.dart';
 import '../../../core/i18n/app_strings.dart';
-import '../../../core/services/update_service.dart';
+// import '../../../core/services/update_service.dart'; // 已禁用自动更新检查
 import '../../../core/models/app_update.dart';
 import '../../../core/utils/card_size_calculator.dart';
 import '../../channels/providers/channel_provider.dart';
@@ -49,7 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadData();
     _loadVersion();
-    _checkForUpdates();
+    // _checkForUpdates(); // 已禁用启动时自动检查更新
     // 监听频道变化
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ChannelProvider>().addListener(_onChannelProviderChanged);
@@ -58,20 +58,21 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<void> _checkForUpdates() async {
-    try {
-      final updateService = UpdateService();
-      // 启动时强制检查一次更新（忽略24小时限制）
-      final update = await updateService.checkForUpdates(forceCheck: true);
-      if (mounted && update != null) {
-        setState(() {
-          _availableUpdate = update;
-        });
-      }
-    } catch (e) {
-      // 静默失败，不影响用户体验
-    }
-  }
+
+  // Future<void> _checkForUpdates() async {
+  //   try {
+  //     final updateService = UpdateService();
+  //     // 启动时强制检查一次更新（忽略24小时限制）
+  //     final update = await updateService.checkForUpdates(forceCheck: true);
+  //     if (mounted && update != null) {
+  //       setState(() {
+  //         _availableUpdate = update;
+  //       });
+  //     }
+  //   } catch (e) {
+  //     // 静默失败，不影响用户体验
+  //   }
+  // }
 
   Future<void> _loadVersion() async {
     try {
