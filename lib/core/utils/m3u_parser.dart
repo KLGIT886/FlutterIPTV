@@ -135,8 +135,11 @@ class M3UParser {
     String? currentLogo;
     String? currentGroup;
     String? currentEpgId;
+    String? currentCatchupType;
+    String? currentCatchupSource;
     int invalidUrlCount = 0;
     int validChannelCount = 0;
+
 
     for (int i = 0; i < lines.length; i++) {
       final line = lines[i].trim();
@@ -150,6 +153,8 @@ class M3UParser {
         currentLogo = parsed['logo'];
         currentGroup = parsed['group'];
         currentEpgId = parsed['epgId'];
+        currentCatchupType = parsed['catchup'];
+        currentCatchupSource = parsed['catchup-source'];
       } else if (line.startsWith(_extGrp)) {
         // Parse EXTGRP line (alternative group format)
         currentGroup = line.substring(_extGrp.length).trim();
@@ -168,6 +173,8 @@ class M3UParser {
               logoUrl: currentLogo,
               groupName: currentGroup ?? 'Uncategorized',
               epgId: currentEpgId,
+              catchupType: currentCatchupType,
+              catchupSource: currentCatchupSource,
             );
 
             rawChannels.add(channel);
@@ -185,8 +192,11 @@ class M3UParser {
         currentLogo = null;
         currentGroup = null;
         currentEpgId = null;
+        currentCatchupType = null;
+        currentCatchupSource = null;
       }
     }
+
 
     debugPrint('DEBUG: 原始解析完成 - 有效频道: $validChannelCount, 无效URL: $invalidUrlCount');
 
@@ -239,17 +249,28 @@ class M3UParser {
             sources: newSources,
             // Keep the first URL as primary
             url: newSources.first,
+            catchupSource: channel.catchupSource ?? existing.catchupSource,
+            catchupType: channel.catchupType ?? existing.catchupType,
           );
         } else {
-          // Just add the new source
-          mergedMap[mergeKey] = existing.copyWith(sources: newSources);
+          // Just add the new source and preserve catchup info
+          mergedMap[mergeKey] = existing.copyWith(
+            sources: newSources,
+            catchupSource: existing.catchupSource ?? channel.catchupSource,
+            catchupType: existing.catchupType ?? channel.catchupType,
+          );
         }
       } else {
         // New channel
-        mergedMap[mergeKey] = channel.copyWith(sources: [channel.url]);
+        mergedMap[mergeKey] = channel.copyWith(
+          sources: [channel.url],
+          catchupSource: channel.catchupSource,
+          catchupType: channel.catchupType,
+        );
         orderKeys.add(mergeKey);
       }
     }
+
 
     // Return in original order
     return orderKeys.map((key) => mergedMap[key]!).toList();
@@ -286,6 +307,9 @@ class M3UParser {
     String? logo;
     String? group;
     String? epgId;
+    String? catchup;
+    String? catchupSource;
+
 
     // Remove #EXTINF: prefix
     String content = line.substring(_extInf.length);
@@ -303,6 +327,8 @@ class M3UParser {
     logo = attributes['tvg-logo'] ?? attributes['logo'];
     group = attributes['group-title'] ?? attributes['tvg-group'];
     epgId = attributes['tvg-id'] ?? attributes['tvg-name'];
+    catchup = attributes['catchup'];
+    catchupSource = attributes['catchup-source'];
 
     // Debug logging for logo parsing
     if (logo != null && logo.isNotEmpty) {
@@ -314,7 +340,10 @@ class M3UParser {
       'logo': logo,
       'group': group,
       'epgId': epgId,
+      'catchup': catchup,
+      'catchup-source': catchupSource,
     };
+
   }
 
   /// Parse key="value" attributes from a string

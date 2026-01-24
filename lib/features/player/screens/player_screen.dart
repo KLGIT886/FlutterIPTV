@@ -18,6 +18,7 @@ import '../../channels/providers/channel_provider.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../../settings/providers/dlna_provider.dart';
 import '../../multi_screen/providers/multi_screen_provider.dart';
+import '../../../core/services/epg_service.dart';
 import '../widgets/player_controls.dart';
 import '../widgets/player_mini_controls.dart';
 import '../widgets/player_category_panel.dart';
@@ -25,6 +26,7 @@ import '../widgets/player_info_display.dart';
 import '../widgets/player_settings_sheet.dart';
 import '../widgets/player_video_layer.dart';
 import '../widgets/player_gesture_overlay.dart';
+
 
 class PlayerScreen extends StatefulWidget {
   final String channelUrl;
@@ -566,7 +568,9 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                             onSourceSwitched: (provider) {
                               // 可以添加源切换的提示逻辑
                             },
+                            onPlayCatchup: _playCatchup,
                           ),
+
 
                   ),
                 ),
@@ -595,6 +599,27 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     );
   }
 
+  String _formatUtcTimestamp(DateTime time) {
+    // e.g. 2026-01-23T16:00:00Z
+    return '${time.toUtc().toIso8601String().split('.').first}Z';
+  }
+
+  Future<void> _playCatchup(EpgProgram program) async {
+    final provider = context.read<PlayerProvider>();
+    final channel = provider.currentChannel;
+    if (channel == null) return;
+    final template = channel.catchupSource;
+    if (template == null || template.isEmpty) return;
+
+    final start = _formatUtcTimestamp(program.start);
+    final end = _formatUtcTimestamp(program.end);
+    final playbackUrl = template
+        .replaceAll(r'${start}', start)
+        .replaceAll(r'${end}', end);
+
+    await provider.playCatchup(channel, playbackUrl);
+  }
+
   void _switchToMultiScreenMode() {
     final pp = context.read<PlayerProvider>();
     final mp = context.read<MultiScreenProvider>();
@@ -612,6 +637,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       mp.playChannelAtDefaultPosition(current, sp.defaultScreenPosition);
     }
   }
+
 
   void _toggleFullScreen() {
     if (!PlatformDetector.isWindows) return;

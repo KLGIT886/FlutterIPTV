@@ -8,6 +8,8 @@ class Channel {
   final String? logoUrl;
   final String? groupName;
   final String? epgId;
+  final String? catchupType; // e.g. "default" or provider specific
+  final String? catchupSource; // template URL with ${start}/${end}
   final bool isActive;
   final DateTime createdAt;
 
@@ -25,6 +27,8 @@ class Channel {
     this.logoUrl,
     this.groupName,
     this.epgId,
+    this.catchupType,
+    this.catchupSource,
     this.isActive = true,
     DateTime? createdAt,
     this.isFavorite = false,
@@ -32,6 +36,7 @@ class Channel {
     this.currentSourceIndex = 0,
   }) : sources = sources ?? [url],
        createdAt = createdAt ?? DateTime.now();
+
 
   /// Get current source URL
   String get currentUrl => sources.isNotEmpty 
@@ -70,6 +75,8 @@ class Channel {
       logoUrl: logoUrl,
       groupName: map['group_name'] as String?,
       epgId: map['epg_id'] as String?,
+      catchupType: map['catchup_type'] as String?,
+      catchupSource: map['catchup_source'] as String?,
       isActive: (map['is_active'] as int?) == 1,
       createdAt: map['created_at'] != null ? DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int) : DateTime.now(),
     );
@@ -85,10 +92,13 @@ class Channel {
       'logo_url': logoUrl,
       'group_name': groupName,
       'epg_id': epgId,
+      'catchup_type': catchupType,
+      'catchup_source': catchupSource,
       'is_active': isActive ? 1 : 0,
       'created_at': createdAt.millisecondsSinceEpoch,
     };
   }
+
 
   Channel copyWith({
     int? id,
@@ -99,6 +109,8 @@ class Channel {
     String? logoUrl,
     String? groupName,
     String? epgId,
+    String? catchupType,
+    String? catchupSource,
     bool? isActive,
     DateTime? createdAt,
     bool? isFavorite,
@@ -114,6 +126,8 @@ class Channel {
       logoUrl: logoUrl ?? this.logoUrl,
       groupName: groupName ?? this.groupName,
       epgId: epgId ?? this.epgId,
+      catchupType: catchupType ?? this.catchupType,
+      catchupSource: catchupSource ?? this.catchupSource,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
       isFavorite: isFavorite ?? this.isFavorite,
@@ -121,6 +135,7 @@ class Channel {
       currentSourceIndex: currentSourceIndex ?? this.currentSourceIndex,
     );
   }
+
 
   /// Add a source URL to this channel
   Channel addSource(String sourceUrl) {

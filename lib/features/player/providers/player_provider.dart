@@ -616,7 +616,34 @@ class PlayerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> playCatchup(Channel channel, String url) async {
+    _currentChannel = channel;
+    _state = PlayerState.loading;
+    _error = null;
+    _lastErrorMessage = null;
+    _errorDisplayed = false;
+    _retryCount = 0;
+    _retryTimer?.cancel();
+    _isAutoDetecting = false;
+    loadVolumeSettings();
+    notifyListeners();
+
+    try {
+      if (_useExoPlayer) {
+        await _initExoPlayer(url);
+      } else {
+        await _mediaKitPlayer?.open(Media(url));
+        _state = PlayerState.playing;
+      }
+    } catch (e) {
+      _setError('Failed to play catchup: $e');
+      return;
+    }
+    notifyListeners();
+  }
+
   void togglePlayPause() {
+
     if (_useExoPlayer) {
       if (_exoPlayer == null) return;
       _exoPlayer!.value.isPlaying ? _exoPlayer!.pause() : _exoPlayer!.play();

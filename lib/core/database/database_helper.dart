@@ -8,7 +8,8 @@ import 'package:flutter/foundation.dart';
 class DatabaseHelper {
   static Database? _database;
   static const String _databaseName = 'flutter_iptv.db';
-  static const int _databaseVersion = 4; // Upgraded for epg_url column
+  static const int _databaseVersion = 5; // Upgrade for catchup support
+
 
   Future<void> initialize() async {
     if (_database != null) return;
@@ -53,8 +54,11 @@ class DatabaseHelper {
         logo_url TEXT,
         group_name TEXT,
         epg_id TEXT,
+        catchup_type TEXT,
+        catchup_source TEXT,
         is_active INTEGER DEFAULT 1,
         created_at INTEGER NOT NULL,
+
         FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
       )
     ''');
@@ -132,7 +136,21 @@ class DatabaseHelper {
         debugPrint('Migration error (ignored): $e');
       }
     }
+    if (oldVersion < 5) {
+      // Add catchup support columns to channels table
+      try {
+        await db.execute('ALTER TABLE channels ADD COLUMN catchup_type TEXT');
+      } catch (e) {
+        debugPrint('Migration error (ignored): $e');
+      }
+      try {
+        await db.execute('ALTER TABLE channels ADD COLUMN catchup_source TEXT');
+      } catch (e) {
+        debugPrint('Migration error (ignored): $e');
+      }
+    }
   }
+
 
   Database get db {
     if (_database == null) {

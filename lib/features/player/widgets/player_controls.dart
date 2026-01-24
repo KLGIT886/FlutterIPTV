@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../../../core/i18n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/platform/platform_detector.dart';
@@ -8,8 +9,10 @@ import '../../favorites/providers/favorites_provider.dart';
 import '../../settings/providers/dlna_provider.dart';
 
 import '../../epg/providers/epg_provider.dart';
+import '../../../core/services/epg_service.dart';
 import '../providers/player_provider.dart';
 import '../../../core/widgets/tv_focusable.dart';
+
 
 class PlayerControls extends StatelessWidget {
   final String channelName;
@@ -19,6 +22,7 @@ class PlayerControls extends StatelessWidget {
   final VoidCallback onFullScreenToggle;
   final VoidCallback onMultiScreenToggle;
   final Function(PlayerProvider) onSourceSwitched;
+  final void Function(EpgProgram program)? onPlayCatchup;
 
   const PlayerControls({
     super.key,
@@ -29,7 +33,9 @@ class PlayerControls extends StatelessWidget {
     required this.onFullScreenToggle,
     required this.onMultiScreenToggle,
     required this.onSourceSwitched,
+    this.onPlayCatchup,
   });
+
 
   String _formatDuration(Duration duration) {
     final hours = duration.inHours;
@@ -416,7 +422,331 @@ class PlayerControls extends StatelessWidget {
     );
   }
 
+  void _showEpgSheet(BuildContext context, PlayerProvider provider) {
+
+    final channel = provider.currentChannel;
+    if (channel == null) return;
+    final epgProvider = context.read<EpgProvider>();
+    final programs = epgProvider.getProgramsInTimeRange(
+      channel.epgId,
+      channel.name,
+      8,
+      daysBefore: 5,
+      daysAfter: 2,
+    );
+
+    // 按 +0800 的自然日分组
+    final Map<String, List<EpgProgram>> grouped = {};
+    for (final p in programs) {
+      final local = p.start.add(const Duration(hours: 8));
+      final key = DateFormat('yyyy-MM-dd').format(DateTime(local.year, local.month, local.day));
+      grouped.putIfAbsent(key, () => []).add(p);
+    }
+    final dates = grouped.keys.toList()..sort();
+    final nowLocal = DateTime.now().toUtc().add(const Duration(hours: 8));
+    final todayKey = DateFormat('yyyy-MM-dd')
+        .format(DateTime(nowLocal.year, nowLocal.month, nowLocal.day));
+    String selectedDate = dates.contains(todayKey)
+        ? todayKey
+        : (dates.isNotEmpty ? dates.first : '');
+    final scrollController = ScrollController();
+    final dateScrollController = ScrollController();
+    bool hasScrolled = false;
+
+
+    void performScroll() {
+      if (!scrollController.hasClients || selectedDate.isEmpty) {
+        print('❌ Scroll failed: hasClients=${scrollController.hasClients}, selectedDate=$selectedDate');
+        return;
+      }
+      
+      final dayPrograms = List<EpgProgram>.from(grouped[selectedDate] ?? [])
+        ..sort((a, b) => a.start.compareTo(b.start));
+      if (dayPrograms.isEmpty) {
+        print('❌ No programs for date: $selectedDate');
+        return;
+      }
+      
+      final nowUtc = DateTime.now().toUtc();
+      final idx = dayPrograms.indexWhere((p) => nowUtc.isAfter(p.start) && nowUtc.isBefore(p.end));
+      
+      print('📺 Total programs: ${dayPrograms.length}, Current idx: $idx');
+      
+      if (idx >= 0) {
+        hasScrolled = true;
+        const listVisibleHeight = 369.0;
+        
+        final maxScroll = scrollController.position.maxScrollExtent;
+        final totalContentHeight = maxScroll + listVisibleHeight;
+        
+        // 根据实际内容高度和节目数量计算平均item高度
+        final avgItemHeight = totalContentHeight / dayPrograms.length;
+        
+        // 计算当前节目的中心位置
+        final programCenter = idx * avgItemHeight + avgItemHeight / 2;
+        
+        // 计算目标偏移：让节目中心对齐可视区域中心
+        final targetOffset = programCenter - (listVisibleHeight / 2);
+        final clampedOffset = targetOffset.clamp(0.0, maxScroll);
+        
+        print('📊 Programs=${dayPrograms.length}, idx=$idx, avgHeight=${avgItemHeight.toStringAsFixed(1)}');
+        print('📊 ProgramCenter=${programCenter.toStringAsFixed(1)}, target=${targetOffset.toStringAsFixed(1)}, clamped=${clampedOffset.toStringAsFixed(1)}');
+        
+        try {
+          scrollController.jumpTo(clampedOffset);
+          print('✅ Scroll completed - program should be centered');
+        } catch (e) {
+          print('❌ Scroll error: $e');
+        }
+      } else {
+        print('⚠️ Current program not found');
+      }
+    }
+
+    void scrollToCurrent() {
+      if (hasScrolled) {
+        print('⚠️ Already scrolled, skipping');
+        return;
+      }
+      print('⏳ Scheduling scroll in 300ms...');
+      Future.delayed(const Duration(milliseconds: 300), () {
+        performScroll();
+      });
+    }
+
+
+
+
+
+
+
+
+
+
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.black.withOpacity(0.5),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            // 使用单次触发确保只滚动一次
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!hasScrolled) {
+                scrollToCurrent();
+              }
+            });
+            return SafeArea(
+              child: SizedBox(
+                height: 500,
+                child: Column(
+                  children: [
+                    // 标题栏 - 带左右margin
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(32, 16, 32, 0),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              channel.name,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const Text(
+                            '+0800',
+                            style: TextStyle(color: Color(0x99FFFFFF), fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // 日期列表 - 全宽，只有左padding，右侧可以自由滚动
+                    if (dates.isNotEmpty)
+                      SizedBox(
+                        height: 45,
+                        child: ListView.separated(
+                          controller: dateScrollController,
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          padding: const EdgeInsets.only(left: 32, right: 80),
+                          itemCount: dates.length,
+                          separatorBuilder: (context, index) => const SizedBox(width: 8),
+                          itemBuilder: (context, index) {
+                            final dateKey = dates[index];
+                            final dateLabel = DateFormat('MM-dd').format(DateTime.parse(dateKey));
+                            final isSelected = dateKey == selectedDate;
+                            return ChoiceChip(
+                              label: Text(
+                                dateLabel,
+                                style: TextStyle(
+                                  color: isSelected ? Colors.white : const Color(0xCCFFFFFF),
+                                  fontSize: 12,
+                                ),
+                              ),
+                              selected: isSelected,
+                              onSelected: (_) {
+                                setModalState(() {
+                                  selectedDate = dateKey;
+                                  hasScrolled = false;
+                                });
+                              },
+                              selectedColor: AppTheme.getPrimaryColor(context),
+                              backgroundColor: const Color(0x33000000),
+                            );
+                          },
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    // 节目列表 - 带左右margin的Container
+                    Expanded(
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.all(16),
+                        child: programs.isEmpty
+                            ? const Center(
+                                child: Text(
+                                  'EPG 暂无数据',
+                                  style: TextStyle(color: Color(0x99FFFFFF)),
+                                ),
+                              )
+                            : ListView(
+                                controller: scrollController,
+                                children: selectedDate.isEmpty
+                                    ? []
+                                    : () {
+                                        final dayPrograms = List<EpgProgram>.from(grouped[selectedDate] ?? [])
+                                          ..sort((a, b) => a.start.compareTo(b.start));
+                                        if (dayPrograms.isEmpty) return <Widget>[];
+                                        final nowUtc = DateTime.now().toUtc();
+                                        final EpgProgram activeProgram = dayPrograms.firstWhere(
+                                          (p) => nowUtc.isAfter(p.start) && nowUtc.isBefore(p.end),
+                                          orElse: () => dayPrograms.first,
+                                        );
+                                        return dayPrograms.map((program) {
+                                          final canReplay = (channel.catchupSource?.isNotEmpty ?? false) && program.end.isBefore(nowUtc);
+                                          final isNow = identical(activeProgram, program);
+                                          return Container(
+                                            margin: const EdgeInsets.only(bottom: 10),
+                                            padding: const EdgeInsets.all(10),
+                                            decoration: BoxDecoration(
+                                              color: isNow ? AppTheme.getPrimaryColor(context).withOpacity(0.12) : const Color(0x15000000),
+                                              borderRadius: BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: isNow
+                                                    ? AppTheme.getPrimaryColor(context)
+                                                    : const Color(0x22FFFFFF),
+                                                width: isNow ? 1.2 : 0.8,
+                                              ),
+                                            ),
+                                            child: Row(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                SizedBox(
+                                                  width: 150,
+                                                  child: Text(
+                                                    '${DateFormat('yyyy-MM-dd HH:mm').format(program.start.add(const Duration(hours: 8)))}\n${DateFormat('yyyy-MM-dd HH:mm').format(program.end.add(const Duration(hours: 8)))}',
+                                                    style: TextStyle(
+                                                      color: isNow ? AppTheme.getPrimaryColor(context) : const Color(0xCCFFFFFF),
+                                                      fontSize: 12,
+                                                      height: 1.4,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 10),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Row(
+                                                        children: [
+                                                          if (isNow)
+                                                            Container(
+                                                              margin: const EdgeInsets.only(right: 6),
+                                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                              decoration: BoxDecoration(
+                                                                color: AppTheme.getPrimaryColor(context),
+                                                                borderRadius: BorderRadius.circular(6),
+                                                              ),
+                                                              child: const Text(
+                                                                '正在播放',
+                                                                style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                                              ),
+                                                            ),
+                                                          Expanded(
+                                                            child: Text(
+                                                              program.title,
+                                                              style: TextStyle(
+                                                                color: isNow ? Colors.white : const Color(0xEEFFFFFF),
+                                                                fontSize: 14,
+                                                                fontWeight: isNow ? FontWeight.w700 : FontWeight.w600,
+                                                              ),
+                                                              maxLines: 2,
+                                                              overflow: TextOverflow.ellipsis,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      if (program.description != null && program.description!.isNotEmpty)
+                                                        Padding(
+                                                          padding: const EdgeInsets.only(top: 4),
+                                                          child: Text(
+                                                            program.description!,
+                                                            style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 12),
+                                                            maxLines: 2,
+                                                            overflow: TextOverflow.ellipsis,
+                                                          ),
+                                                        ),
+                                                      if (canReplay)
+                                                        Padding(
+                                                          padding: const EdgeInsets.only(top: 6),
+                                                          child: ElevatedButton(
+                                                            style: ElevatedButton.styleFrom(
+                                                              backgroundColor: AppTheme.getPrimaryColor(context),
+                                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                            ),
+                                                            onPressed: () {
+                                                              Navigator.of(context).pop();
+                                                              onPlayCatchup?.call(program);
+                                                            },
+                                                            child: const Text('回放'),
+                                                          ),
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }).toList();
+                                      }(),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+
+
+
+
   Widget _buildBottomControls(BuildContext context) {
+
     return Consumer<PlayerProvider>(
       builder: (context, provider, _) {
         return Padding(
@@ -436,100 +766,104 @@ class PlayerControls extends StatelessWidget {
                   if (currentProgram != null || nextProgram != null) {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0x33000000),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (currentProgram != null)
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.getPrimaryColor(context),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                        AppStrings.of(context)?.nowPlaying ??
-                                            'Now playing',
-                                        style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold)),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      currentProgram.title,
-                                      style: const TextStyle(
-                                          color: Colors.white, fontSize: 13),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  Text(
-                                    (AppStrings.of(context)?.endsInMinutes ??
-                                            'Ends in {minutes} min')
-                                        .replaceFirst('{minutes}',
-                                            '${currentProgram.remainingMinutes}'),
-                                    style: const TextStyle(
-                                        color: Color(0x99FFFFFF), fontSize: 11),
-                                  ),
-                                ],
-                              ),
-                            if (nextProgram != null) ...[
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: [
-                                          AppTheme.getPrimaryColor(context)
-                                              .withOpacity(0.7),
-                                          AppTheme.getSecondaryColor(context)
-                                              .withOpacity(0.7),
-                                        ],
+                      child: GestureDetector(
+                        onTap: () => _showEpgSheet(context, provider),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0x33000000),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (currentProgram != null)
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.getPrimaryColor(context),
+                                        borderRadius: BorderRadius.circular(4),
                                       ),
-                                      borderRadius: BorderRadius.circular(6),
+                                      child: Text(
+                                          AppStrings.of(context)?.nowPlaying ??
+                                              'Now playing',
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold)),
                                     ),
-                                    child: Text(
-                                        AppStrings.of(context)?.upNext ??
-                                            'Up next',
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        currentProgram.title,
+                                        style: const TextStyle(
+                                            color: Colors.white, fontSize: 13),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    Text(
+                                      (AppStrings.of(context)?.endsInMinutes ??
+                                              'Ends in {minutes} min')
+                                          .replaceFirst('{minutes}',
+                                              '${currentProgram.remainingMinutes}'),
+                                      style: const TextStyle(
+                                          color: Color(0x99FFFFFF), fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              if (nextProgram != null) ...[
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            AppTheme.getPrimaryColor(context)
+                                                .withOpacity(0.7),
+                                            AppTheme.getSecondaryColor(context)
+                                                .withOpacity(0.7),
+                                          ],
+                                        ),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                          AppStrings.of(context)?.upNext ??
+                                              'Up next',
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600)),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        nextProgram.title,
                                         style: const TextStyle(
                                             color: Colors.white,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600)),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      nextProgram.title,
-                                      style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w500),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
+                                  ],
+                                ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
                       ),
                     );
                   }
+
                   return const SizedBox.shrink();
                 },
               ),
@@ -723,14 +1057,13 @@ class PlayerControls extends StatelessWidget {
                 ],
               ),
 
-              // Slim progress bar at bottom (only for DLNA mode with valid duration)
+              // Slim progress bar at bottom (显示有时长的流，包括回放 HLS)
               Consumer<DlnaProvider>(
                 builder: (context, dlnaProvider, _) {
-                  // 只有 DLNA 投屏模式且有有效时长时才显示进度条
-                  // IPTV 直播流不显示进度条
-                  final showProgressBar = dlnaProvider.isActiveSession &&
-                      provider.duration.inSeconds > 0;
+                  final showProgressBar = provider.duration.inSeconds > 0;
                   if (!showProgressBar) return const SizedBox.shrink();
+
+
 
                   return Padding(
                     padding: const EdgeInsets.only(top: 12),
