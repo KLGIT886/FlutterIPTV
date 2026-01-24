@@ -378,6 +378,16 @@ class PlayerProvider extends ChangeNotifier {
     });
     _mediaKitPlayer!.stream.error.listen((err) {
       if (err.isNotEmpty) {
+        // 过滤非致命的警告：如果播放器正在正常播放，忽略该错误
+        // mpv 可能会输出一些非致命的警告（如某些音轨的解码警告），但实际播放正常
+        final isActuallyPlaying = _mediaKitPlayer!.state.playing;
+        
+        if (isActuallyPlaying) {
+          // 播放正常，说明是误报/警告，忽略
+          debugPrint('PlayerProvider: 忽略非致命警告（播放正常）: $err');
+          return;
+        }
+        
         if (_shouldTrySoftwareFallback(err)) {
           _attemptSoftwareFallback();
         } else {
@@ -439,7 +449,31 @@ class PlayerProvider extends ChangeNotifier {
 
   bool _shouldTrySoftwareFallback(String error) {
     final lowerError = error.toLowerCase();
-    return (lowerError.contains('codec') || lowerError.contains('decoder') || lowerError.contains('hwdec') || lowerError.contains('mediacodec')) && _retryCount < _maxRetries;
+    
+    // 过滤掉已知的非致命警告（mpv 常见的误报）
+    // 这些警告通常不影响实际播放，可以忽略
+    final ignorePatterns = [
+      'error decoding audio',  // mpv 的音频解码警告（非致命）
+      'could not find audio',   // 找不到音轨但视频能播放
+      'no audio',              // 无音频但视频正常
+      'audio device',          // 音频设备警告
+      'failed to open audio',  // 打开音频设备失败但可能重新成功
+      'ao-',                   // audio output 相关警告
+    ];
+    
+    for (final pattern in ignorePatterns) {
+      if (lowerError.contains(pattern)) {
+        debugPrint('PlayerProvider: 忽略已知的非致命错误模式: $pattern');
+        return false;
+      }
+    }
+    
+    // 真正的编解码器错误才尝试软件解码
+    return ((lowerError.contains('codec') ||
+            lowerError.contains('decoder') ||
+            lowerError.contains('hwdec') ||
+            lowerError.contains('mediacodec')) &&
+            _retryCount < _maxRetries);
   }
 
   void _attemptSoftwareFallback() {
