@@ -1299,6 +1299,16 @@ class _OptimizedChannelCard extends StatelessWidget {
           isFavorite: data.isFavorite,
           onFavoriteToggle: () => context.read<FavoritesProvider>().toggleFavorite(channel),
           onTap: onTap,
+          onEpgTap: () {
+            Navigator.pushNamed(
+              context,
+              AppRouter.epg,
+              arguments: {
+                'channelId': channel.epgId,
+                'channelName': channel.name,
+              },
+            );
+          },
         );
       },
     );

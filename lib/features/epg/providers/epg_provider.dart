@@ -85,6 +85,11 @@ class EpgProvider extends ChangeNotifier {
     return _epgService.getTodayPrograms(channelId, channelName);
   }
 
+  /// 获取频道指定时区的节目列表（时间范围：前5天到后2天）
+  List<EpgProgram> getProgramsInTimeRange(String? channelId, String? channelName, int hourOffset, {int daysBefore = 5, int daysAfter = 2}) {
+    return _epgService.getProgramsInTimeRange(channelId, channelName, hourOffset, daysBefore: daysBefore, daysAfter: daysAfter);
+  }
+
   void clear() {
     _epgService.clear();
     _lastUpdate = null;

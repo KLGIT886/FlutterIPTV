@@ -74,6 +74,7 @@ class AppRouter {
         return _buildRoute(
           EpgScreen(
             channelId: args?['channelId'],
+            channelName: args?['channelName'],
           ),
           settings,
         );

@@ -25,6 +25,7 @@ class ChannelCard extends StatelessWidget {
   final VoidCallback? onLeft;
   final VoidCallback? onDown;
   final VoidCallback? onFocused; // 获得焦点时的回调
+  final VoidCallback? onEpgTap; // EPG信息点击回调
   final bool autofocus;
   final FocusNode? focusNode;
 
@@ -45,6 +46,7 @@ class ChannelCard extends StatelessWidget {
     this.onLeft,
     this.onDown,
     this.onFocused,
+    this.onEpgTap,
     this.autofocus = false,
     this.focusNode,
   });
@@ -237,7 +239,8 @@ class ChannelCard extends StatelessWidget {
     final hasGroup = groupName != null && groupName!.isNotEmpty;
     final hasEpg = hasCurrentProgram || hasNextProgram;
 
-    return Column(
+    // 构建EPG信息区域
+    Widget epgInfo = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.start,
       children: [
@@ -317,6 +320,16 @@ class ChannelCard extends StatelessWidget {
         ],
       ],
     );
+
+    // 如果提供了EPG点击回调，包装EPG信息区域为可点击
+    if (onEpgTap != null && hasEpg) {
+      return GestureDetector(
+        onTap: onEpgTap,
+        child: epgInfo,
+      );
+    } else {
+      return epgInfo;
+    }
   }
 
   // TV端长按菜单

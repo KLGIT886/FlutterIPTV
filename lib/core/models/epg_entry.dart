@@ -46,27 +46,54 @@ class EpgEntry {
     };
   }
 
-  /// Check if this program is currently airing
+  /// Check if this program is currently airing (based on UTC time)
   bool get isLive {
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
     return now.isAfter(startTime) && now.isBefore(endTime);
   }
 
-  /// Check if this program has ended
-  bool get hasEnded => DateTime.now().isAfter(endTime);
+  /// Check if this program has ended (based on UTC time)
+  bool get hasEnded => DateTime.now().toUtc().isAfter(endTime);
 
-  /// Check if this program is upcoming
-  bool get isUpcoming => DateTime.now().isBefore(startTime);
+  /// Check if this program is upcoming (based on UTC time)
+  bool get isUpcoming => DateTime.now().toUtc().isBefore(startTime);
 
   /// Get the duration of the program
   Duration get duration => endTime.difference(startTime);
 
-  /// Get the progress percentage (0.0 - 1.0) if currently live
+  /// Get the progress percentage (0.0 - 1.0) if currently live (based on UTC time)
   double get progress {
-    if (!isLive) return hasEnded ? 1.0 : 0.0;
-    final now = DateTime.now();
-    final elapsed = now.difference(startTime);
-    return elapsed.inSeconds / duration.inSeconds;
+    final now = DateTime.now().toUtc();
+    if (now.isBefore(startTime)) return 0.0;
+    if (now.isAfter(endTime)) return 1.0;
+    final total = duration.inSeconds;
+    final elapsed = now.difference(startTime).inSeconds;
+    return elapsed / total;
+  }
+
+  /// Convert times to specified timezone (hour offset)
+  /// Example: +8 for China Standard Time (Beijing Time)
+  DateTime startTimeInTimeZone(int hourOffset) {
+    return startTime.add(Duration(hours: hourOffset));
+  }
+
+  DateTime endTimeInTimeZone(int hourOffset) {
+    return endTime.add(Duration(hours: hourOffset));
+  }
+
+  /// Check if program is currently airing (based on specified timezone)
+  bool isLiveInTimeZone(int hourOffset) {
+    final now = DateTime.now().add(Duration(hours: hourOffset));
+    final localStart = startTimeInTimeZone(hourOffset);
+    final localEnd = endTimeInTimeZone(hourOffset);
+    return now.isAfter(localStart) && now.isBefore(localEnd);
+  }
+
+  /// Check if program is upcoming (based on specified timezone)
+  bool isUpcomingInTimeZone(int hourOffset) {
+    final now = DateTime.now().add(Duration(hours: hourOffset));
+    final localStart = startTimeInTimeZone(hourOffset);
+    return localStart.isAfter(now);
   }
 
   @override

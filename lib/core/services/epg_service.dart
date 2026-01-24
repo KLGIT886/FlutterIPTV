@@ -22,19 +22,21 @@ class EpgProgram {
     this.category,
   });
 
+  /// 检查节目是否正在播放（基于UTC时间）
   bool get isNow {
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
     return now.isAfter(start) && now.isBefore(end);
   }
 
+  /// 检查节目是否即将播放（基于UTC时间）
   bool get isNext {
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
     return start.isAfter(now);
   }
 
-  /// 节目进度 (0.0 - 1.0)
+  /// 节目进度 (0.0 - 1.0)，基于UTC时间
   double get progress {
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
     if (now.isBefore(start)) return 0.0;
     if (now.isAfter(end)) return 1.0;
     final total = end.difference(start).inSeconds;
@@ -42,11 +44,36 @@ class EpgProgram {
     return elapsed / total;
   }
 
-  /// 剩余时间（分钟）
+  /// 剩余时间（分钟），基于UTC时间
   int get remainingMinutes {
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
     if (now.isAfter(end)) return 0;
     return end.difference(now).inMinutes;
+  }
+
+  /// 将时间转换到指定时区（小时偏移量）
+  /// 例如：+8 表示东八区（北京时间）
+  DateTime startInTimeZone(int hourOffset) {
+    return start.add(Duration(hours: hourOffset));
+  }
+
+  DateTime endInTimeZone(int hourOffset) {
+    return end.add(Duration(hours: hourOffset));
+  }
+
+  /// 检查节目是否正在播放（基于指定时区）
+  bool isNowInTimeZone(int hourOffset) {
+    final now = DateTime.now().add(Duration(hours: hourOffset));
+    final localStart = startInTimeZone(hourOffset);
+    final localEnd = endInTimeZone(hourOffset);
+    return now.isAfter(localStart) && now.isBefore(localEnd);
+  }
+
+  /// 检查节目是否即将播放（基于指定时区）
+  bool isNextInTimeZone(int hourOffset) {
+    final now = DateTime.now().add(Duration(hours: hourOffset));
+    final localStart = startInTimeZone(hourOffset);
+    return localStart.isAfter(now);
   }
 }
 
@@ -74,12 +101,12 @@ class EpgService {
   bool get isLoading => _isLoading;
   DateTime? get lastUpdate => _lastUpdate;
 
-  /// 获取频道当前节目
+  /// 获取频道当前节目（基于UTC时间）
   EpgProgram? getCurrentProgram(String? channelId, String? channelName) {
     final programs = _findPrograms(channelId, channelName);
     if (programs == null) return null;
 
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
     for (final program in programs) {
       if (now.isAfter(program.start) && now.isBefore(program.end)) {
         return program;
@@ -88,12 +115,12 @@ class EpgService {
     return null;
   }
 
-  /// 获取频道下一个节目
+  /// 获取频道下一个节目（基于UTC时间）
   EpgProgram? getNextProgram(String? channelId, String? channelName) {
     final programs = _findPrograms(channelId, channelName);
     if (programs == null) return null;
 
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
     for (final program in programs) {
       if (program.start.isAfter(now)) {
         return program;
@@ -102,16 +129,31 @@ class EpgService {
     return null;
   }
 
-  /// 获取频道今日节目列表
+  /// 获取频道今日节目列表（基于UTC时间）
   List<EpgProgram> getTodayPrograms(String? channelId, String? channelName) {
     final programs = _findPrograms(channelId, channelName);
     if (programs == null) return [];
 
-    final today = DateTime.now();
-    final startOfDay = DateTime(today.year, today.month, today.day);
+    final today = DateTime.now().toUtc();
+    final startOfDay = DateTime.utc(today.year, today.month, today.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
 
     return programs.where((p) => p.start.isAfter(startOfDay) && p.start.isBefore(endOfDay)).toList();
+  }
+
+  /// 获取频道指定时区的节目列表（时间范围：前5天到后2天）
+  List<EpgProgram> getProgramsInTimeRange(String? channelId, String? channelName, int hourOffset, {int daysBefore = 5, int daysAfter = 2}) {
+    final programs = _findPrograms(channelId, channelName);
+    if (programs == null) return [];
+
+    final now = DateTime.now().add(Duration(hours: hourOffset));
+    final startRange = DateTime(now.year, now.month, now.day).subtract(Duration(days: daysBefore));
+    final endRange = DateTime(now.year, now.month, now.day).add(Duration(days: daysAfter + 1));
+
+    return programs.where((program) {
+      final programStartLocal = program.startInTimeZone(hourOffset);
+      return programStartLocal.isAfter(startRange) && programStartLocal.isBefore(endRange);
+    }).toList();
   }
 
   List<EpgProgram>? _findPrograms(String? channelId, String? channelName) {
@@ -297,11 +339,18 @@ class EpgService {
 
   static DateTime? _parseDateTimeStatic(String str) {
     try {
-      final match = RegExp(r'(\d{14})').firstMatch(str);
+      // XMLTV时间格式可以是:
+      // 1. YYYYMMDDHHMMSS (14位数字)
+      // 2. YYYYMMDDHHMMSS +0000 (14位数字+时区)
+      // 3. YYYYMMDDHHMMSS Z (14位数字+Z表示UTC)
+      final match = RegExp(r'^(\d{14})(?:[ ]+([+-]\d{4}|Z))?$').firstMatch(str);
       if (match == null) return null;
 
       final dateStr = match.group(1)!;
-      return DateTime(
+      final timezoneStr = match.group(2);
+      
+      // 创建本地时间（假设为本地时区）
+      final localTime = DateTime(
         int.parse(dateStr.substring(0, 4)),
         int.parse(dateStr.substring(4, 6)),
         int.parse(dateStr.substring(6, 8)),
@@ -309,6 +358,46 @@ class EpgService {
         int.parse(dateStr.substring(10, 12)),
         int.parse(dateStr.substring(12, 14)),
       );
+      
+      // 处理时区
+      if (timezoneStr == null) {
+        // 没有时区信息，假设为UTC时间
+        return DateTime.utc(
+          int.parse(dateStr.substring(0, 4)),
+          int.parse(dateStr.substring(4, 6)),
+          int.parse(dateStr.substring(6, 8)),
+          int.parse(dateStr.substring(8, 10)),
+          int.parse(dateStr.substring(10, 12)),
+          int.parse(dateStr.substring(12, 14)),
+        );
+      } else if (timezoneStr == 'Z') {
+        // UTC时间
+        return DateTime.utc(
+          int.parse(dateStr.substring(0, 4)),
+          int.parse(dateStr.substring(4, 6)),
+          int.parse(dateStr.substring(6, 8)),
+          int.parse(dateStr.substring(8, 10)),
+          int.parse(dateStr.substring(10, 12)),
+          int.parse(dateStr.substring(12, 14)),
+        );
+      } else {
+        // 有时区偏移，如 +0800, -0500
+        final isPositive = timezoneStr[0] == '+';
+        final hours = int.parse(timezoneStr.substring(1, 3));
+        final minutes = int.parse(timezoneStr.substring(3, 5));
+        final totalOffsetMinutes = (hours * 60 + minutes) * (isPositive ? 1 : -1);
+        
+        // 创建UTC时间：本地时间 - 时区偏移
+        final utcTime = localTime.subtract(Duration(minutes: totalOffsetMinutes));
+        return DateTime.utc(
+          utcTime.year,
+          utcTime.month,
+          utcTime.day,
+          utcTime.hour,
+          utcTime.minute,
+          utcTime.second,
+        );
+      }
     } catch (e) {
       return null;
     }

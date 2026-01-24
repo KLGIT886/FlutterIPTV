@@ -717,6 +717,16 @@ class _SearchScreenState extends State<SearchScreen> {
                     onFavoriteToggle: () {
                       context.read<FavoritesProvider>().toggleFavorite(channel);
                     },
+                    onEpgTap: () {
+                      Navigator.pushNamed(
+                        context,
+                        AppRouter.epg,
+                        arguments: {
+                          'channelId': channel.epgId,
+                          'channelName': channel.name,
+                        },
+                      );
+                    },
                     onTap: () {
                       // 保存上次播放的频道ID
                       final settingsProvider = context.read<SettingsProvider>();
