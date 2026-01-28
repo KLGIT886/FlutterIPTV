@@ -809,6 +809,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                           return ChannelCard(
                             name: channel.name,
                             logoUrl: channel.logoUrl,
+                            channel: channel, // 传递完整的 channel 对象
                             groupName: isUnavailable ? ChannelProvider.extractOriginalGroup(channel.groupName) : channel.groupName,
                             currentProgram: currentProgram?.title,
                             nextProgram: nextProgram?.title,

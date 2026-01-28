@@ -4,7 +4,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../theme/app_theme.dart';
 import '../platform/platform_detector.dart';
 import '../i18n/app_strings.dart';
+import '../models/channel.dart';
 import 'tv_focusable.dart';
+import 'channel_logo_widget.dart';
 
 /// A card widget for displaying channel information
 /// 使用固定宽高比，内部布局自适应
@@ -12,6 +14,7 @@ import 'tv_focusable.dart';
 class ChannelCard extends StatelessWidget {
   final String name;
   final String? logoUrl;
+  final Channel? channel; // 新增：完整的 Channel 对象，用于 ChannelLogoWidget
   final String? groupName;
   final String? currentProgram;
   final String? nextProgram;
@@ -32,6 +35,7 @@ class ChannelCard extends StatelessWidget {
     super.key,
     required this.name,
     this.logoUrl,
+    this.channel,
     this.groupName,
     this.currentProgram,
     this.nextProgram,
@@ -125,7 +129,17 @@ class ChannelCard extends StatelessWidget {
                               ),
                             ),
                       child: Center(
-                        child: logoUrl != null && logoUrl!.isNotEmpty ? _buildChannelLogo(logoUrl!) : _buildPlaceholder(),
+                        child: channel != null 
+                            ? Padding(
+                                padding: const EdgeInsets.all(10),
+                                child: ChannelLogoWidget(
+                                  channel: channel!,
+                                  fit: BoxFit.contain,
+                                ),
+                              )
+                            : (logoUrl != null && logoUrl!.isNotEmpty 
+                                ? _buildChannelLogo(logoUrl!) 
+                                : _buildPlaceholder()),
                       ),
                     ),
                     // Playing indicator

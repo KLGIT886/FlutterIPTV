@@ -1389,6 +1389,7 @@ class _OptimizedChannelCard extends StatelessWidget {
         return ChannelCard(
           name: channel.name,
           logoUrl: channel.logoUrl,
+          channel: channel, // 传递完整的 channel 对象
           groupName: channel.groupName,
           currentProgram: data.currentProgram,
           nextProgram: data.nextProgram,

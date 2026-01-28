@@ -3,12 +3,13 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter/services.dart';
 import '../services/service_locator.dart';
 
 class DatabaseHelper {
   static Database? _database;
   static const String _databaseName = 'flutter_iptv.db';
-  static const int _databaseVersion = 4; // Upgraded for epg_url column
+  static const int _databaseVersion = 5; // Upgraded for channel_logos table
 
   Future<void> initialize() async {
     ServiceLocator.log.d('DatabaseHelper: 开始初始化数据库');
@@ -112,6 +113,58 @@ class DatabaseHelper {
     await db.execute('CREATE INDEX idx_history_channel ON watch_history(channel_id)');
     await db.execute('CREATE INDEX idx_epg_channel ON epg_data(channel_epg_id)');
     await db.execute('CREATE INDEX idx_epg_time ON epg_data(start_time, end_time)');
+
+    // Channel logos table
+    await db.execute('''
+      CREATE TABLE channel_logos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        channel_name TEXT NOT NULL,
+        logo_url TEXT NOT NULL,
+        search_keys TEXT,
+        created_at INTEGER NOT NULL
+      )
+    ''');
+    await db.execute('CREATE INDEX idx_channel_logos_name ON channel_logos(channel_name)');
+
+    // Import channel logos from SQL script
+    await _importChannelLogos(db);
+  }
+
+  /// Import channel logos from SQL script
+  Future<void> _importChannelLogos(Database db) async {
+    try {
+      ServiceLocator.log.d('DatabaseHelper: 开始导入台标数据');
+      final startTime = DateTime.now();
+      
+      // Load SQL script from assets
+      final sqlScript = await rootBundle.loadString('assets/sql/channel_logos.sql');
+      
+      // Split into individual statements
+      final statements = sqlScript
+          .split('\n')
+          .where((line) => line.trim().startsWith('INSERT'))
+          .toList();
+      
+      ServiceLocator.log.d('DatabaseHelper: 准备执行 ${statements.length} 条 SQL 语句');
+      
+      // Execute in batches for better performance
+      const batchSize = 100;
+      for (var i = 0; i < statements.length; i += batchSize) {
+        final batch = db.batch();
+        final end = (i + batchSize < statements.length) ? i + batchSize : statements.length;
+        
+        for (var j = i; j < end; j++) {
+          batch.rawInsert(statements[j]);
+        }
+        
+        await batch.commit(noResult: true);
+      }
+      
+      final duration = DateTime.now().difference(startTime).inMilliseconds;
+      ServiceLocator.log.d('DatabaseHelper: 台标数据导入完成，共 ${statements.length} 条记录，耗时 ${duration}ms');
+    } catch (e) {
+      ServiceLocator.log.e('DatabaseHelper: 台标数据导入失败: $e');
+    }
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -139,6 +192,26 @@ class DatabaseHelper {
         await db.execute('ALTER TABLE playlists ADD COLUMN epg_url TEXT');
       } catch (e) {
         // Ignore if column already exists
+        ServiceLocator.log.d('Migration error (ignored): $e');
+      }
+    }
+    if (oldVersion < 5) {
+      // Create channel_logos table
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS channel_logos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            channel_name TEXT NOT NULL,
+            logo_url TEXT NOT NULL,
+            search_keys TEXT,
+            created_at INTEGER NOT NULL
+          )
+        ''');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_channel_logos_name ON channel_logos(channel_name)');
+        
+        // Import channel logos data
+        await _importChannelLogos(db);
+      } catch (e) {
         ServiceLocator.log.d('Migration error (ignored): $e');
       }
     }

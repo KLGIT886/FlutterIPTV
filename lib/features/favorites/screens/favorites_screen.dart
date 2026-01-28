@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/navigation/app_router.dart';
 import '../../../core/widgets/tv_focusable.dart';
 import '../../../core/widgets/tv_sidebar.dart';
+import '../../../core/widgets/channel_logo_widget.dart';
 import '../../../core/platform/platform_detector.dart';
 import '../../../core/i18n/app_strings.dart';
 import '../providers/favorites_provider.dart';
@@ -375,28 +376,12 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             const SizedBox(width: 8),
 
             // Channel Logo
-            Container(
-              width: 48,
+            ChannelLogoWidget(
+              channel: channel,
+              width: 64,
               height: 48,
-              decoration: BoxDecoration(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? AppTheme.getCardColor(context)
-                    : Colors.grey[200],
-                borderRadius: BorderRadius.circular(10),
-                image: channel.logoUrl != null
-                    ? DecorationImage(
-                        image: NetworkImage(channel.logoUrl!),
-                        fit: BoxFit.contain,
-                      )
-                    : null,
-              ),
-              child: channel.logoUrl == null
-                  ? Icon(
-                      Icons.live_tv_rounded,
-                      color: AppTheme.getTextMuted(context),
-                      size: 24,
-                    )
-                  : null,
+              fit: BoxFit.contain,
+              borderRadius: BorderRadius.circular(10),
             ),
 
             const SizedBox(width: 16),

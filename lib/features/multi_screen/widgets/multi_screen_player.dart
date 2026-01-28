@@ -5,6 +5,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/channel_logo_widget.dart';
 import '../../../core/platform/windows_pip_channel.dart';
 import '../../../core/i18n/app_strings.dart';
 import '../providers/multi_screen_provider.dart';
@@ -613,16 +614,13 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                         ? const Color(0xFF0A0A0A) 
                         : const Color(0xFFB8B8B8),
                     child: Center(
-                      child: channel.logoUrl != null && channel.logoUrl!.isNotEmpty
-                          ? Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: Image.network(
-                                channel.logoUrl!,
-                                fit: BoxFit.contain,
-                                errorBuilder: (_, __, ___) => _buildDefaultLogo(),
-                              ),
-                            )
-                          : _buildDefaultLogo(),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: ChannelLogoWidget(
+                          channel: channel,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
                     ),
                   ),
                 ),

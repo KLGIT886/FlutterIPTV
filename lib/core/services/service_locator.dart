@@ -6,6 +6,7 @@ import '../database/database_helper.dart';
 import '../platform/platform_detector.dart';
 import 'update_service.dart';
 import 'log_service.dart';
+import 'channel_logo_service.dart';
 import '../managers/update_manager.dart';
 
 /// Service Locator for dependency injection
@@ -16,6 +17,7 @@ class ServiceLocator {
   static late UpdateService _updateService;
   static late UpdateManager _updateManager;
   static late LogService _logService;
+  static late ChannelLogoService _channelLogoService;
 
   static SharedPreferences get prefs => _prefs;
   static DatabaseHelper get database => _database;
@@ -23,6 +25,7 @@ class ServiceLocator {
   static UpdateService get updateService => _updateService;
   static UpdateManager get updateManager => _updateManager;
   static LogService get log => _logService;
+  static ChannelLogoService get channelLogo => _channelLogoService;
   
   /// Check if log service is initialized
   static bool get isLogInitialized {
@@ -52,6 +55,13 @@ class ServiceLocator {
     // Initialize database
     _database = DatabaseHelper();
     await _database.initialize();
+
+    // Initialize channel logo service (after database)
+    _channelLogoService = ChannelLogoService(_database);
+    // Initialize in background to avoid blocking app startup
+    _channelLogoService.initialize().catchError((e) {
+      log.e('Failed to initialize channel logo service: $e');
+    });
   }
 
   static Future<void> init() async {
