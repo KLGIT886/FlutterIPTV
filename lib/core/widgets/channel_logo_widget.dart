@@ -10,7 +10,7 @@ class _TimeoutHttpClient extends http.BaseClient {
   final http.Client _inner = http.Client();
   final Duration timeout;
 
-  _TimeoutHttpClient({this.timeout = const Duration(seconds: 2)});  // 2秒超时
+  _TimeoutHttpClient({this.timeout = const Duration(seconds: 2)});  // 恢复 2秒超时
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) {
@@ -41,7 +41,7 @@ class LogoCacheManager extends CacheManager {
             maxNrOfCacheObjects: 500,
             repo: JsonCacheInfoRepository(databaseName: key),
             fileService: HttpFileService(
-              httpClient: _TimeoutHttpClient(timeout: const Duration(seconds: 2)),  // 2秒超时
+              httpClient: _TimeoutHttpClient(timeout: const Duration(seconds: 2)),  // 恢复 2秒超时
             ),
           ),
         );
@@ -66,7 +66,7 @@ class _LogoStateManager {
   final Set<String> _loadingFallback = {};
   
   // 并发控制：限制同时加载的台标数量
-  static const int _maxConcurrentLoads = 10; // 最多同时加载 10 个台标
+  static const int _maxConcurrentLoads = 20; // 恢复：最多同时加载 10 个台标
   int _currentLoadingCount = 0;
   final List<Function> _pendingLoads = [];
 
@@ -141,6 +141,23 @@ class _LogoStateManager {
     _pendingLoads.clear();
     _currentLoadingCount = 0;
   }
+  
+  /// 清理待处理的加载队列（但保留已加载的缓存）
+  void clearPendingLoads() {
+    _pendingLoads.clear();
+    ServiceLocator.log.d('台标加载队列已清理，待处理任务数: 0');
+  }
+}
+
+/// 公共访问点：清理台标加载队列
+void clearLogoLoadingQueue() {
+  _LogoStateManager().clearPendingLoads();
+}
+
+/// 公共访问点：完全清理台标缓存（包括已加载的）
+void clearAllLogoCache() {
+  _LogoStateManager().clear();
+  ServiceLocator.log.d('台标缓存已完全清理');
 }
 
 /// Widget to display channel logo with fallback priority:
@@ -171,21 +188,32 @@ class ChannelLogoWidget extends StatefulWidget {
 
 class _ChannelLogoWidgetState extends State<ChannelLogoWidget> {
   final _logoState = _LogoStateManager();
+  bool _isDisposed = false; // 添加标记，防止 dispose 后继续操作
 
   @override
   void initState() {
     super.initState();
-    ServiceLocator.log.d('ChannelLogoWidget.initState - ${widget.channel.name}, logoUrl: ${widget.channel.logoUrl}, lazyLoad: ${widget.lazyLoad}');
+    // 移除日志输出，减少主线程负担
+    // ServiceLocator.log.d('ChannelLogoWidget.initState - ${widget.channel.name}, logoUrl: ${widget.channel.logoUrl}, lazyLoad: ${widget.lazyLoad}');
     
     // 如果不是延迟加载模式，或者频道没有 M3U 台标，立即加载数据库台标
     if (!widget.lazyLoad || widget.channel.logoUrl == null || widget.channel.logoUrl!.isEmpty) {
-      ServiceLocator.log.d('ChannelLogoWidget: 立即加载数据库台标 - ${widget.channel.name}');
+      // ServiceLocator.log.d('ChannelLogoWidget: 立即加载数据库台标 - ${widget.channel.name}');
       _loadFallbackLogo();
     }
   }
 
+  @override
+  void dispose() {
+    _isDisposed = true; // 标记为已销毁
+    super.dispose();
+  }
+
   Future<void> _loadFallbackLogo() async {
     final channelName = widget.channel.name;
+    
+    // 如果已经销毁，直接返回
+    if (_isDisposed) return;
     
     // 如果已经加载过（无论结果是否为 null）或正在加载，直接返回
     if (_logoState.isFallbackLoaded(channelName) || 
@@ -195,25 +223,29 @@ class _ChannelLogoWidgetState extends State<ChannelLogoWidget> {
     
     // 使用并发控制加载
     await _logoState.requestLoadFallback(() async {
+      // 再次检查是否已销毁
+      if (_isDisposed) return;
+      
       _logoState.markLoadingFallback(channelName, true);
-      ServiceLocator.log.d('ChannelLogoWidget: 开始加载数据库台标 - $channelName');
+      // ServiceLocator.log.d('ChannelLogoWidget: 开始加载数据库台标 - $channelName');
       
       try {
         final logoUrl = await ServiceLocator.channelLogo.findLogoUrl(channelName);
-        ServiceLocator.log.d('ChannelLogoWidget: 数据库台标查询结果 - $channelName: $logoUrl');
+        // ServiceLocator.log.d('ChannelLogoWidget: 数据库台标查询结果 - $channelName: $logoUrl');
         
         _logoState.setFallbackLogoUrl(channelName, logoUrl); // 这里会同时标记为已加载
         _logoState.markLoadingFallback(channelName, false);
         
-        if (mounted) {
+        // 检查是否已销毁再调用 setState
+        if (!_isDisposed && mounted) {
           setState(() {});
-          ServiceLocator.log.d('ChannelLogoWidget: 已设置数据库台标 - $channelName');
+          // ServiceLocator.log.d('ChannelLogoWidget: 已设置数据库台标 - $channelName');
         }
       } catch (e) {
         ServiceLocator.log.w('Failed to load fallback logo for $channelName: $e');
         _logoState.setFallbackLogoUrl(channelName, null); // 即使为 null 也标记为已加载
         _logoState.markLoadingFallback(channelName, false);
-        if (mounted) {
+        if (!_isDisposed && mounted) {
           setState(() {});
         }
       }
@@ -221,6 +253,9 @@ class _ChannelLogoWidgetState extends State<ChannelLogoWidget> {
   }
   
   void _ensureFallbackLoaded() {
+    // 如果已销毁，直接返回
+    if (_isDisposed) return;
+    
     final channelName = widget.channel.name;
     // 延迟加载：只在真正需要时才加载
     if (widget.lazyLoad && 
@@ -229,7 +264,7 @@ class _ChannelLogoWidgetState extends State<ChannelLogoWidget> {
         !_logoState.isLoadingFallback(channelName)) {
       // 使用 addPostFrameCallback 避免在 build 期间调用 setState
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
+        if (!_isDisposed && mounted) {
           _loadFallbackLogo();
         }
       });
@@ -237,6 +272,9 @@ class _ChannelLogoWidgetState extends State<ChannelLogoWidget> {
   }
 
   void _onM3uLogoError() {
+    // 如果已销毁，直接返回
+    if (_isDisposed) return;
+    
     final channelName = widget.channel.name;
     // 只在第一次失败时触发
     if (!_logoState.isM3uLogoFailed(channelName)) {
@@ -246,7 +284,7 @@ class _ChannelLogoWidgetState extends State<ChannelLogoWidget> {
       if (!_logoState.isFallbackLoaded(channelName) &&
           !_logoState.isLoadingFallback(channelName)) {
         _loadFallbackLogo();
-      } else if (mounted) {
+      } else if (!_isDisposed && mounted) {
         setState(() {});
       }
     }
@@ -257,7 +295,7 @@ class _ChannelLogoWidgetState extends State<ChannelLogoWidget> {
       return _buildPlaceholder();
     }
 
-    ServiceLocator.log.d('ChannelLogoWidget: 尝试加载台标 - ${widget.channel.name}: $logoUrl');
+    // ServiceLocator.log.d('ChannelLogoWidget: 尝试加载台标 - ${widget.channel.name}: $logoUrl');
 
     return CachedNetworkImage(
       imageUrl: logoUrl,
@@ -267,7 +305,7 @@ class _ChannelLogoWidgetState extends State<ChannelLogoWidget> {
       cacheManager: LogoCacheManager(), // 使用自定义缓存管理器
       placeholder: (context, url) => _buildPlaceholder(),
       errorWidget: (context, url, error) {
-        ServiceLocator.log.w('ChannelLogoWidget: 台标加载失败 - ${widget.channel.name}: $error');
+        // ServiceLocator.log.w('ChannelLogoWidget: 台标加载失败 - ${widget.channel.name}: $error');
         
         // 只有 M3U logo 失败时才触发 fallback
         if (isM3uLogo) {

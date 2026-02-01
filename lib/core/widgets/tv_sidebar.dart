@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import '../navigation/app_router.dart';
 import '../i18n/app_strings.dart';
 import 'tv_focusable.dart';
+import 'channel_logo_widget.dart';
 import '../../features/settings/providers/settings_provider.dart';
 import '../services/service_locator.dart';
 
@@ -84,6 +85,9 @@ class _TVSidebarState extends State<TVSidebar> {
 
   void _onNavItemTap(int index, String? route) {
     if (index == widget.selectedIndex) return;
+
+    // 切换页面时清理台标加载队列
+    clearLogoLoadingQueue();
 
     if (index == 0) {
       // 返回首页：直接 pop 到首页

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/models/channel.dart';
 import '../../../core/models/channel_group.dart';
 import '../../../core/services/service_locator.dart';
+import '../../../core/widgets/channel_logo_widget.dart';
 
 class ChannelProvider extends ChangeNotifier {
   List<Channel> _channels = [];
@@ -122,6 +123,15 @@ class ChannelProvider extends ChangeNotifier {
   // Select a group filter
   void selectGroup(String? groupName) {
     _selectedGroup = groupName;
+    
+    // 切换分类时，清理台标加载队列，避免堆积
+    try {
+      clearLogoLoadingQueue();
+      ServiceLocator.log.d('切换分类到: $groupName，已清理台标加载队列');
+    } catch (e) {
+      ServiceLocator.log.w('清理台标队列失败: $e');
+    }
+    
     notifyListeners();
   }
 

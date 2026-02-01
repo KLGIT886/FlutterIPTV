@@ -161,7 +161,7 @@ class _ChannelTestDialogState extends State<ChannelTestDialog> {
     final isLandscape = screenWidth > 600 && screenWidth < 900 && screenHeight < screenWidth;
     
     return Dialog(
-      backgroundColor: AppTheme.surfaceColor,
+      backgroundColor: AppTheme.getSurfaceColor(context),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(isLandscape ? 12 : 16)),
       child: Container(
         width: isLandscape ? 250 : 500,  // 横屏时宽度更小
@@ -601,7 +601,7 @@ class _BackgroundTestProgressDialogState extends State<BackgroundTestProgressDia
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: AppTheme.surfaceColor,
+      backgroundColor: AppTheme.getSurfaceColor(context),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         width: 400,

@@ -759,7 +759,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(isLandscape ? 12 : 16),
           ),
@@ -773,7 +773,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           title: Text(
             AppStrings.of(context)?.decodingMode ?? 'Decoding Mode',
             style: TextStyle(
-              color: AppTheme.textPrimary,
+              color: AppTheme.getTextPrimary(context),
               fontSize: isLandscape ? 14 : 18,
             ),
           ),
@@ -785,14 +785,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: Text(
                     _getDecodingModeLabel(context, mode),
                     style: TextStyle(
-                      color: AppTheme.textPrimary,
+                      color: AppTheme.getTextPrimary(context),
                       fontSize: isLandscape ? 12 : 14,
                     ),
                   ),
                   subtitle: Text(
                     _getDecodingModeDescription(context, mode),
                     style: TextStyle(
-                      color: AppTheme.textMuted,
+                      color: AppTheme.getTextMuted(context),
                       fontSize: isLandscape ? 9 : 11,
                     ),
                   ),
@@ -1190,14 +1190,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           shape: style['shape'],
           contentPadding: style['contentPadding'],
           titlePadding: style['titlePadding'],
           title: Text(
             strings?.bufferStrength ?? 'Buffer Strength',
             style: TextStyle(
-              color: AppTheme.textPrimary,
+              color: AppTheme.getTextPrimary(context),
               fontSize: style['titleFontSize'],
             ),
           ),
@@ -1209,7 +1209,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: Text(
                     labels[strength] ?? strength,
                     style: TextStyle(
-                      color: AppTheme.textPrimary,
+                      color: AppTheme.getTextPrimary(context),
                       fontSize: style['itemFontSize'],
                     ),
                   ),
@@ -1252,14 +1252,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           shape: style['shape'],
           contentPadding: style['contentPadding'],
           titlePadding: style['titlePadding'],
           title: Text(
             strings?.progressBarMode ?? '进度条显示',
             style: TextStyle(
-              color: AppTheme.textPrimary,
+              color: AppTheme.getTextPrimary(context),
               fontSize: style['titleFontSize'],
             ),
           ),
@@ -1271,14 +1271,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: Text(
                     labels[mode] ?? mode,
                     style: TextStyle(
-                      color: AppTheme.textPrimary,
+                      color: AppTheme.getTextPrimary(context),
                       fontSize: style['itemFontSize'],
                     ),
                   ),
                   subtitle: Text(
                     descriptions[mode] ?? '',
                     style: TextStyle(
-                      color: AppTheme.textMuted,
+                      color: AppTheme.getTextMuted(context),
                       fontSize: style['subtitleFontSize'],
                     ),
                   ),
@@ -1326,10 +1326,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           title: Text(
             AppStrings.of(context)?.bufferSize ?? 'Buffer Size',
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.getTextPrimary(context)),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1337,7 +1337,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               return RadioListTile<int>(
                 title: Text(
                   '$seconds ${AppStrings.of(context)?.seconds ?? 'seconds'}',
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: AppTheme.getTextPrimary(context)),
                 ),
                 value: seconds,
                 groupValue: settings.bufferSize,
@@ -1367,14 +1367,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (dialogContext) {
         final strings = AppStrings.of(context);
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           shape: style['shape'],
           contentPadding: style['contentPadding'],
           titlePadding: style['titlePadding'],
           title: Text(
             strings?.volumeBoost ?? 'Volume Boost',
             style: TextStyle(
-              color: AppTheme.textPrimary,
+              color: AppTheme.getTextPrimary(context),
               fontSize: style['titleFontSize'],
             ),
           ),
@@ -1388,14 +1388,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: Text(
                       db == 0 ? '${strings?.noBoost ?? "No boost"} (0 dB)' : '${db > 0 ? '+' : ''}$db dB',
                       style: TextStyle(
-                        color: AppTheme.textPrimary,
+                        color: AppTheme.getTextPrimary(context),
                         fontSize: style['itemFontSize'],
                       ),
                     ),
                     subtitle: Text(
                       _getVolumeBoostDescription(context, db),
                       style: TextStyle(
-                        color: AppTheme.textMuted,
+                        color: AppTheme.getTextMuted(context),
                         fontSize: style['subtitleFontSize'],
                       ),
                     ),
@@ -1440,14 +1440,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           shape: style['shape'],
           contentPadding: style['contentPadding'],
           titlePadding: style['titlePadding'],
           title: Text(
             AppStrings.of(context)?.refreshInterval ?? 'Refresh Interval',
             style: TextStyle(
-              color: AppTheme.textPrimary,
+              color: AppTheme.getTextPrimary(context),
               fontSize: style['titleFontSize'],
             ),
           ),
@@ -1461,7 +1461,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ? '$hours ${AppStrings.of(context)?.hours ?? 'hours'}'
                         : '${hours ~/ 24} ${hours ~/ 24 > 1 ? (AppStrings.of(context)?.days ?? 'days') : (AppStrings.of(context)?.day ?? 'day')}',
                     style: TextStyle(
-                      color: AppTheme.textPrimary,
+                      color: AppTheme.getTextPrimary(context),
                       fontSize: style['itemFontSize'],
                     ),
                   ),
@@ -1494,17 +1494,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           title: Text(
             AppStrings.of(context)?.epgUrl ?? 'EPG URL',
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.getTextPrimary(context)),
           ),
           content: TextField(
             controller: controller,
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.getTextPrimary(context)),
             decoration: InputDecoration(
               hintText: AppStrings.of(context)?.enterEpgUrl ?? 'Enter EPG XMLTV URL',
-              hintStyle: const TextStyle(color: AppTheme.textMuted),
+              hintStyle: TextStyle(color: AppTheme.getTextMuted(context)),
             ),
           ),
           actions: [
@@ -1556,20 +1556,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           title: Text(
             AppStrings.of(context)?.setPin ?? 'Set PIN',
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.getTextPrimary(context)),
           ),
           content: TextField(
             controller: controller,
             keyboardType: TextInputType.number,
             maxLength: 4,
             obscureText: true,
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.getTextPrimary(context)),
             decoration: InputDecoration(
               hintText: AppStrings.of(context)?.enterPin ?? 'Enter 4-digit PIN',
-              hintStyle: const TextStyle(color: AppTheme.textMuted),
+              hintStyle: TextStyle(color: AppTheme.getTextMuted(context)),
             ),
           ),
           actions: [
@@ -1601,14 +1601,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           title: Text(
             AppStrings.of(context)?.resetSettings ?? 'Reset Settings',
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.getTextPrimary(context)),
           ),
           content: Text(
             AppStrings.of(context)?.resetConfirm ?? 'Are you sure you want to reset all settings to their default values?',
-            style: const TextStyle(color: AppTheme.textSecondary),
+            style: TextStyle(color: AppTheme.getTextSecondary(context)),
           ),
           actions: [
             TextButton(
@@ -1642,10 +1642,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           title: Text(
             AppStrings.of(context)?.language ?? 'Language',
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.getTextPrimary(context)),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1653,7 +1653,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               RadioListTile<String?>(
                 title: Text(
                   AppStrings.of(context)?.followSystem ?? '跟随系统',
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: AppTheme.getTextPrimary(context)),
                 ),
                 value: null,
                 groupValue: currentLang,
@@ -1665,9 +1665,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 activeColor: AppTheme.getPrimaryColor(dialogContext),
               ),
               RadioListTile<String?>(
-                title: const Text(
+                title: Text(
                   'English',
-                  style: TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: AppTheme.getTextPrimary(context)),
                 ),
                 value: 'en',
                 groupValue: currentLang,
@@ -1681,7 +1681,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               RadioListTile<String?>(
                 title: Text(
                   AppStrings.of(context)?.chinese ?? '中文',
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: AppTheme.getTextPrimary(context)),
                 ),
                 value: 'zh',
                 groupValue: currentLang,
@@ -1721,14 +1721,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           shape: style['shape'],
           contentPadding: style['contentPadding'],
           titlePadding: style['titlePadding'],
           title: Text(
             AppStrings.of(context)?.theme ?? 'Theme',
             style: TextStyle(
-              color: AppTheme.textPrimary,
+              color: AppTheme.getTextPrimary(context),
               fontSize: style['titleFontSize'],
             ),
           ),
@@ -1740,7 +1740,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: Text(
                     _getThemeModeLabel(context, mode),
                     style: TextStyle(
-                      color: AppTheme.textPrimary,
+                      color: AppTheme.getTextPrimary(context),
                       fontSize: style['itemFontSize'],
                     ),
                   ),
@@ -1773,10 +1773,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           title: Text(
             AppStrings.of(context)?.logLevel ?? 'Log Level',
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.getTextPrimary(context)),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1784,11 +1784,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               return RadioListTile<String>(
                 title: Text(
                   _getLogLevelLabel(context, level),
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: AppTheme.getTextPrimary(context)),
                 ),
                 subtitle: Text(
                   _getLogLevelDescription(context, level),
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                  style: TextStyle(color: AppTheme.getTextSecondary(context), fontSize: 12),
                 ),
                 value: level,
                 groupValue: settings.logLevel,
@@ -1823,14 +1823,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surfaceColor,
+        backgroundColor: AppTheme.getSurfaceColor(context),
         title: Text(
           AppStrings.of(context)?.clearLogsConfirm ?? 'Clear Logs',
-          style: const TextStyle(color: AppTheme.textPrimary),
+          style: TextStyle(color: AppTheme.getTextPrimary(context)),
         ),
         content: Text(
           AppStrings.of(context)?.clearLogsConfirmMessage ?? 'Are you sure you want to delete all log files? This action cannot be undone.',
-          style: const TextStyle(color: AppTheme.textSecondary),
+          style: TextStyle(color: AppTheme.getTextSecondary(context)),
         ),
         actions: [
           TextButton(
@@ -1957,17 +1957,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           title: Text(
             strings?.defaultScreenPosition ?? 'Default Screen Position',
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.getTextPrimary(context)),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 strings?.screenPositionDesc ?? 'Choose which screen position to use by default when clicking a channel:',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                style: TextStyle(color: AppTheme.getTextSecondary(context), fontSize: 12),
               ),
               const SizedBox(height: 16),
               // 显示2x2网格示意图
@@ -1975,7 +1975,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 width: 120,
                 height: 90,
                 decoration: BoxDecoration(
-                  border: Border.all(color: AppTheme.textMuted),
+                  border: Border.all(color: AppTheme.getTextMuted(context)),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Column(
@@ -1986,19 +1986,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           Expanded(
                             child: Container(
                               decoration: BoxDecoration(
-                                border: Border.all(color: AppTheme.textMuted.withOpacity(0.3)),
+                                border: Border.all(color: AppTheme.getTextMuted(context).withOpacity(0.3)),
                                 color: settings.defaultScreenPosition == 1 ? AppTheme.getPrimaryColor(context).withOpacity(0.3) : null,
                               ),
-                              child: const Center(child: Text('1', style: TextStyle(color: AppTheme.textPrimary, fontSize: 12))),
+                              child: Center(child: Text('1', style: TextStyle(color: AppTheme.getTextPrimary(context), fontSize: 12))),
                             ),
                           ),
                           Expanded(
                             child: Container(
                               decoration: BoxDecoration(
-                                border: Border.all(color: AppTheme.textMuted.withOpacity(0.3)),
+                                border: Border.all(color: AppTheme.getTextMuted(context).withOpacity(0.3)),
                                 color: settings.defaultScreenPosition == 2 ? AppTheme.getPrimaryColor(context).withOpacity(0.3) : null,
                               ),
-                              child: const Center(child: Text('2', style: TextStyle(color: AppTheme.textPrimary, fontSize: 12))),
+                              child: Center(child: Text('2', style: TextStyle(color: AppTheme.getTextPrimary(context), fontSize: 12))),
                             ),
                           ),
                         ],
@@ -2010,19 +2010,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           Expanded(
                             child: Container(
                               decoration: BoxDecoration(
-                                border: Border.all(color: AppTheme.textMuted.withOpacity(0.3)),
+                                border: Border.all(color: AppTheme.getTextMuted(context).withOpacity(0.3)),
                                 color: settings.defaultScreenPosition == 3 ? AppTheme.getPrimaryColor(context).withOpacity(0.3) : null,
                               ),
-                              child: const Center(child: Text('3', style: TextStyle(color: AppTheme.textPrimary, fontSize: 12))),
+                              child: Center(child: Text('3', style: TextStyle(color: AppTheme.getTextPrimary(context), fontSize: 12))),
                             ),
                           ),
                           Expanded(
                             child: Container(
                               decoration: BoxDecoration(
-                                border: Border.all(color: AppTheme.textMuted.withOpacity(0.3)),
+                                border: Border.all(color: AppTheme.getTextMuted(context).withOpacity(0.3)),
                                 color: settings.defaultScreenPosition == 4 ? AppTheme.getPrimaryColor(context).withOpacity(0.3) : null,
                               ),
-                              child: const Center(child: Text('4', style: TextStyle(color: AppTheme.textPrimary, fontSize: 12))),
+                              child: Center(child: Text('4', style: TextStyle(color: AppTheme.getTextPrimary(context), fontSize: 12))),
                             ),
                           ),
                         ],
@@ -2036,7 +2036,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 return RadioListTile<int>(
                   title: Text(
                     _getScreenPositionLabel(context, position),
-                    style: const TextStyle(color: AppTheme.textPrimary),
+                    style: TextStyle(color: AppTheme.getTextPrimary(context)),
                   ),
                   value: position,
                   groupValue: settings.defaultScreenPosition,
@@ -2109,14 +2109,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           shape: style['shape'],
           contentPadding: style['contentPadding'],
           titlePadding: style['titlePadding'],
           title: Text(
             strings?.fontFamily ?? '字体',
             style: TextStyle(
-              color: AppTheme.textPrimary,
+              color: AppTheme.getTextPrimary(context),
               fontSize: style['titleFontSize'],
             ),
           ),
@@ -2132,7 +2132,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: Text(
                     _getFontFamilyLabel(context, font, settings),
                     style: TextStyle(
-                      color: AppTheme.textPrimary,
+                      color: AppTheme.getTextPrimary(context),
                       fontFamily: resolvedFont,
                       fontSize: style['itemFontSize'],
                     ),
@@ -2197,14 +2197,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           shape: style['shape'],
           contentPadding: style['contentPadding'],
           titlePadding: style['titlePadding'],
           title: Text(
             '屏幕方向',
             style: TextStyle(
-              color: AppTheme.textPrimary,
+              color: AppTheme.getTextPrimary(context),
               fontSize: style['titleFontSize'],
             ),
           ),
@@ -2231,14 +2231,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       Icon(
                         icon,
-                        color: AppTheme.textPrimary,
+                        color: AppTheme.getTextPrimary(context),
                         size: style['isLandscape'] ? 16.0 : 20.0,
                       ),
                       SizedBox(width: style['isLandscape'] ? 8.0 : 12.0),
                       Text(
                         _getOrientationLabel(context, orientation),
                         style: TextStyle(
-                          color: AppTheme.textPrimary,
+                          color: AppTheme.getTextPrimary(context),
                           fontSize: style['itemFontSize'],
                         ),
                       ),

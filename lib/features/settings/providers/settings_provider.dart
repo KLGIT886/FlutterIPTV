@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/log_service.dart';
 
@@ -39,6 +40,7 @@ class SettingsProvider extends ChangeNotifier {
   static const String _keySimpleMenu = 'simple_menu';
   static const String _keyLogLevel = 'log_level'; // debug, release, off
   static const String _keyMobileOrientation = 'mobile_orientation'; // portrait, landscape, auto
+  static const String _keyLastAppVersion = 'last_app_version'; // 用于检测版本更新
 
   // Settings values
   String _themeMode = 'dark';
@@ -124,6 +126,7 @@ class SettingsProvider extends ChangeNotifier {
 
   SettingsProvider() {
     _loadSettings();
+    _checkVersionUpdate();
   }
 
   void _loadSettings() {
@@ -196,6 +199,34 @@ class SettingsProvider extends ChangeNotifier {
     _mobileOrientation = prefs.getString(_keyMobileOrientation) ?? 'portrait';
     
     // 不在构造函数中调用 notifyListeners()，避免 build 期间触发重建
+  }
+
+  /// 检测版本更新，如果版本更新则自动关闭开发者日志
+  Future<void> _checkVersionUpdate() async {
+    try {
+      final prefs = ServiceLocator.prefs;
+      final lastVersion = prefs.getString(_keyLastAppVersion);
+      
+      // 获取当前版本号
+      final packageInfo = await PackageInfo.fromPlatform();
+      final currentVersion = packageInfo.version;
+      
+      // 如果版本不同，说明应用更新了
+      if (lastVersion != null && lastVersion != currentVersion) {
+        ServiceLocator.log.d('检测到版本更新: $lastVersion → $currentVersion');
+        
+        // 自动关闭开发者日志
+        if (_logLevel != 'off') {
+          ServiceLocator.log.d('自动关闭开发者日志');
+          await setLogLevel('off');
+        }
+      }
+      
+      // 保存当前版本号
+      await prefs.setString(_keyLastAppVersion, currentVersion);
+    } catch (e) {
+      ServiceLocator.log.e('版本检测失败: $e');
+    }
   }
 
   Future<void> _saveSettings() async {

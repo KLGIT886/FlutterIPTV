@@ -58,6 +58,11 @@ class PlaylistProvider extends ChangeNotifier {
 
       _playlists = results.map((r) => Playlist.fromMap(r)).toList();
       ServiceLocator.log.d('从数据库加载了 ${_playlists.length} 个播放列表', tag: 'PlaylistProvider');
+      
+      // 调试：打印每个播放列表的 EPG URL
+      for (final playlist in _playlists) {
+        ServiceLocator.log.d('播放列表 "${playlist.name}" (ID: ${playlist.id}) - epgUrl: ${playlist.epgUrl ?? "(未配置)"}', tag: 'PlaylistProvider');
+      }
 
       // Load channel counts for each playlist
       for (int i = 0; i < _playlists.length; i++) {
@@ -164,15 +169,20 @@ class PlaylistProvider extends ChangeNotifier {
       // Check for EPG URL in M3U header (only for M3U format)
       if (format == 'm3u') {
         _lastExtractedEpgUrl = M3UParser.lastParseResult?.epgUrl;
+        ServiceLocator.log.d('M3U 解析结果 - EPG URL: ${_lastExtractedEpgUrl ?? "(未找到)"}', tag: 'PlaylistProvider');
+        
         if (_lastExtractedEpgUrl != null) {
           ServiceLocator.log.d('从M3U提取到EPG URL: $_lastExtractedEpgUrl', tag: 'PlaylistProvider');
           // Save EPG URL to playlist
-          await ServiceLocator.database.update(
+          final updateCount = await ServiceLocator.database.update(
             'playlists',
             {'epg_url': _lastExtractedEpgUrl},
             where: 'id = ?',
             whereArgs: [playlistId],
           );
+          ServiceLocator.log.d('EPG URL 保存到数据库 - 更新行数: $updateCount', tag: 'PlaylistProvider');
+        } else {
+          ServiceLocator.log.d('M3U 文件中没有找到 EPG URL（x-tvg-url 或 url-tvg）', tag: 'PlaylistProvider');
         }
       }
 

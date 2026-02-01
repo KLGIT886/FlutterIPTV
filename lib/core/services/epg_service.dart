@@ -137,10 +137,15 @@ class EpgService {
     // 用频道名称索引快速查找
     if (channelName != null && channelName.isNotEmpty) {
       final normalizedName = _normalizeName(channelName);
+      ServiceLocator.log.d('EPG: 查找频道 "$channelName" → 规范化为 "$normalizedName"');
+      
       if (_nameIndex.containsKey(normalizedName)) {
         final foundId = _nameIndex[normalizedName]!;
+        ServiceLocator.log.d('EPG: 匹配成功 "$normalizedName" → ID: $foundId');
         _lookupCache[cacheKey] = foundId;
         return _programs[foundId];
+      } else {
+        ServiceLocator.log.d('EPG: 未找到匹配 "$normalizedName"，可用的频道: ${_nameIndex.keys.take(10).join(", ")}...');
       }
       
       // 尝试用 channelId 作为名称查找
@@ -159,9 +164,51 @@ class EpgService {
     return null;
   }
 
+  /// 规范化频道名称，用于智能匹配
+  /// 参考台标服务的匹配逻辑
   String _normalizeName(String name) {
-    // 保留 + 号，因为 CCTV5 和 CCTV5+ 是不同的频道
-    return name.toLowerCase().replaceAll(RegExp(r'[^\w\u4e00-\u9fa5+]'), '').replaceAll('hd', '').replaceAll('高清', '').replaceAll('标清', '').replaceAll('超清', '');
+    String normalized = name.toUpperCase();
+    
+    // 1. 先去除空格、横线、下划线（保留 + 号），统一格式
+    normalized = normalized.replaceAll(RegExp(r'[-\s_]+'), '');
+    
+    // 2. 特殊处理：CCTV01 -> CCTV1
+    normalized = normalized.replaceAllMapped(
+      RegExp(r'CCTV0*(\d+)'),
+      (match) => 'CCTV${match.group(1)}',
+    );
+    
+    // 3. 去除英文后缀
+    normalized = normalized.replaceAll(RegExp(r'(HD|4K|8K|FHD|UHD|SD)'), '');
+    
+    // 4. 去除中文后缀（匹配末尾的修饰词）
+    normalized = normalized.replaceAll(
+      RegExp(r'(高清|超清|蓝光|高码率|低码率|标清|频道)$'),
+      '',
+    );
+    
+    // 5. 特殊处理 CCTV 频道：去除中文描述（如 CCTV1综合 -> CCTV1）
+    normalized = normalized.replaceAllMapped(
+      RegExp(r'(CCTV\d+\+?)[\u4e00-\u9fa5]+'),
+      (match) => match.group(1)!,
+    );
+    
+    // 6. 特殊处理：保留"卫视"
+    if (!normalized.endsWith('卫视') && name.toUpperCase().contains('卫视')) {
+      // 如果原名包含卫视但被去掉了，加回来
+      final wsMatch = RegExp(r'(.+?)卫视').firstMatch(name.toUpperCase().replaceAll(RegExp(r'[-\s_]+'), ''));
+      if (wsMatch != null) {
+        normalized = '${wsMatch.group(1)!}卫视';
+      }
+    }
+    
+    // 7. 去除卫视后缀的修饰词
+    normalized = normalized.replaceAll(
+      RegExp(r'(卫视)(高清|超清)$'),
+      r'$1',
+    );
+    
+    return normalized;
   }
 
   /// 从 URL 加载 EPG 数据
@@ -291,9 +338,51 @@ class EpgService {
     }
   }
 
+  /// 规范化频道名称（静态版本，用于 isolate）
+  /// 参考台标服务的匹配逻辑
   static String _normalizeNameStatic(String name) {
-    // 保留 + 号，因为 CCTV5 和 CCTV5+ 是不同的频道
-    return name.toLowerCase().replaceAll(RegExp(r'[^\w\u4e00-\u9fa5+]'), '').replaceAll('hd', '').replaceAll('高清', '').replaceAll('标清', '').replaceAll('超清', '');
+    String normalized = name.toUpperCase();
+    
+    // 1. 先去除空格、横线、下划线（保留 + 号），统一格式
+    normalized = normalized.replaceAll(RegExp(r'[-\s_]+'), '');
+    
+    // 2. 特殊处理：CCTV01 -> CCTV1
+    normalized = normalized.replaceAllMapped(
+      RegExp(r'CCTV0*(\d+)'),
+      (match) => 'CCTV${match.group(1)}',
+    );
+    
+    // 3. 去除英文后缀
+    normalized = normalized.replaceAll(RegExp(r'(HD|4K|8K|FHD|UHD|SD)'), '');
+    
+    // 4. 去除中文后缀（匹配末尾的修饰词）
+    normalized = normalized.replaceAll(
+      RegExp(r'(高清|超清|蓝光|高码率|低码率|标清|频道)$'),
+      '',
+    );
+    
+    // 5. 特殊处理 CCTV 频道：去除中文描述（如 CCTV1综合 -> CCTV1）
+    normalized = normalized.replaceAllMapped(
+      RegExp(r'(CCTV\d+\+?)[\u4e00-\u9fa5]+'),
+      (match) => match.group(1)!,
+    );
+    
+    // 6. 特殊处理：保留"卫视"
+    if (!normalized.endsWith('卫视') && name.toUpperCase().contains('卫视')) {
+      // 如果原名包含卫视但被去掉了，加回来
+      final wsMatch = RegExp(r'(.+?)卫视').firstMatch(name.toUpperCase().replaceAll(RegExp(r'[-\s_]+'), ''));
+      if (wsMatch != null) {
+        normalized = '${wsMatch.group(1)!}卫视';
+      }
+    }
+    
+    // 7. 去除卫视后缀的修饰词
+    normalized = normalized.replaceAll(
+      RegExp(r'(卫视)(高清|超清)$'),
+      r'$1',
+    );
+    
+    return normalized;
   }
 
   static DateTime? _parseDateTimeStatic(String str) {

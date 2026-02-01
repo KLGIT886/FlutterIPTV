@@ -9,6 +9,7 @@ import '../../../core/widgets/tv_focusable.dart';
 import '../../../core/widgets/tv_sidebar.dart';
 import '../../../core/widgets/category_card.dart';
 import '../../../core/widgets/channel_card.dart';
+import '../../../core/widgets/channel_logo_widget.dart';
 import '../../../core/platform/platform_detector.dart';
 import '../../../core/i18n/app_strings.dart';
 import '../../../core/services/update_service.dart';
@@ -216,6 +217,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ServiceLocator.log.i('首页数据加载完成，耗时: ${loadTime}ms，频道数: ${channelProvider.channels.length}', tag: 'HomeScreen');
       
       // 加载 EPG（使用播放列表的 EPG URL，如果失败则使用设置中的兜底 URL）
+      ServiceLocator.log.d('HomeScreen: 检查 EPG 加载条件 - activePlaylist.epgUrl=${activePlaylist?.epgUrl}, settingsProvider.epgUrl=${settingsProvider.epgUrl}');
+      print('HomeScreen: 检查 EPG 加载条件 - activePlaylist.epgUrl=${activePlaylist?.epgUrl}, settingsProvider.epgUrl=${settingsProvider.epgUrl}');
       if (activePlaylist?.epgUrl != null && activePlaylist!.epgUrl!.isNotEmpty) {
         ServiceLocator.log.d('HomeScreen: 初始加载播放列表的 EPG URL: ${activePlaylist.epgUrl}');
         await epgProvider.loadEpg(
@@ -225,6 +228,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       } else if (settingsProvider.epgUrl != null && settingsProvider.epgUrl!.isNotEmpty) {
         ServiceLocator.log.d('HomeScreen: 初始加载设置中的兜底 EPG URL: ${settingsProvider.epgUrl}');
         await epgProvider.loadEpg(settingsProvider.epgUrl!);
+      } else {
+        ServiceLocator.log.d('HomeScreen: 没有可用的 EPG URL（播放列表和设置中都没有配置）');
       }
       
       // 自动播放功能：数据加载完成后延迟500ms自动播放
@@ -313,6 +318,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _onNavItemTap(int index) {
     if (index == _selectedNavIndex) return;
+    
+    // 切换页面时清理台标加载队列
+    clearLogoLoadingQueue();
+    
     setState(() => _selectedNavIndex = index);
   }
 
@@ -718,11 +727,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   /// 显示添加播放列表对话框
   Future<void> _showAddPlaylistDialog() async {
-    final result = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const AddPlaylistDialog(),
-    );
+    final result = PlatformDetector.isMobile
+        ? await showModalBottomSheet<bool>(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (context) => const AddPlaylistDialog(),
+          )
+        : await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => const AddPlaylistDialog(),
+          );
 
     // 如果成功添加了播放列表，刷新数据
     if (result == true && mounted) {
@@ -741,6 +757,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
 
+    // 清理台标加载队列和缓存，准备重新加载
+    clearAllLogoCache(); // 完全清理，包括已加载的缓存
+    
     // 显示加载提示
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
