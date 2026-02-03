@@ -1,23 +1,23 @@
 {
-  "version": "1.4.25",
-  "build": 145,
+  "version": "1.4.26",
+  "build": 146,
   "releaseDate": "2026-02-03",
   "assets": {
-    "windows": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.25/flutteriptv-Windows-x64-Setup.exe",
+    "windows": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.26/flutteriptv-Windows-x64-Setup.exe",
     "android_mobile": {
-      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.25/flutteriptv-Android-Mobile-arm64-v8a.apk",
-      "armeabi-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.25/flutteriptv-Android-Mobile-armeabi-v7a.apk",
-      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.25/flutteriptv-Android-Mobile-x86_64.apk"
+      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.26/flutteriptv-Android-Mobile-arm64-v8a.apk",
+      "armeabi-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.26/flutteriptv-Android-Mobile-armeabi-v7a.apk",
+      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.26/flutteriptv-Android-Mobile-x86_64.apk"
     },
     "android_tv": {
-      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.25/flutteriptv-AndroidTV-arm64-v8a.apk",
-      "armeabi-v7a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.25/flutteriptv-AndroidTV-armeabi-v7a.apk",
-      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.25/flutteriptv-AndroidTV-x86_64.apk"
+      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.26/flutteriptv-AndroidTV-arm64-v8a.apk",
+      "armeabi-v7a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.26/flutteriptv-AndroidTV-armeabi-v7a.apk",
+      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.26/flutteriptv-AndroidTV-x86_64.apk"
     }
   },
   "changelog": {
-    "zh": "- 修复：播放器顶部控制栏位置调整，解决与信息窗口重叠问题（单屏/多屏）\n- 修复：控制栏隐藏时鼠标光标未能自动隐藏的问题\n- 优化：鼠标移出窗口时控制栏立即隐藏\n- 优化：多屏播放器滚动字幕性能改进",
-    "en": "- Fixed: Adjusted player top control bar position to fix overlap with info overlay (Single/Multi-screen)\n- Fixed: Mouse cursor not hiding when controls are hidden\n- Optimized: Controls hide immediately when mouse leaves window\n- Optimized: Improved scrolling text performance in multi-screen player"
+    "zh": "- 修复：还原鼠标悬停控制栏显示逻辑，解决快速划过时的异常行为\n- 优化：播放列表解析超时时间从30秒减少到3秒，提高响应速度\n- 改进：播放列表解析错误处理，使用本地化错误消息\n- 优化：代码格式化和结构改进，提高代码可读性\n- 修复：自动刷新服务错误处理，增强稳定性\n- 改进：首页数据加载和错误提示优化",
+    "en": "- Fixed: Reverted mouse hover control bar display logic to fix abnormal behavior during quick mouse movements\n- Optimized: Reduced playlist parsing timeout from 30s to 3s for better responsiveness\n- Improved: Playlist parsing error handling with localized error messages\n- Optimized: Code formatting and structure improvements for better readability\n- Fixed: Auto-refresh service error handling for enhanced stability\n- Improved: Home screen data loading and error message optimization"
   },
   "minVersion": "1.0.0"
 }

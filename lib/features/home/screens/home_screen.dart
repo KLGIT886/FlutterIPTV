@@ -58,7 +58,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ChannelProvider>().addListener(_onChannelProviderChanged);
       context.read<PlaylistProvider>().addListener(_onPlaylistProviderChanged);
-      context.read<FavoritesProvider>().addListener(_onFavoritesProviderChanged);
+      context
+          .read<FavoritesProvider>()
+          .addListener(_onFavoritesProviderChanged);
     });
   }
 
@@ -66,7 +68,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     ServiceLocator.log.i('应用生命周期变化: $state', tag: 'HomeScreen');
-    
+
     // 当应用从后台恢复时，检查并重新加载数据
     if (state == AppLifecycleState.resumed) {
       ServiceLocator.log.i('应用从后台恢复，检查数据状态', tag: 'HomeScreen');
@@ -112,11 +114,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _onChannelProviderChanged() {
     if (!mounted) return;
     final channelProvider = context.read<ChannelProvider>();
-    
+
     // 当加载完成时刷新推荐频道
     if (!channelProvider.isLoading && channelProvider.channels.isNotEmpty) {
       // 频道数量变化或首次加载时刷新
-      if (channelProvider.channels.length != _lastChannelCount || _recommendedChannels.isEmpty) {
+      if (channelProvider.channels.length != _lastChannelCount ||
+          _recommendedChannels.isEmpty) {
         _lastChannelCount = channelProvider.channels.length;
         _refreshRecommendedChannels();
       }
@@ -127,20 +130,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!mounted) return;
     final playlistProvider = context.read<PlaylistProvider>();
     final currentPlaylistId = playlistProvider.activePlaylist?.id;
-    
+
     // 播放列表ID变化时清空推荐频道并重新加载
     if (_lastPlaylistId != currentPlaylistId) {
       _lastPlaylistId = currentPlaylistId;
       _recommendedChannels = [];
       _lastChannelCount = 0;
-      
+
       // 播放列表切换时，重新加载频道
       if (currentPlaylistId != null) {
         final channelProvider = context.read<ChannelProvider>();
         channelProvider.loadChannels(currentPlaylistId);
       }
     }
-    
+
     // 当播放列表刷新完成时（isLoading 从 true 变为 false），触发频道重新加载
     // 这样可以确保刷新 M3U 后首页能正确更新
     if (!playlistProvider.isLoading && playlistProvider.hasPlaylists) {
@@ -169,11 +172,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _checkAndReloadIfNeeded() {
     final playlistProvider = context.read<PlaylistProvider>();
     final channelProvider = context.read<ChannelProvider>();
-    
+
     // 如果播放列表已加载但频道列表为空，说明可能是应用恢复后状态丢失
-    if (playlistProvider.hasPlaylists && 
-        !playlistProvider.isLoading && 
-        channelProvider.channels.isEmpty && 
+    if (playlistProvider.hasPlaylists &&
+        !playlistProvider.isLoading &&
+        channelProvider.channels.isEmpty &&
         !channelProvider.isLoading) {
       ServiceLocator.log.w('检测到数据状态异常：播放列表存在但频道为空', tag: 'HomeScreen');
       _loadData();
@@ -183,7 +186,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _loadData() async {
     ServiceLocator.log.i('开始加载首页数据', tag: 'HomeScreen');
     final startTime = DateTime.now();
-    
+
     final playlistProvider = context.read<PlaylistProvider>();
     final channelProvider = context.read<ChannelProvider>();
     final favoritesProvider = context.read<FavoritesProvider>();
@@ -199,65 +202,84 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (playlistProvider.hasPlaylists) {
       final activePlaylist = playlistProvider.activePlaylist;
       _lastPlaylistId = activePlaylist?.id;
-      ServiceLocator.log.d('活动播放列表: ${activePlaylist?.name} (ID: ${activePlaylist?.id})', tag: 'HomeScreen');
-      
+      ServiceLocator.log.d(
+          '活动播放列表: ${activePlaylist?.name} (ID: ${activePlaylist?.id})',
+          tag: 'HomeScreen');
+
       if (activePlaylist != null && activePlaylist.id != null) {
-        ServiceLocator.log.d('加载播放列表频道: ${activePlaylist.id}', tag: 'HomeScreen');
+        ServiceLocator.log
+            .d('加载播放列表频道: ${activePlaylist.id}', tag: 'HomeScreen');
         await channelProvider.loadChannels(activePlaylist.id!);
       } else {
         ServiceLocator.log.d('加载所有频道', tag: 'HomeScreen');
         await channelProvider.loadAllChannels();
       }
-      
+
       ServiceLocator.log.d('加载收藏列表', tag: 'HomeScreen');
       await favoritesProvider.loadFavorites();
       _refreshRecommendedChannels();
-      
+
       final loadTime = DateTime.now().difference(startTime).inMilliseconds;
-      ServiceLocator.log.i('首页数据加载完成，耗时: ${loadTime}ms，频道数: ${channelProvider.channels.length}', tag: 'HomeScreen');
-      
+      ServiceLocator.log.i(
+          '首页数据加载完成，耗时: ${loadTime}ms，频道数: ${channelProvider.channels.length}',
+          tag: 'HomeScreen');
+
       // 加载 EPG（使用播放列表的 EPG URL，如果失败则使用设置中的兜底 URL）
-      ServiceLocator.log.d('HomeScreen: 检查 EPG 加载条件 - activePlaylist.epgUrl=${activePlaylist?.epgUrl}, settingsProvider.epgUrl=${settingsProvider.epgUrl}');
-      print('HomeScreen: 检查 EPG 加载条件 - activePlaylist.epgUrl=${activePlaylist?.epgUrl}, settingsProvider.epgUrl=${settingsProvider.epgUrl}');
-      if (activePlaylist?.epgUrl != null && activePlaylist!.epgUrl!.isNotEmpty) {
-        ServiceLocator.log.d('HomeScreen: 初始加载播放列表的 EPG URL: ${activePlaylist.epgUrl}');
+      ServiceLocator.log.d(
+          'HomeScreen: 检查 EPG 加载条件 - activePlaylist.epgUrl=${activePlaylist?.epgUrl}, settingsProvider.epgUrl=${settingsProvider.epgUrl}');
+      print(
+          'HomeScreen: 检查 EPG 加载条件 - activePlaylist.epgUrl=${activePlaylist?.epgUrl}, settingsProvider.epgUrl=${settingsProvider.epgUrl}');
+      if (activePlaylist?.epgUrl != null &&
+          activePlaylist!.epgUrl!.isNotEmpty) {
+        ServiceLocator.log
+            .d('HomeScreen: 初始加载播放列表的 EPG URL: ${activePlaylist.epgUrl}');
         await epgProvider.loadEpg(
           activePlaylist.epgUrl!,
           fallbackUrl: settingsProvider.epgUrl,
         );
-      } else if (settingsProvider.epgUrl != null && settingsProvider.epgUrl!.isNotEmpty) {
-        ServiceLocator.log.d('HomeScreen: 初始加载设置中的兜底 EPG URL: ${settingsProvider.epgUrl}');
+      } else if (settingsProvider.epgUrl != null &&
+          settingsProvider.epgUrl!.isNotEmpty) {
+        ServiceLocator.log
+            .d('HomeScreen: 初始加载设置中的兜底 EPG URL: ${settingsProvider.epgUrl}');
         await epgProvider.loadEpg(settingsProvider.epgUrl!);
       } else {
         ServiceLocator.log.d('HomeScreen: 没有可用的 EPG URL（播放列表和设置中都没有配置）');
       }
-      
+
       // 自动播放功能：数据加载完成后延迟500ms自动播放
       if (settingsProvider.autoPlay && mounted) {
         Future.delayed(const Duration(milliseconds: 500), () {
           if (!mounted) return;
-          
+
           // 获取上次播放状态
-          final isMultiScreenMode = settingsProvider.lastPlayMode == 'multi' && settingsProvider.hasMultiScreenState;
+          final isMultiScreenMode = settingsProvider.lastPlayMode == 'multi' &&
+              settingsProvider.hasMultiScreenState;
           Channel? lastChannel;
-          
-          if (settingsProvider.rememberLastChannel && settingsProvider.lastChannelId != null) {
+
+          if (settingsProvider.rememberLastChannel &&
+              settingsProvider.lastChannelId != null) {
             try {
               lastChannel = channelProvider.channels.firstWhere(
                 (c) => c.id == settingsProvider.lastChannelId,
               );
             } catch (_) {
               // 频道不存在，使用第一个频道
-              lastChannel = channelProvider.channels.isNotEmpty ? channelProvider.channels.first : null;
+              lastChannel = channelProvider.channels.isNotEmpty
+                  ? channelProvider.channels.first
+                  : null;
             }
           } else {
-            lastChannel = channelProvider.channels.isNotEmpty ? channelProvider.channels.first : null;
+            lastChannel = channelProvider.channels.isNotEmpty
+                ? channelProvider.channels.first
+                : null;
           }
-          
+
           // 自动触发继续播放
           if (lastChannel != null || isMultiScreenMode) {
-            ServiceLocator.log.d('HomeScreen: Auto-play triggered - isMultiScreen=$isMultiScreenMode');
-            _continuePlayback(channelProvider, lastChannel, isMultiScreenMode, settingsProvider);
+            ServiceLocator.log.d(
+                'HomeScreen: Auto-play triggered - isMultiScreen=$isMultiScreenMode');
+            _continuePlayback(channelProvider, lastChannel, isMultiScreenMode,
+                settingsProvider);
           }
         });
       }
@@ -269,7 +291,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     final channelProvider = context.read<ChannelProvider>();
     final favoritesProvider = context.read<FavoritesProvider>();
-    
+
     // 如果频道列表为空，清空推荐列表
     if (channelProvider.channels.isEmpty) {
       if (_recommendedChannels.isNotEmpty) {
@@ -283,7 +305,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // 分离收藏和非收藏频道
     final favoriteChannels = <Channel>[];
     final nonFavoriteChannels = <Channel>[];
-    
+
     for (final channel in channelProvider.channels) {
       if (favoritesProvider.isFavorite(channel.id ?? 0)) {
         favoriteChannels.add(channel);
@@ -291,10 +313,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         nonFavoriteChannels.add(channel);
       }
     }
-    
+
     // 打乱非收藏频道顺序
     nonFavoriteChannels.shuffle();
-    
+
     // 优先显示收藏频道，不够再补充非收藏频道
     _recommendedChannels = [
       ...favoriteChannels,
@@ -308,20 +330,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final strings = AppStrings.of(context);
     return [
       _NavItem(icon: Icons.home_rounded, label: strings?.home ?? 'Home'),
-      _NavItem(icon: Icons.live_tv_rounded, label: strings?.channels ?? 'Channels'),
-      _NavItem(icon: Icons.playlist_play_rounded, label: strings?.playlistList ?? 'Sources'),
-      _NavItem(icon: Icons.favorite_rounded, label: strings?.favorites ?? 'Favorites'),
-      _NavItem(icon: Icons.search_rounded, label: strings?.searchChannels ?? 'Search'),
-      _NavItem(icon: Icons.settings_rounded, label: strings?.settings ?? 'Settings'),
+      _NavItem(
+          icon: Icons.live_tv_rounded, label: strings?.channels ?? 'Channels'),
+      _NavItem(
+          icon: Icons.playlist_play_rounded,
+          label: strings?.playlistList ?? 'Sources'),
+      _NavItem(
+          icon: Icons.favorite_rounded,
+          label: strings?.favorites ?? 'Favorites'),
+      _NavItem(
+          icon: Icons.search_rounded,
+          label: strings?.searchChannels ?? 'Search'),
+      _NavItem(
+          icon: Icons.settings_rounded, label: strings?.settings ?? 'Settings'),
     ];
   }
 
   void _onNavItemTap(int index) {
     if (index == _selectedNavIndex) return;
-    
+
     // 切换页面时清理台标加载队列
     clearLogoLoadingQueue();
-    
+
     setState(() => _selectedNavIndex = index);
   }
 
@@ -334,21 +364,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return Scaffold(
         body: Container(
           decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: Theme.of(context).brightness == Brightness.dark
-                        ? [
-                            AppTheme.getBackgroundColor(context),
-                            AppTheme.getPrimaryColor(context).withOpacity(0.15),
-                            AppTheme.getBackgroundColor(context),
-                          ]
-                        : [
-                            AppTheme.getBackgroundColor(context),
-                            AppTheme.getBackgroundColor(context).withOpacity(0.9),
-                            AppTheme.getPrimaryColor(context).withOpacity(0.08),
-                          ],
-                  ),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: Theme.of(context).brightness == Brightness.dark
+                  ? [
+                      AppTheme.getBackgroundColor(context),
+                      AppTheme.getPrimaryColor(context).withOpacity(0.15),
+                      AppTheme.getBackgroundColor(context),
+                    ]
+                  : [
+                      AppTheme.getBackgroundColor(context),
+                      AppTheme.getBackgroundColor(context).withOpacity(0.9),
+                      AppTheme.getPrimaryColor(context).withOpacity(0.08),
+                    ],
+            ),
           ),
           child: TVSidebar(
             selectedIndex: 0,
@@ -378,7 +408,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       bottomNavigationBar: _buildBottomNav(context),
       // 添加屏幕方向切换悬浮按钮（仅手机端）
-      floatingActionButton: PlatformDetector.isMobile ? _buildOrientationFab() : null,
+      floatingActionButton:
+          PlatformDetector.isMobile ? _buildOrientationFab() : null,
     );
   }
 
@@ -389,7 +420,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         final orientation = settings.mobileOrientation;
         IconData icon;
         String tooltip;
-        
+
         // 只显示当前状态，不显示下一个状态
         switch (orientation) {
           case 'landscape':
@@ -402,7 +433,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             tooltip = '竖屏模式';
             break;
         }
-        
+
         return FloatingActionButton(
           mini: true,
           backgroundColor: AppTheme.getSurfaceColor(context).withOpacity(0.9),
@@ -419,7 +450,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     String newOrientation;
     List<DeviceOrientation> orientations;
     String message;
-    
+
     // 只在横屏和竖屏之间切换
     if (settings.mobileOrientation == 'portrait') {
       newOrientation = 'landscape';
@@ -435,10 +466,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ];
       message = '已切换到竖屏模式';
     }
-    
+
     await settings.setMobileOrientation(newOrientation);
     await SystemChrome.setPreferredOrientations(orientations);
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -471,7 +502,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _buildBottomNav(BuildContext context) {
     final navItems = _getNavItems(context);
     return Container(
-      decoration: BoxDecoration(color: AppTheme.getSurfaceColor(context), border: const Border(top: BorderSide(color: Color(0x1AFFFFFF), width: 1))),
+      decoration: BoxDecoration(
+          color: AppTheme.getSurfaceColor(context),
+          border: const Border(
+              top: BorderSide(color: Color(0x1AFFFFFF), width: 1))),
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
@@ -483,9 +517,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               return GestureDetector(
                 onTap: () => _onNavItemTap(index),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(gradient: isSelected ? AppTheme.getGradient(context) : null, borderRadius: BorderRadius.circular(AppTheme.radiusPill)),
-                  child: Icon(item.icon, color: isSelected ? Colors.white : AppTheme.getTextMuted(context), size: 22),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  decoration: BoxDecoration(
+                      gradient:
+                          isSelected ? AppTheme.getGradient(context) : null,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusPill)),
+                  child: Icon(item.icon,
+                      color: isSelected
+                          ? Colors.white
+                          : AppTheme.getTextMuted(context),
+                      size: 22),
                 ),
               );
             }),
@@ -499,12 +541,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Consumer2<PlaylistProvider, ChannelProvider>(
       builder: (context, playlistProvider, channelProvider, _) {
         if (!playlistProvider.hasPlaylists) return _buildEmptyState();
-        
+
         // 播放列表正在刷新或频道正在加载时显示加载状态
         if (playlistProvider.isLoading || channelProvider.isLoading) {
-          return const Center(child: CircularProgressIndicator(color: AppTheme.primaryColor));
+          return const Center(
+              child: CircularProgressIndicator(color: AppTheme.primaryColor));
         }
-        
+
         // 如果播放列表已加载但频道为空，尝试重新加载
         if (playlistProvider.hasPlaylists && channelProvider.channels.isEmpty) {
           // 使用 addPostFrameCallback 避免在 build 期间调用 setState
@@ -517,7 +560,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               }
             }
           });
-          return const Center(child: CircularProgressIndicator(color: AppTheme.primaryColor));
+          return const Center(
+              child: CircularProgressIndicator(color: AppTheme.primaryColor));
         }
 
         final favChannels = _getFavoriteChannels(channelProvider);
@@ -529,34 +573,57 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             // 固定头部
             _buildCompactHeader(channelProvider),
             // 固定分类标签（横屏时隐藏）
-            if (MediaQuery.of(context).size.width <= 700 || !PlatformDetector.isMobile)
+            if (MediaQuery.of(context).size.width <= 700 ||
+                !PlatformDetector.isMobile)
               _buildCategoryChips(channelProvider),
-            SizedBox(height: PlatformDetector.isMobile && MediaQuery.of(context).size.width > 700 ? 0 : (PlatformDetector.isMobile ? 2 : 16)),  // 横屏时间距为0
+            SizedBox(
+                height: PlatformDetector.isMobile &&
+                        MediaQuery.of(context).size.width > 700
+                    ? 0
+                    : (PlatformDetector.isMobile ? 2 : 16)), // 横屏时间距为0
             // 可滚动的频道列表
             Expanded(
               child: CustomScrollView(
                 slivers: [
                   SliverPadding(
-                    padding: EdgeInsets.symmetric(horizontal: PlatformDetector.isMobile ? 12 : 24),
+                    padding: EdgeInsets.symmetric(
+                        horizontal: PlatformDetector.isMobile ? 12 : 24),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
-                        _buildChannelRow(AppStrings.of(context)?.recommendedChannels ?? 'Recommended', _recommendedChannels, showRefresh: true, onRefresh: _refreshRecommendedChannels),
+                        _buildChannelRow(
+                            AppStrings.of(context)?.recommendedChannels ??
+                                'Recommended',
+                            _recommendedChannels,
+                            showRefresh: true,
+                            onRefresh: _refreshRecommendedChannels),
                         SizedBox(height: PlatformDetector.isMobile ? 8 : 12),
                         ...channelProvider.groups.take(5).map((group) {
                           // 取足够多的频道，实际显示数量由宽度决定
-                          final channels = channelProvider.channels.where((c) => c.groupName == group.name).take(20).toList();
+                          final channels = channelProvider.channels
+                              .where((c) => c.groupName == group.name)
+                              .take(20)
+                              .toList();
                           return Padding(
-                            padding: EdgeInsets.only(bottom: PlatformDetector.isMobile ? 8 : 12),
+                            padding: EdgeInsets.only(
+                                bottom: PlatformDetector.isMobile ? 8 : 12),
                             child: _buildChannelRow(
                               group.name,
                               channels,
                               showMore: true,
-                              onMoreTap: () => Navigator.pushNamed(context, AppRouter.channels, arguments: {'groupName': group.name}),
+                              onMoreTap: () => Navigator.pushNamed(
+                                  context, AppRouter.channels,
+                                  arguments: {'groupName': group.name}),
                             ),
                           );
                         }),
                         if (favChannels.isNotEmpty) ...[
-                          _buildChannelRow(AppStrings.of(context)?.myFavorites ?? 'My Favorites', favChannels, showMore: true, onMoreTap: () => Navigator.pushNamed(context, AppRouter.favorites)),
+                          _buildChannelRow(
+                              AppStrings.of(context)?.myFavorites ??
+                                  'My Favorites',
+                              favChannels,
+                              showMore: true,
+                              onMoreTap: () => Navigator.pushNamed(
+                                  context, AppRouter.favorites)),
                           SizedBox(height: PlatformDetector.isMobile ? 8 : 12),
                         ],
                       ]),
@@ -577,22 +644,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final playlistProvider = context.watch<PlaylistProvider>();
     final activePlaylist = playlistProvider.activePlaylist;
     Channel? lastChannel;
-    final bool isMultiScreenMode = settingsProvider.lastPlayMode == 'multi' && settingsProvider.hasMultiScreenState;
-    
-    ServiceLocator.log.d('HomeScreen: lastPlayMode=${settingsProvider.lastPlayMode}, hasMultiScreenState=${settingsProvider.hasMultiScreenState}, isMultiScreenMode=$isMultiScreenMode');
-    ServiceLocator.log.d('HomeScreen: lastMultiScreenChannels=${settingsProvider.lastMultiScreenChannels}');
+    final bool isMultiScreenMode = settingsProvider.lastPlayMode == 'multi' &&
+        settingsProvider.hasMultiScreenState;
 
-    if (settingsProvider.rememberLastChannel && settingsProvider.lastChannelId != null) {
+    ServiceLocator.log.d(
+        'HomeScreen: lastPlayMode=${settingsProvider.lastPlayMode}, hasMultiScreenState=${settingsProvider.hasMultiScreenState}, isMultiScreenMode=$isMultiScreenMode');
+    ServiceLocator.log.d(
+        'HomeScreen: lastMultiScreenChannels=${settingsProvider.lastMultiScreenChannels}');
+
+    if (settingsProvider.rememberLastChannel &&
+        settingsProvider.lastChannelId != null) {
       try {
         lastChannel = provider.channels.firstWhere(
           (c) => c.id == settingsProvider.lastChannelId,
         );
       } catch (_) {
         // 频道不存在，使用第一个频道
-        lastChannel = provider.channels.isNotEmpty ? provider.channels.first : null;
+        lastChannel =
+            provider.channels.isNotEmpty ? provider.channels.first : null;
       }
     } else {
-      lastChannel = provider.channels.isNotEmpty ? provider.channels.first : null;
+      lastChannel =
+          provider.channels.isNotEmpty ? provider.channels.first : null;
     }
 
     // 构建播放列表信息
@@ -601,7 +674,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final type = activePlaylist.isRemote ? 'URL' : '本地';
       playlistInfo = ' · [$type] ${activePlaylist.name}';
       if (activePlaylist.url != null && activePlaylist.url!.isNotEmpty) {
-        String url = activePlaylist.url!.replaceFirst(RegExp(r'^https?://'), '');
+        String url =
+            activePlaylist.url!.replaceFirst(RegExp(r'^https?://'), '');
         if (url.length > 30) {
           url = '${url.substring(0, 30)}...';
         }
@@ -610,54 +684,79 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     // 继续播放按钮 - 名字固定为 "Continue"，不根据模式变化
-    final continueLabel = AppStrings.of(context)?.continueWatching ?? 'Continue';
+    final continueLabel =
+        AppStrings.of(context)?.continueWatching ?? 'Continue';
     final isMobile = PlatformDetector.isMobile;
     final screenWidth = MediaQuery.of(context).size.width;
-    final isLandscape = isMobile && screenWidth > 700;  // 手机端横屏
-    
+    final isLandscape = isMobile && screenWidth > 700; // 手机端横屏
+
     // 手机端获取状态栏高度，并减少一些间距让内容更靠近状态栏
     final statusBarHeight = isMobile ? MediaQuery.of(context).padding.top : 0.0;
-    final topPadding = isMobile ? (statusBarHeight > 0 ? statusBarHeight - 10.0 : 0.0) : 16.0;  // 状态栏高度 + 4px
+    final topPadding = isMobile
+        ? (statusBarHeight > 0 ? statusBarHeight - 10.0 : 0.0)
+        : 16.0; // 状态栏高度 + 4px
 
     return Container(
       // 手机端添加状态栏高度的padding，其他平台使用SafeArea
       padding: EdgeInsets.fromLTRB(
-        isMobile ? 12 : 24, 
-        topPadding,  // 使用计算后的顶部间距
-        isMobile ? 12 : 24, 
-        isMobile ? 2 : 12
-      ),
+          isMobile ? 12 : 24,
+          topPadding, // 使用计算后的顶部间距
+          isMobile ? 12 : 24,
+          isMobile ? 2 : 12),
       child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ShaderMask(
-                    shaderCallback: (bounds) => AppTheme.getGradient(context).createShader(bounds),
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ShaderMask(
+                  shaderCallback: (bounds) =>
+                      AppTheme.getGradient(context).createShader(bounds),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.baseline,
                     textBaseline: TextBaseline.alphabetic,
                     children: [
-                      Text('Lotus IPTV', style: TextStyle(fontSize: isLandscape ? 16 : (isMobile ? 18 : 28), fontWeight: FontWeight.bold, color: Colors.white)),  // 横屏16，竖屏18
+                      Text('Lotus IPTV',
+                          style: TextStyle(
+                              fontSize: isLandscape ? 16 : (isMobile ? 18 : 28),
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white)), // 横屏16，竖屏18
                       const SizedBox(width: 8),
-                      Text('v$_appVersion', style: TextStyle(fontSize: isLandscape ? 10 : 11, fontWeight: FontWeight.normal, color: Colors.white70)),  // 横屏10，竖屏11
+                      Text('v$_appVersion',
+                          style: TextStyle(
+                              fontSize: isLandscape ? 10 : 11,
+                              fontWeight: FontWeight.normal,
+                              color: Colors.white70)), // 横屏10，竖屏11
                       if (_availableUpdate != null) ...[
                         const SizedBox(width: 8),
                         TVFocusable(
-                          onSelect: () => Navigator.pushNamed(context, AppRouter.settings, arguments: {'autoCheckUpdate': true}),
+                          onSelect: () => Navigator.pushNamed(
+                              context, AppRouter.settings,
+                              arguments: {'autoCheckUpdate': true}),
                           focusScale: 1.0,
                           showFocusBorder: false,
                           builder: (context, isFocused, child) {
                             return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                gradient: isFocused ? AppTheme.getGradient(context) : LinearGradient(
-                                  colors: [Colors.orange.shade600, Colors.deepOrange.shade600],
-                                ),
-                                borderRadius: BorderRadius.circular(AppTheme.radiusPill),
-                                border: isFocused ? Border.all(color: AppTheme.getPrimaryColor(context), width: 2) : null,
+                                gradient: isFocused
+                                    ? AppTheme.getGradient(context)
+                                    : LinearGradient(
+                                        colors: [
+                                          Colors.orange.shade600,
+                                          Colors.deepOrange.shade600
+                                        ],
+                                      ),
+                                borderRadius:
+                                    BorderRadius.circular(AppTheme.radiusPill),
+                                border: isFocused
+                                    ? Border.all(
+                                        color:
+                                            AppTheme.getPrimaryColor(context),
+                                        width: 2)
+                                    : null,
                               ),
                               child: child,
                             );
@@ -665,9 +764,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.system_update_rounded, size: 10, color: Colors.white),
+                              const Icon(Icons.system_update_rounded,
+                                  size: 10, color: Colors.white),
                               const SizedBox(width: 3),
-                              Text('v${_availableUpdate!.version}', style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600)),
+                              Text('v${_availableUpdate!.version}',
+                                  style: const TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600)),
                             ],
                           ),
                         ),
@@ -680,7 +784,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   SizedBox(height: isMobile ? 2 : 4),
                   Text(
                     '${provider.totalChannelCount} ${AppStrings.of(context)?.channels ?? "频道"} · ${provider.groups.length} ${AppStrings.of(context)?.categories ?? "分类"} · ${context.watch<FavoritesProvider>().count} ${AppStrings.of(context)?.favorites ?? "收藏"}$playlistInfo',
-                    style: TextStyle(color: AppTheme.getTextMuted(context), fontSize: 13),
+                    style: TextStyle(
+                        color: AppTheme.getTextMuted(context), fontSize: 13),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -691,17 +796,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           Row(
             children: [
               _buildHeaderButton(
-                Icons.play_arrow_rounded, 
-                continueLabel, 
-                true, 
-                (lastChannel != null || isMultiScreenMode) 
-                    ? () => _continuePlayback(provider, lastChannel, isMultiScreenMode, settingsProvider) 
-                    : null
-              ),
+                  Icons.play_arrow_rounded,
+                  continueLabel,
+                  true,
+                  (lastChannel != null || isMultiScreenMode)
+                      ? () => _continuePlayback(provider, lastChannel,
+                          isMultiScreenMode, settingsProvider)
+                      : null),
               SizedBox(width: isMobile ? 6 : 10),
-              _buildHeaderButton(Icons.playlist_add_rounded, AppStrings.of(context)?.playlists ?? 'Playlists', false, () => _showAddPlaylistDialog()),
+              _buildHeaderButton(
+                  Icons.playlist_add_rounded,
+                  AppStrings.of(context)?.playlists ?? 'Playlists',
+                  false,
+                  () => _showAddPlaylistDialog()),
               SizedBox(width: isMobile ? 6 : 10),
-              _buildHeaderButton(Icons.refresh_rounded, AppStrings.of(context)?.refresh ?? 'Refresh', false, activePlaylist != null ? () => _refreshCurrentPlaylist(playlistProvider, provider) : null),
+              _buildHeaderButton(
+                  Icons.refresh_rounded,
+                  AppStrings.of(context)?.refresh ?? 'Refresh',
+                  false,
+                  activePlaylist != null
+                      ? () =>
+                          _refreshCurrentPlaylist(playlistProvider, provider)
+                      : null),
               SizedBox(width: isMobile ? 6 : 10),
               _buildThemeToggleButton(),
             ],
@@ -712,9 +828,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   /// 继续播放 - 支持单频道和分屏模式
-  void _continuePlayback(ChannelProvider provider, Channel? lastChannel, bool isMultiScreenMode, SettingsProvider settingsProvider) {
-    ServiceLocator.log.i('继续播放 - 模式: ${isMultiScreenMode ? "分屏" : "单频道"}', tag: 'HomeScreen');
-    
+  void _continuePlayback(ChannelProvider provider, Channel? lastChannel,
+      bool isMultiScreenMode, SettingsProvider settingsProvider) {
+    ServiceLocator.log
+        .i('继续播放 - 模式: ${isMultiScreenMode ? "分屏" : "单频道"}', tag: 'HomeScreen');
+
     if (isMultiScreenMode) {
       // 恢复分屏模式
       _resumeMultiScreen(provider, settingsProvider);
@@ -747,10 +865,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   /// 刷新当前播放列表
-  Future<void> _refreshCurrentPlaylist(PlaylistProvider playlistProvider, ChannelProvider channelProvider) async {
+  Future<void> _refreshCurrentPlaylist(PlaylistProvider playlistProvider,
+      ChannelProvider channelProvider) async {
     ServiceLocator.log.i('开始刷新当前播放列表', tag: 'HomeScreen');
     final startTime = DateTime.now();
-    
+
     final activePlaylist = playlistProvider.activePlaylist;
     if (activePlaylist == null) {
       ServiceLocator.log.w('没有活动播放列表，无法刷新', tag: 'HomeScreen');
@@ -759,7 +878,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     // 清理台标加载队列和缓存，准备重新加载
     clearAllLogoCache(); // 完全清理，包括已加载的缓存
-    
+
     // 显示加载提示
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -769,8 +888,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
     );
 
-    ServiceLocator.log.d('刷新播放列表: ${activePlaylist.name} (ID: ${activePlaylist.id})', tag: 'HomeScreen');
-    
+    ServiceLocator.log.d(
+        '刷新播放列表: ${activePlaylist.name} (ID: ${activePlaylist.id})',
+        tag: 'HomeScreen');
+
     // 执行刷新
     final success = await playlistProvider.refreshPlaylist(activePlaylist);
 
@@ -782,30 +903,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         await channelProvider.loadChannels(activePlaylist.id!);
         // 刷新推荐列表
         _refreshRecommendedChannels();
-        
+
         // 重新加载 EPG（使用播放列表的 EPG URL，如果失败则使用设置中的兜底 URL）
         final epgProvider = context.read<EpgProvider>();
         final settingsProvider = context.read<SettingsProvider>();
-        
+
         // 重新加载播放列表以获取最新的 EPG URL
         await playlistProvider.loadPlaylists();
         final updatedPlaylist = playlistProvider.activePlaylist;
-        
+
         if (updatedPlaylist?.epgUrl != null) {
-          ServiceLocator.log.d('HomeScreen: 使用播放列表的 EPG URL 重新加载: ${updatedPlaylist!.epgUrl}');
+          ServiceLocator.log.d(
+              'HomeScreen: 使用播放列表的 EPG URL 重新加载: ${updatedPlaylist!.epgUrl}');
           await epgProvider.loadEpg(
             updatedPlaylist.epgUrl!,
             fallbackUrl: settingsProvider.epgUrl,
           );
         } else if (settingsProvider.epgUrl != null) {
-          ServiceLocator.log.d('HomeScreen: 使用设置中的兜底 EPG URL 重新加载: ${settingsProvider.epgUrl}');
+          ServiceLocator.log.d(
+              'HomeScreen: 使用设置中的兜底 EPG URL 重新加载: ${settingsProvider.epgUrl}');
           await epgProvider.loadEpg(settingsProvider.epgUrl!);
         }
       }
-      
+
       final refreshTime = DateTime.now().difference(startTime).inMilliseconds;
       ServiceLocator.log.i('播放列表刷新成功，耗时: ${refreshTime}ms', tag: 'HomeScreen');
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('刷新成功'),
@@ -817,8 +940,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ServiceLocator.log.e('播放列表刷新失败', tag: 'HomeScreen');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('刷新失败'),
-          duration: const Duration(seconds: 2),
+          content: Text(
+              '刷新失败: ${playlistProvider.error?.replaceAll("Exception:", "").trim() ?? ""}'),
+          duration: const Duration(seconds: 5),
           backgroundColor: Colors.red,
         ),
       );
@@ -826,25 +950,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   /// 恢复分屏播放
-  Future<void> _resumeMultiScreen(ChannelProvider provider, SettingsProvider settingsProvider) async {
+  Future<void> _resumeMultiScreen(
+      ChannelProvider provider, SettingsProvider settingsProvider) async {
     ServiceLocator.log.i('开始恢复分屏播放', tag: 'HomeScreen');
-    
+
     final channels = provider.channels;
     final multiScreenChannelIds = settingsProvider.lastMultiScreenChannels;
     final activeIndex = settingsProvider.activeScreenIndex;
-    
+
     ServiceLocator.log.d('分屏频道ID: $multiScreenChannelIds', tag: 'HomeScreen');
     ServiceLocator.log.d('活动屏幕索引: $activeIndex', tag: 'HomeScreen');
-    
+
     // 设置 providers 用于状态保存
     final favoritesProvider = context.read<FavoritesProvider>();
-    NativePlayerChannel.setProviders(favoritesProvider, provider, settingsProvider);
-    
+    NativePlayerChannel.setProviders(
+        favoritesProvider, provider, settingsProvider);
+
     // 将频道ID转换为频道索引
     final List<int?> restoreScreenChannels = [];
     int initialChannelIndex = 0;
     bool foundFirst = false;
-    
+
     for (int i = 0; i < multiScreenChannelIds.length; i++) {
       final channelId = multiScreenChannelIds[i];
       if (channelId != null) {
@@ -862,9 +988,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         restoreScreenChannels.add(null);
       }
     }
-    
+
     ServiceLocator.log.d('恢复屏幕频道: $restoreScreenChannels', tag: 'HomeScreen');
-    
+
     // 检查是否是 Android TV，使用原生分屏
     if (PlatformDetector.isAndroid) {
       ServiceLocator.log.d('使用 Android TV 原生分屏', tag: 'HomeScreen');
@@ -873,7 +999,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final groups = channels.map((c) => c.groupName ?? '').toList();
       final sources = channels.map((c) => c.sources).toList();
       final logos = channels.map((c) => c.logoUrl ?? '').toList();
-      
+
       await NativePlayerChannel.launchMultiScreen(
         urls: urls,
         names: names,
@@ -895,16 +1021,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // Windows/其他平台使用 Flutter 分屏
       ServiceLocator.log.d('使用 Flutter 分屏', tag: 'HomeScreen');
       if (!mounted) return;
-      
+
       // 预先设置 MultiScreenProvider 的频道状态
       final multiScreenProvider = context.read<MultiScreenProvider>();
-      
+
       // 设置音量增强（必须在播放之前设置）
       multiScreenProvider.setVolumeSettings(1.0, settingsProvider.volumeBoost);
-      
+
       // 设置活动屏幕（必须在播放之前设置）
       multiScreenProvider.setActiveScreen(activeIndex);
-      
+
       // 恢复每个屏幕的频道（等待所有播放完成）
       final futures = <Future>[];
       for (int i = 0; i < multiScreenChannelIds.length && i < 4; i++) {
@@ -918,20 +1044,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           futures.add(multiScreenProvider.playChannelOnScreen(i, channel));
         }
       }
-      
+
       // 等待所有频道开始播放
       await Future.wait(futures);
-      
+
       ServiceLocator.log.d('所有分屏频道加载完成', tag: 'HomeScreen');
-      
+
       // 等待一小段时间确保所有播放器都已经开始播放
       await Future.delayed(const Duration(milliseconds: 500));
-      
+
       // 所有频道加载完成后，重新应用音量设置确保只有活动屏幕有声音
       await multiScreenProvider.reapplyVolumeToAllScreens();
-      
+
       ServiceLocator.log.i('Flutter 分屏播放恢复成功', tag: 'HomeScreen');
-      
+
       // 找到初始频道（用于路由参数）
       Channel? initialChannel;
       if (initialChannelIndex >= 0 && initialChannelIndex < channels.length) {
@@ -939,7 +1065,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       } else if (channels.isNotEmpty) {
         initialChannel = channels.first;
       }
-      
+
       if (initialChannel != null && mounted) {
         Navigator.pushNamed(
           context,
@@ -954,7 +1080,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  Widget _buildHeaderButton(IconData icon, String label, bool isPrimary, VoidCallback? onTap) {
+  Widget _buildHeaderButton(
+      IconData icon, String label, bool isPrimary, VoidCallback? onTap) {
     final isMobile = PlatformDetector.isMobile;
     return TVFocusable(
       onSelect: onTap,
@@ -962,12 +1089,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       showFocusBorder: false,
       builder: (context, isFocused, child) {
         return Container(
-          padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 14, vertical: isMobile ? 6 : 8),
+          padding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 8 : 14, vertical: isMobile ? 6 : 8),
           decoration: BoxDecoration(
-            gradient: isPrimary || isFocused ? AppTheme.getGradient(context) : null,
-            color: isPrimary || isFocused ? null : AppTheme.getGlassColor(context),
+            gradient:
+                isPrimary || isFocused ? AppTheme.getGradient(context) : null,
+            color:
+                isPrimary || isFocused ? null : AppTheme.getGlassColor(context),
             borderRadius: BorderRadius.circular(AppTheme.radiusPill),
-            border: Border.all(color: isFocused ? AppTheme.getPrimaryColor(context) : AppTheme.getGlassBorderColor(context), width: isFocused ? 2 : 1),
+            border: Border.all(
+                color: isFocused
+                    ? AppTheme.getPrimaryColor(context)
+                    : AppTheme.getGlassBorderColor(context),
+                width: isFocused ? 2 : 1),
           ),
           child: child,
         );
@@ -975,7 +1109,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Builder(
         builder: (context) {
           final isDark = Theme.of(context).brightness == Brightness.dark;
-          final textColor = isPrimary ? Colors.white : (isDark ? Colors.white : AppTheme.textPrimaryLight);
+          final textColor = isPrimary
+              ? Colors.white
+              : (isDark ? Colors.white : AppTheme.textPrimaryLight);
           // 手机端只显示图标，节省空间
           if (isMobile) {
             return Icon(icon, color: textColor, size: 16);
@@ -985,7 +1121,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             children: [
               Icon(icon, color: textColor, size: 16),
               const SizedBox(width: 6),
-              Text(label, style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w500)),
+              Text(label,
+                  style: TextStyle(
+                      color: textColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500)),
             ],
           );
         },
@@ -997,7 +1137,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final settingsProvider = context.watch<SettingsProvider>();
     final isDarkMode = settingsProvider.themeMode == 'dark';
     final isMobile = PlatformDetector.isMobile;
-    
+
     return TVFocusable(
       onSelect: () {
         // 切换黑暗/明亮模式
@@ -1007,14 +1147,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       showFocusBorder: false,
       builder: (context, isFocused, child) {
         return Container(
-          padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 14, vertical: isMobile ? 6 : 8),
+          padding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 8 : 14, vertical: isMobile ? 6 : 8),
           decoration: BoxDecoration(
-            color: isFocused ? AppTheme.getGlassColor(context) : AppTheme.getGlassColor(context).withOpacity(0.5),
+            color: isFocused
+                ? AppTheme.getGlassColor(context)
+                : AppTheme.getGlassColor(context).withOpacity(0.5),
             borderRadius: BorderRadius.circular(AppTheme.radiusPill),
             border: Border.all(
-              color: isFocused ? AppTheme.getPrimaryColor(context) : AppTheme.getGlassBorderColor(context), 
-              width: isFocused ? 2 : 1
-            ),
+                color: isFocused
+                    ? AppTheme.getPrimaryColor(context)
+                    : AppTheme.getGlassBorderColor(context),
+                width: isFocused ? 2 : 1),
           ),
           child: child,
         );
@@ -1022,30 +1166,35 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Builder(
         builder: (context) {
           final themeIsDark = Theme.of(context).brightness == Brightness.dark;
-          final textColor = themeIsDark ? Colors.white : AppTheme.textPrimaryLight;
-          
+          final textColor =
+              themeIsDark ? Colors.white : AppTheme.textPrimaryLight;
+
           // 手机端只显示图标
           if (isMobile) {
             return Icon(
-              isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded, 
-              color: textColor, 
-              size: 16
-            );
+                isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                color: textColor,
+                size: 16);
           }
-          
+
           return Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded, 
-                color: textColor, 
-                size: 16
-              ),
+                  isDarkMode
+                      ? Icons.light_mode_rounded
+                      : Icons.dark_mode_rounded,
+                  color: textColor,
+                  size: 16),
               const SizedBox(width: 6),
               Text(
-                isDarkMode ? (AppStrings.of(context)?.themeLight ?? '明亮') : (AppStrings.of(context)?.themeDark ?? '深色'), 
-                style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w500)
-              ),
+                  isDarkMode
+                      ? (AppStrings.of(context)?.themeLight ?? '明亮')
+                      : (AppStrings.of(context)?.themeDark ?? '深色'),
+                  style: TextStyle(
+                      color: textColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500)),
             ],
           );
         },
@@ -1056,11 +1205,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _buildCategoryChips(ChannelProvider provider) {
     return _ResponsiveCategoryChips(
       groups: provider.groups,
-      onGroupTap: (groupName) => Navigator.pushNamed(context, AppRouter.channels, arguments: {'groupName': groupName}),
+      onGroupTap: (groupName) => Navigator.pushNamed(
+          context, AppRouter.channels,
+          arguments: {'groupName': groupName}),
     );
   }
 
-  Widget _buildChannelRow(String title, List<Channel> channels, {bool showMore = false, bool showRefresh = false, VoidCallback? onMoreTap, VoidCallback? onRefresh}) {
+  Widget _buildChannelRow(String title, List<Channel> channels,
+      {bool showMore = false,
+      bool showRefresh = false,
+      VoidCallback? onMoreTap,
+      VoidCallback? onRefresh}) {
     if (channels.isEmpty && !showRefresh) return const SizedBox.shrink();
     final isMobile = PlatformDetector.isMobile;
 
@@ -1069,7 +1224,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       children: [
         Row(
           children: [
-            Text(title, style: TextStyle(color: AppTheme.getTextPrimary(context), fontSize: isMobile ? 14 : 16, fontWeight: FontWeight.w600)),
+            Text(title,
+                style: TextStyle(
+                    color: AppTheme.getTextPrimary(context),
+                    fontSize: isMobile ? 14 : 16,
+                    fontWeight: FontWeight.w600)),
             if (showRefresh) ...[
               const SizedBox(width: 10),
               TVFocusable(
@@ -1080,13 +1239,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   return Container(
                     padding: const EdgeInsets.all(5),
                     decoration: BoxDecoration(
-                      color: isFocused ? AppTheme.getPrimaryColor(context) : AppTheme.getGlassColor(context),
+                      color: isFocused
+                          ? AppTheme.getPrimaryColor(context)
+                          : AppTheme.getGlassColor(context),
                       shape: BoxShape.circle,
                     ),
                     child: child,
                   );
                 },
-                child: Icon(Icons.refresh_rounded, color: AppTheme.getTextPrimary(context), size: isMobile ? 12 : 14),
+                child: Icon(Icons.refresh_rounded,
+                    color: AppTheme.getTextPrimary(context),
+                    size: isMobile ? 12 : 14),
               ),
             ],
             const Spacer(),
@@ -1097,9 +1260,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 showFocusBorder: false,
                 builder: (context, isFocused, child) {
                   return Container(
-                    padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 10, vertical: isMobile ? 4 : 5),
+                    padding: EdgeInsets.symmetric(
+                        horizontal: isMobile ? 8 : 10,
+                        vertical: isMobile ? 4 : 5),
                     decoration: BoxDecoration(
-                      gradient: isFocused ? AppTheme.getGradient(context) : null,
+                      gradient:
+                          isFocused ? AppTheme.getGradient(context) : null,
                       borderRadius: BorderRadius.circular(AppTheme.radiusPill),
                     ),
                     child: child,
@@ -1108,9 +1274,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(AppStrings.of(context)?.more ?? 'More', style: TextStyle(color: AppTheme.getTextMuted(context), fontSize: isMobile ? 10 : 12)),
+                    Text(AppStrings.of(context)?.more ?? 'More',
+                        style: TextStyle(
+                            color: AppTheme.getTextMuted(context),
+                            fontSize: isMobile ? 10 : 12)),
                     const SizedBox(width: 2),
-                    Icon(Icons.chevron_right_rounded, color: AppTheme.getTextMuted(context), size: isMobile ? 14 : 16),
+                    Icon(Icons.chevron_right_rounded,
+                        color: AppTheme.getTextMuted(context),
+                        size: isMobile ? 14 : 16),
                   ],
                 ),
               ),
@@ -1126,7 +1297,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
             final availableWidth = constraints.maxWidth;
             // 首页使用专门的计算方法，显示更多更小的卡片
-            final cardsPerRow = CardSizeCalculator.calculateHomeCardsPerRow(availableWidth);
+            final cardsPerRow =
+                CardSizeCalculator.calculateHomeCardsPerRow(availableWidth);
             final cardSpacing = CardSizeCalculator.spacing;
             final totalSpacing = (cardsPerRow - 1) * cardSpacing;
             final cardWidth = (availableWidth - totalSpacing) / cardsPerRow;
@@ -1142,7 +1314,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   final channel = channels[index];
 
                   return Padding(
-                    padding: EdgeInsets.only(right: index < displayCount - 1 ? cardSpacing : 0),
+                    padding: EdgeInsets.only(
+                        right: index < displayCount - 1 ? cardSpacing : 0),
                     child: SizedBox(
                       width: cardWidth,
                       child: _OptimizedChannelCard(
@@ -1161,17 +1334,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _playChannel(Channel channel) {
-    ServiceLocator.log.i('播放频道: ${channel.name} (ID: ${channel.id})', tag: 'HomeScreen');
-      // final startTime = DateTime.now();
-    
+    ServiceLocator.log
+        .i('播放频道: ${channel.name} (ID: ${channel.id})', tag: 'HomeScreen');
+    // final startTime = DateTime.now();
+
     // 保存上次播放的频道ID
     final settingsProvider = context.read<SettingsProvider>();
     final channelProvider = context.read<ChannelProvider>();
     final favoritesProvider = context.read<FavoritesProvider>();
-    
+
     // 设置 providers 用于状态保存和收藏功能
-    NativePlayerChannel.setProviders(favoritesProvider, channelProvider, settingsProvider);
-    
+    NativePlayerChannel.setProviders(
+        favoritesProvider, channelProvider, settingsProvider);
+
     if (settingsProvider.rememberLastChannel && channel.id != null) {
       // 保存单频道播放状态
       settingsProvider.saveLastSingleChannel(channel.id);
@@ -1182,17 +1357,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // TV 端使用原生分屏播放器
       if (PlatformDetector.isTV && PlatformDetector.isAndroid) {
         final channels = channelProvider.channels;
-        
+
         // 找到当前点击频道的索引
         final clickedIndex = channels.indexWhere((c) => c.url == channel.url);
-        
+
         // 准备频道数据
         final urls = channels.map((c) => c.url).toList();
         final names = channels.map((c) => c.name).toList();
         final groups = channels.map((c) => c.groupName ?? '').toList();
         final sources = channels.map((c) => c.sources).toList();
         final logos = channels.map((c) => c.logoUrl ?? '').toList();
-        
+
         // 启动原生分屏播放器
         NativePlayerChannel.launchMultiScreen(
           urls: urls,
@@ -1213,9 +1388,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         final multiScreenProvider = context.read<MultiScreenProvider>();
         final defaultPosition = settingsProvider.defaultScreenPosition;
         // 设置音量增强到分屏Provider
-        multiScreenProvider.setVolumeSettings(1.0, settingsProvider.volumeBoost);
-        multiScreenProvider.playChannelAtDefaultPosition(channel, defaultPosition);
-        
+        multiScreenProvider.setVolumeSettings(
+            1.0, settingsProvider.volumeBoost);
+        multiScreenProvider.playChannelAtDefaultPosition(
+            channel, defaultPosition);
+
         // 分屏模式下导航到播放器页面，但不传递频道参数（由MultiScreenProvider处理播放）
         Navigator.pushNamed(context, AppRouter.player, arguments: {
           'channelUrl': '', // 空URL表示分屏模式
@@ -1245,7 +1422,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<Channel> _getFavoriteChannels(ChannelProvider provider) {
     final favProvider = context.read<FavoritesProvider>();
     // 最多取20个作为候选，实际显示数量由宽度决定
-    return provider.channels.where((c) => favProvider.isFavorite(c.id ?? 0)).take(20).toList();
+    return provider.channels
+        .where((c) => favProvider.isFavorite(c.id ?? 0))
+        .take(20)
+        .toList();
   }
 
   Widget _buildEmptyState() {
@@ -1257,15 +1437,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             width: 100,
             height: 100,
             decoration: BoxDecoration(
-              gradient: AppTheme.getGradient(context), 
-              borderRadius: BorderRadius.circular(24)
-            ),
-            child: const Icon(Icons.playlist_add_rounded, size: 48, color: Colors.white),
+                gradient: AppTheme.getGradient(context),
+                borderRadius: BorderRadius.circular(24)),
+            child: const Icon(Icons.playlist_add_rounded,
+                size: 48, color: Colors.white),
           ),
           const SizedBox(height: 20),
-          Text(AppStrings.of(context)?.noPlaylistYet ?? 'No Playlists Yet', style: TextStyle(color: AppTheme.getTextPrimary(context), fontSize: 20, fontWeight: FontWeight.bold)),
+          Text(AppStrings.of(context)?.noPlaylistYet ?? 'No Playlists Yet',
+              style: TextStyle(
+                  color: AppTheme.getTextPrimary(context),
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          Text(AppStrings.of(context)?.addM3uToStart ?? 'Add M3U playlist to start watching', style: TextStyle(color: AppTheme.getTextSecondary(context), fontSize: 13)),
+          Text(
+              AppStrings.of(context)?.addM3uToStart ??
+                  'Add M3U playlist to start watching',
+              style: TextStyle(
+                  color: AppTheme.getTextSecondary(context), fontSize: 13)),
           const SizedBox(height: 24),
           TVFocusable(
             autofocus: false,
@@ -1274,11 +1462,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             showFocusBorder: false,
             builder: (context, isFocused, child) {
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 decoration: BoxDecoration(
                   gradient: AppTheme.getGradient(context),
                   borderRadius: BorderRadius.circular(AppTheme.radiusPill),
-                  border: isFocused ? Border.all(color: AppTheme.getPrimaryColor(context), width: 2) : null,
+                  border: isFocused
+                      ? Border.all(
+                          color: AppTheme.getPrimaryColor(context), width: 2)
+                      : null,
                 ),
                 child: child,
               );
@@ -1290,7 +1482,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 const SizedBox(width: 8),
                 Text(
                   AppStrings.of(context)?.addPlaylist ?? 'Add Playlist',
-                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500),
                 ),
               ],
             ),
@@ -1318,7 +1513,8 @@ class _ResponsiveCategoryChips extends StatefulWidget {
   });
 
   @override
-  State<_ResponsiveCategoryChips> createState() => _ResponsiveCategoryChipsState();
+  State<_ResponsiveCategoryChips> createState() =>
+      _ResponsiveCategoryChipsState();
 }
 
 class _ResponsiveCategoryChipsState extends State<_ResponsiveCategoryChips> {
@@ -1327,7 +1523,7 @@ class _ResponsiveCategoryChipsState extends State<_ResponsiveCategoryChips> {
   @override
   Widget build(BuildContext context) {
     final isMobile = PlatformDetector.isMobile;
-    
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final horizontalPadding = isMobile ? 12.0 : 24.0;
@@ -1344,7 +1540,8 @@ class _ResponsiveCategoryChipsState extends State<_ResponsiveCategoryChips> {
         }
 
         // 否则显示部分 + 展开按钮
-        return _buildCollapsedView(maxVisibleCount, isMobile, horizontalPadding);
+        return _buildCollapsedView(
+            maxVisibleCount, isMobile, horizontalPadding);
       },
     );
   }
@@ -1367,7 +1564,8 @@ class _ResponsiveCategoryChipsState extends State<_ResponsiveCategoryChips> {
     );
   }
 
-  Widget _buildCollapsedView(int maxVisible, bool isMobile, double horizontalPadding) {
+  Widget _buildCollapsedView(
+      int maxVisible, bool isMobile, double horizontalPadding) {
     // 至少显示 4 个，留一个位置给展开按钮
     final visibleCount = (maxVisible - 1).clamp(3, widget.groups.length);
 
@@ -1380,7 +1578,9 @@ class _ResponsiveCategoryChipsState extends State<_ResponsiveCategoryChips> {
           runSpacing: isMobile ? 6 : 8,
           alignment: WrapAlignment.start,
           children: [
-            ...widget.groups.take(visibleCount).map((group) => _buildChip(group.name, isMobile)),
+            ...widget.groups
+                .take(visibleCount)
+                .map((group) => _buildChip(group.name, isMobile)),
             _buildExpandButton(widget.groups.length - visibleCount, isMobile),
           ],
         ),
@@ -1395,11 +1595,18 @@ class _ResponsiveCategoryChipsState extends State<_ResponsiveCategoryChips> {
       showFocusBorder: false,
       builder: (context, isFocused, child) {
         return Container(
-          padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 12, vertical: isMobile ? 3 : 8),  // 手机端从5减少到3
+          padding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 8 : 12,
+              vertical: isMobile ? 3 : 8), // 手机端从5减少到3
           decoration: BoxDecoration(
-            gradient: isFocused ? AppTheme.getGradient(context) : AppTheme.getSoftGradient(context),
+            gradient: isFocused
+                ? AppTheme.getGradient(context)
+                : AppTheme.getSoftGradient(context),
             borderRadius: BorderRadius.circular(AppTheme.radiusPill),
-            border: Border.all(color: isFocused ? AppTheme.getPrimaryColor(context) : AppTheme.getGlassBorderColor(context)),
+            border: Border.all(
+                color: isFocused
+                    ? AppTheme.getPrimaryColor(context)
+                    : AppTheme.getGlassBorderColor(context)),
           ),
           child: child,
         );
@@ -1407,9 +1614,14 @@ class _ResponsiveCategoryChipsState extends State<_ResponsiveCategoryChips> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(CategoryCard.getIconForCategory(name), size: isMobile ? 12 : 14, color: AppTheme.getTextSecondary(context)),
+          Icon(CategoryCard.getIconForCategory(name),
+              size: isMobile ? 12 : 14,
+              color: AppTheme.getTextSecondary(context)),
           SizedBox(width: isMobile ? 4 : 6),
-          Text(name, style: TextStyle(color: AppTheme.getTextSecondary(context), fontSize: isMobile ? 10 : 12)),
+          Text(name,
+              style: TextStyle(
+                  color: AppTheme.getTextSecondary(context),
+                  fontSize: isMobile ? 10 : 12)),
         ],
       ),
     );
@@ -1422,11 +1634,18 @@ class _ResponsiveCategoryChipsState extends State<_ResponsiveCategoryChips> {
       showFocusBorder: false,
       builder: (context, isFocused, child) {
         return Container(
-          padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 12, vertical: isMobile ? 3 : 8),  // 手机端从5减少到3
+          padding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 8 : 12,
+              vertical: isMobile ? 3 : 8), // 手机端从5减少到3
           decoration: BoxDecoration(
-            gradient: isFocused ? AppTheme.getGradient(context) : AppTheme.getSoftGradient(context),
+            gradient: isFocused
+                ? AppTheme.getGradient(context)
+                : AppTheme.getSoftGradient(context),
             borderRadius: BorderRadius.circular(AppTheme.radiusPill),
-            border: Border.all(color: isFocused ? AppTheme.getPrimaryColor(context) : AppTheme.getGlassBorderColor(context)),
+            border: Border.all(
+                color: isFocused
+                    ? AppTheme.getPrimaryColor(context)
+                    : AppTheme.getGlassBorderColor(context)),
           ),
           child: child,
         );
@@ -1434,9 +1653,14 @@ class _ResponsiveCategoryChipsState extends State<_ResponsiveCategoryChips> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.more_horiz_rounded, size: isMobile ? 12 : 14, color: AppTheme.getTextSecondary(context)),
+          Icon(Icons.more_horiz_rounded,
+              size: isMobile ? 12 : 14,
+              color: AppTheme.getTextSecondary(context)),
           SizedBox(width: isMobile ? 3 : 4),
-          Text('+$hiddenCount', style: TextStyle(color: AppTheme.getTextSecondary(context), fontSize: isMobile ? 10 : 12)),
+          Text('+$hiddenCount',
+              style: TextStyle(
+                  color: AppTheme.getTextSecondary(context),
+                  fontSize: isMobile ? 10 : 12)),
         ],
       ),
     );
@@ -1449,11 +1673,18 @@ class _ResponsiveCategoryChipsState extends State<_ResponsiveCategoryChips> {
       showFocusBorder: false,
       builder: (context, isFocused, child) {
         return Container(
-          padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 12, vertical: isMobile ? 3 : 8),  // 手机端从5减少到3
+          padding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 8 : 12,
+              vertical: isMobile ? 3 : 8), // 手机端从5减少到3
           decoration: BoxDecoration(
-            gradient: isFocused ? AppTheme.getGradient(context) : AppTheme.getSoftGradient(context),
+            gradient: isFocused
+                ? AppTheme.getGradient(context)
+                : AppTheme.getSoftGradient(context),
             borderRadius: BorderRadius.circular(AppTheme.radiusPill),
-            border: Border.all(color: isFocused ? AppTheme.getPrimaryColor(context) : AppTheme.getGlassBorderColor(context)),
+            border: Border.all(
+                color: isFocused
+                    ? AppTheme.getPrimaryColor(context)
+                    : AppTheme.getGlassBorderColor(context)),
           ),
           child: child,
         );
@@ -1461,9 +1692,14 @@ class _ResponsiveCategoryChipsState extends State<_ResponsiveCategoryChips> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.unfold_less_rounded, size: isMobile ? 12 : 14, color: AppTheme.getTextSecondary(context)),
+          Icon(Icons.unfold_less_rounded,
+              size: isMobile ? 12 : 14,
+              color: AppTheme.getTextSecondary(context)),
           SizedBox(width: isMobile ? 3 : 4),
-          Text(AppStrings.of(context)?.collapse ?? 'Collapse', style: TextStyle(color: AppTheme.getTextSecondary(context), fontSize: isMobile ? 10 : 12)),
+          Text(AppStrings.of(context)?.collapse ?? 'Collapse',
+              style: TextStyle(
+                  color: AppTheme.getTextSecondary(context),
+                  fontSize: isMobile ? 10 : 12)),
         ],
       ),
     );
@@ -1485,8 +1721,10 @@ class _OptimizedChannelCard extends StatelessWidget {
     // 使用 Selector 监听收藏状态和 EPG 数据变化
     return Selector2<FavoritesProvider, EpgProvider, _ChannelCardData>(
       selector: (_, favProvider, epgProvider) {
-        final currentProgram = epgProvider.getCurrentProgram(channel.epgId, channel.name);
-        final nextProgram = epgProvider.getNextProgram(channel.epgId, channel.name);
+        final currentProgram =
+            epgProvider.getCurrentProgram(channel.epgId, channel.name);
+        final nextProgram =
+            epgProvider.getNextProgram(channel.epgId, channel.name);
         return _ChannelCardData(
           isFavorite: favProvider.isFavorite(channel.id ?? 0),
           currentProgram: currentProgram?.title,
@@ -1502,7 +1740,8 @@ class _OptimizedChannelCard extends StatelessWidget {
           currentProgram: data.currentProgram,
           nextProgram: data.nextProgram,
           isFavorite: data.isFavorite,
-          onFavoriteToggle: () => context.read<FavoritesProvider>().toggleFavorite(channel),
+          onFavoriteToggle: () =>
+              context.read<FavoritesProvider>().toggleFavorite(channel),
           onTap: onTap,
         );
       },
@@ -1540,7 +1779,8 @@ class _EmbeddedChannelsScreen extends StatefulWidget {
   const _EmbeddedChannelsScreen();
 
   @override
-  State<_EmbeddedChannelsScreen> createState() => _EmbeddedChannelsScreenState();
+  State<_EmbeddedChannelsScreen> createState() =>
+      _EmbeddedChannelsScreenState();
 }
 
 class _EmbeddedChannelsScreenState extends State<_EmbeddedChannelsScreen> {

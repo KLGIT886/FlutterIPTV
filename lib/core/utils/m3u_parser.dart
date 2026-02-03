@@ -33,8 +33,9 @@ class M3UParser {
 
       // Use Dio for better handling of large files and redirects
       final dio = Dio();
-      dio.options.connectTimeout = const Duration(seconds: 30);
-      dio.options.receiveTimeout = const Duration(seconds: 30);
+      // Reduce timeout to 10 seconds as requested
+      dio.options.connectTimeout = const Duration(seconds: 3);
+      dio.options.receiveTimeout = const Duration(seconds: 3);
 
       final response = await dio.get(
         url,
@@ -45,39 +46,45 @@ class M3UParser {
       );
 
       ServiceLocator.log.d('DEBUG: 成功获取播放列表内容，状态码: ${response.statusCode}');
-      ServiceLocator.log.d('DEBUG: 内容大小: ${response.data.toString().length} 字符');
+      ServiceLocator.log
+          .d('DEBUG: 内容大小: ${response.data.toString().length} 字符');
 
       // 使用 compute 在独立 isolate 中解析，避免阻塞主线程
-      final result = await compute(_parseInIsolate, _ParseParams(response.data.toString(), playlistId));
-      
+      final result = await compute(
+          _parseInIsolate, _ParseParams(response.data.toString(), playlistId));
+
       // 保存解析结果（包括 EPG URL）到主线程的静态变量
       _lastParseResult = result;
-      
-      ServiceLocator.log.d('DEBUG: URL解析完成，共解析出 ${result.channels.length} 个频道，EPG URL: ${result.epgUrl ?? "(未配置)"}');
+
+      ServiceLocator.log.d(
+          'DEBUG: URL解析完成，共解析出 ${result.channels.length} 个频道，EPG URL: ${result.epgUrl ?? "(未配置)"}');
 
       return result.channels;
     } catch (e) {
       ServiceLocator.log.d('DEBUG: 从URL获取播放列表时出错: $e');
-      // 简化错误信息
-      String errorMsg = 'Failed to load playlist';
+
       final errorStr = e.toString().toLowerCase();
-      if (errorStr.contains('404')) {
-        errorMsg = 'Playlist not found (404)';
+      // Use localization keys for common errors
+      if (errorStr.contains('timeout') || errorStr.contains('timed out')) {
+        throw Exception('errorTimeout');
+      } else if (errorStr.contains('socket') ||
+          errorStr.contains('connection') ||
+          errorStr.contains('handshake') ||
+          errorStr.contains('lookup')) {
+        throw Exception('errorNetwork');
+      } else if (errorStr.contains('404')) {
+        throw Exception('Playlist not found (404)');
       } else if (errorStr.contains('403')) {
-        errorMsg = 'Access denied (403)';
-      } else if (errorStr.contains('timeout') || errorStr.contains('timed out')) {
-        errorMsg = 'Connection timeout';
-      } else if (errorStr.contains('socket') || errorStr.contains('connection')) {
-        errorMsg = 'Network connection failed';
-      } else if (errorStr.contains('certificate') || errorStr.contains('ssl')) {
-        errorMsg = 'SSL certificate error';
+        throw Exception('Access denied (403)');
       }
-      throw Exception(errorMsg);
+
+      throw e;
     }
   }
 
   /// Parse M3U content from a local file
-  static Future<List<Channel>> parseFromFile(String filePath, int playlistId) async {
+  static Future<List<Channel>> parseFromFile(
+      String filePath, int playlistId) async {
     try {
       ServiceLocator.log.d('DEBUG: 开始从本地文件读取播放列表: $filePath');
       final file = File(filePath);
@@ -91,12 +98,14 @@ class M3UParser {
       ServiceLocator.log.d('DEBUG: 成功读取本地文件，内容大小: ${content.length} 字符');
 
       // 使用 compute 在独立 isolate 中解析，避免阻塞主线程
-      final result = await compute(_parseInIsolate, _ParseParams(content, playlistId));
-      
+      final result =
+          await compute(_parseInIsolate, _ParseParams(content, playlistId));
+
       // 保存解析结果（包括 EPG URL）到主线程的静态变量
       _lastParseResult = result;
-      
-      ServiceLocator.log.d('DEBUG: 本地文件解析完成，共解析出 ${result.channels.length} 个频道，EPG URL: ${result.epgUrl ?? "(未配置)"}');
+
+      ServiceLocator.log.d(
+          'DEBUG: 本地文件解析完成，共解析出 ${result.channels.length} 个频道，EPG URL: ${result.epgUrl ?? "(未配置)"}');
 
       return result.channels;
     } catch (e) {
@@ -114,7 +123,6 @@ class M3UParser {
     // 注意：_lastParseResult 在 isolate 中被设置，但我们需要返回它
     return _lastParseResult ?? M3UParseResult(channels: channels, epgUrl: null);
   }
-
 
   /// Parse M3U content string
   /// Merges channels with same tvg-name/epgId into single channel with multiple sources
@@ -138,16 +146,17 @@ class M3UParser {
     bool foundHeader = false;
     for (int i = 0; i < lines.length && i < 10; i++) {
       final line = lines[i].trim();
-      print('M3U Parser: 检查第${i + 1}行: ${line.length > 100 ? line.substring(0, 100) + "..." : line}');
-      
+      print(
+          'M3U Parser: 检查第${i + 1}行: ${line.length > 100 ? line.substring(0, 100) + "..." : line}');
+
       if (line.startsWith(_extM3U)) {
         foundHeader = true;
         print('M3U Parser: 找到M3U头部标记');
-        
+
         // Extract x-tvg-url from this line
         final extractedUrl = _extractEpgUrl(line);
         print('M3U Parser: EPG URL 提取结果: ${extractedUrl ?? "(未找到)"}');
-        
+
         if (extractedUrl != null) {
           epgUrl = extractedUrl;
           print('M3U Parser: 成功提取EPG URL: $epgUrl');
@@ -220,13 +229,15 @@ class M3UParser {
     }
 
     // ServiceLocator.log.d('DEBUG: 原始解析完成 - 有效频道: $validChannelCount, 无效URL: $invalidUrlCount');
-    print('M3U Parser: 原始解析完成 - 有效频道: $validChannelCount, 无效URL: $invalidUrlCount');
+    print(
+        'M3U Parser: 原始解析完成 - 有效频道: $validChannelCount, 无效URL: $invalidUrlCount');
 
     // Merge channels with same epgId (tvg-name) into single channel with multiple sources
     final List<Channel> mergedChannels = _mergeChannelSources(rawChannels);
-    
+
     // ServiceLocator.log.d('DEBUG: 合并后频道数: ${mergedChannels.length} (原始: ${rawChannels.length})');
-    print('M3U Parser: 合并后频道数: ${mergedChannels.length} (原始: ${rawChannels.length})');
+    print(
+        'M3U Parser: 合并后频道数: ${mergedChannels.length} (原始: ${rawChannels.length})');
 
     // Save parse result with EPG URL
     _lastParseResult = M3UParseResult(channels: mergedChannels, epgUrl: epgUrl);
@@ -247,26 +258,26 @@ class M3UParser {
     for (final channel in channels) {
       // Use epgId as merge key
       final mergeKey = channel.epgId ?? channel.name;
-      
+
       if (mergedMap.containsKey(mergeKey)) {
         // Add source to existing channel
         final existing = mergedMap[mergeKey]!;
         final newSources = [...existing.sources];
-        
+
         // Add URL if not duplicate
         if (!newSources.contains(channel.url)) {
           newSources.add(channel.url);
         }
-        
+
         // Check if we should replace the primary channel info
         // (prefer non-special group over special group)
-        final existingIsSpecial = specialGroups.any(
-          (g) => existing.groupName?.toLowerCase().contains(g.toLowerCase()) ?? false
-        );
-        final newIsSpecial = specialGroups.any(
-          (g) => channel.groupName?.toLowerCase().contains(g.toLowerCase()) ?? false
-        );
-        
+        final existingIsSpecial = specialGroups.any((g) =>
+            existing.groupName?.toLowerCase().contains(g.toLowerCase()) ??
+            false);
+        final newIsSpecial = specialGroups.any((g) =>
+            channel.groupName?.toLowerCase().contains(g.toLowerCase()) ??
+            false);
+
         if (existingIsSpecial && !newIsSpecial) {
           // Replace with the new channel's info but keep all sources
           mergedMap[mergeKey] = channel.copyWith(
@@ -289,12 +300,12 @@ class M3UParser {
     return orderKeys.map((key) => mergedMap[key]!).toList();
   }
 
-
   /// Extract EPG URL from M3U header line
   /// Supports: x-tvg-url="url" or url-tvg="url"
   static String? _extractEpgUrl(String headerLine) {
-    print('M3U Parser: _extractEpgUrl 输入: ${headerLine.length > 200 ? headerLine.substring(0, 200) + "..." : headerLine}');
-    
+    print(
+        'M3U Parser: _extractEpgUrl 输入: ${headerLine.length > 200 ? headerLine.substring(0, 200) + "..." : headerLine}');
+
     // Match x-tvg-url="..." or url-tvg="..."
     final patterns = [
       RegExp(r'x-tvg-url="([^"]+)"', caseSensitive: false),
@@ -307,11 +318,11 @@ class M3UParser {
       final pattern = patterns[i];
       final match = pattern.firstMatch(headerLine);
       print('M3U Parser: 尝试模式 $i: ${pattern.pattern} - 匹配结果: ${match != null}');
-      
+
       if (match != null && match.groupCount >= 1) {
         final urls = match.group(1);
         print('M3U Parser: 提取到URL字符串: $urls');
-        
+
         if (urls != null && urls.isNotEmpty) {
           // If multiple URLs separated by comma, return the first one
           final firstUrl = urls.split(',').first.trim();
@@ -320,7 +331,7 @@ class M3UParser {
         }
       }
     }
-    
+
     print('M3U Parser: 所有模式都未匹配到EPG URL');
     return null;
   }
@@ -367,7 +378,8 @@ class M3UParser {
     final Map<String, String> attributes = {};
 
     // Regular expression to match key="value" or key=value patterns
-    final RegExp attrRegex = RegExp(r'(\S+?)=["\u0027]?([^"\u0027]+)["\u0027]?(?:\s|$)');
+    final RegExp attrRegex =
+        RegExp(r'(\S+?)=["\u0027]?([^"\u0027]+)["\u0027]?(?:\s|$)');
 
     for (final match in attrRegex.allMatches(content)) {
       if (match.groupCount >= 2) {
@@ -386,10 +398,14 @@ class M3UParser {
   static bool _isValidUrl(String url) {
     try {
       final uri = Uri.parse(url);
-      final isValid = uri.hasScheme && 
-          (uri.scheme == 'http' || uri.scheme == 'https' || 
-           uri.scheme == 'rtmp' || uri.scheme == 'rtsp' || 
-           uri.scheme == 'mms' || uri.scheme == 'mmsh' || uri.scheme == 'mmst');
+      final isValid = uri.hasScheme &&
+          (uri.scheme == 'http' ||
+              uri.scheme == 'https' ||
+              uri.scheme == 'rtmp' ||
+              uri.scheme == 'rtsp' ||
+              uri.scheme == 'mms' ||
+              uri.scheme == 'mmsh' ||
+              uri.scheme == 'mmst');
 
       // if (!isValid) {
       //   ServiceLocator.log.d('DEBUG: URL验证失败 - Scheme: ${uri.scheme}, Host: ${uri.host}');

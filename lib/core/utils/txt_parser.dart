@@ -7,7 +7,7 @@ import '../models/channel.dart';
 import '../services/service_locator.dart';
 
 /// Parser for TXT playlist files (genre format)
-/// Format: 
+/// Format:
 /// Category,#genre#
 /// Channel Name,URL
 /// Channel Name,URL
@@ -18,8 +18,9 @@ class TXTParser {
       ServiceLocator.log.d('DEBUG: 开始从URL获取TXT播放列表内容: $url');
 
       final dio = Dio();
-      dio.options.connectTimeout = const Duration(seconds: 30);
-      dio.options.receiveTimeout = const Duration(seconds: 30);
+      // Reduce timeout to 10 seconds as requested
+      dio.options.connectTimeout = const Duration(seconds: 3);
+      dio.options.receiveTimeout = const Duration(seconds: 3);
 
       final response = await dio.get(
         url,
@@ -30,34 +31,40 @@ class TXTParser {
       );
 
       ServiceLocator.log.d('DEBUG: 成功获取TXT播放列表内容，状态码: ${response.statusCode}');
-      ServiceLocator.log.d('DEBUG: 内容大小: ${response.data.toString().length} 字符');
+      ServiceLocator.log
+          .d('DEBUG: 内容大小: ${response.data.toString().length} 字符');
 
       // 使用 compute 在独立 isolate 中解析，避免阻塞主线程
-      final channels = await compute(_parseInIsolate, _ParseParams(response.data.toString(), playlistId));
+      final channels = await compute(
+          _parseInIsolate, _ParseParams(response.data.toString(), playlistId));
       ServiceLocator.log.d('DEBUG: TXT URL解析完成，共解析出 ${channels.length} 个频道');
 
       return channels;
     } catch (e) {
       ServiceLocator.log.d('DEBUG: 从URL获取TXT播放列表时出错: $e');
-      String errorMsg = 'Failed to load playlist';
+
       final errorStr = e.toString().toLowerCase();
-      if (errorStr.contains('404')) {
-        errorMsg = 'Playlist not found (404)';
+
+      if (errorStr.contains('timeout') || errorStr.contains('timed out')) {
+        throw Exception('errorTimeout');
+      } else if (errorStr.contains('socket') ||
+          errorStr.contains('connection') ||
+          errorStr.contains('handshake') ||
+          errorStr.contains('lookup')) {
+        throw Exception('errorNetwork');
+      } else if (errorStr.contains('404')) {
+        throw Exception('Playlist not found (404)');
       } else if (errorStr.contains('403')) {
-        errorMsg = 'Access denied (403)';
-      } else if (errorStr.contains('timeout') || errorStr.contains('timed out')) {
-        errorMsg = 'Connection timeout';
-      } else if (errorStr.contains('socket') || errorStr.contains('connection')) {
-        errorMsg = 'Network connection failed';
-      } else if (errorStr.contains('certificate') || errorStr.contains('ssl')) {
-        errorMsg = 'SSL certificate error';
+        throw Exception('Access denied (403)');
       }
-      throw Exception(errorMsg);
+
+      throw e;
     }
   }
 
   /// Parse TXT content from a local file
-  static Future<List<Channel>> parseFromFile(String filePath, int playlistId) async {
+  static Future<List<Channel>> parseFromFile(
+      String filePath, int playlistId) async {
     try {
       ServiceLocator.log.d('DEBUG: 开始从本地文件读取TXT播放列表: $filePath');
       final file = File(filePath);
@@ -71,7 +78,8 @@ class TXTParser {
       ServiceLocator.log.d('DEBUG: 成功读取TXT本地文件，内容大小: ${content.length} 字符');
 
       // 使用 compute 在独立 isolate 中解析，避免阻塞主线程
-      final channels = await compute(_parseInIsolate, _ParseParams(content, playlistId));
+      final channels =
+          await compute(_parseInIsolate, _ParseParams(content, playlistId));
       ServiceLocator.log.d('DEBUG: TXT本地文件解析完成，共解析出 ${channels.length} 个频道');
 
       return channels;
@@ -122,7 +130,8 @@ class TXTParser {
       final parts = line.split(',');
       if (parts.length >= 2) {
         final name = parts[0].trim();
-        final url = parts.sublist(1).join(',').trim(); // Handle URLs with commas
+        final url =
+            parts.sublist(1).join(',').trim(); // Handle URLs with commas
 
         if (name.isNotEmpty && _isValidUrl(url)) {
           final channel = Channel(
@@ -152,7 +161,7 @@ class TXTParser {
 
     // Merge channels with same name into single channel with multiple sources
     final List<Channel> mergedChannels = _mergeChannelSources(rawChannels);
-    
+
     // ServiceLocator.log.d('DEBUG: TXT合并后频道数: ${mergedChannels.length} (原始: ${rawChannels.length})');
 
     return mergedChannels;
@@ -170,26 +179,26 @@ class TXTParser {
     for (final channel in channels) {
       // Use channel name as merge key (TXT format doesn't have epgId)
       final mergeKey = channel.name;
-      
+
       if (mergedMap.containsKey(mergeKey)) {
         // Add source to existing channel
         final existing = mergedMap[mergeKey]!;
         final newSources = [...existing.sources];
-        
+
         // Add URL if not duplicate
         if (!newSources.contains(channel.url)) {
           newSources.add(channel.url);
         }
-        
+
         // Check if we should replace the primary channel info
         // (prefer non-special group over special group)
-        final existingIsSpecial = specialGroups.any(
-          (g) => existing.groupName?.toLowerCase().contains(g.toLowerCase()) ?? false
-        );
-        final newIsSpecial = specialGroups.any(
-          (g) => channel.groupName?.toLowerCase().contains(g.toLowerCase()) ?? false
-        );
-        
+        final existingIsSpecial = specialGroups.any((g) =>
+            existing.groupName?.toLowerCase().contains(g.toLowerCase()) ??
+            false);
+        final newIsSpecial = specialGroups.any((g) =>
+            channel.groupName?.toLowerCase().contains(g.toLowerCase()) ??
+            false);
+
         if (existingIsSpecial && !newIsSpecial) {
           // Replace with the new channel's info but keep all sources
           mergedMap[mergeKey] = channel.copyWith(
@@ -216,10 +225,14 @@ class TXTParser {
   static bool _isValidUrl(String url) {
     try {
       final uri = Uri.parse(url);
-      final isValid = uri.hasScheme && 
-          (uri.scheme == 'http' || uri.scheme == 'https' || 
-           uri.scheme == 'rtmp' || uri.scheme == 'rtsp' || 
-           uri.scheme == 'mms' || uri.scheme == 'mmsh' || uri.scheme == 'mmst');
+      final isValid = uri.hasScheme &&
+          (uri.scheme == 'http' ||
+              uri.scheme == 'https' ||
+              uri.scheme == 'rtmp' ||
+              uri.scheme == 'rtsp' ||
+              uri.scheme == 'mms' ||
+              uri.scheme == 'mmsh' ||
+              uri.scheme == 'mmst');
 
       return isValid;
     } catch (e) {
@@ -230,7 +243,7 @@ class TXTParser {
   /// Generate TXT content from a list of channels
   static String generate(List<Channel> channels) {
     final buffer = StringBuffer();
-    
+
     // Group channels by category
     final Map<String, List<Channel>> groupedChannels = {};
     for (final channel in channels) {
