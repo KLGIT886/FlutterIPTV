@@ -87,6 +87,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   // Windows 全屏状态
   bool _isFullScreen = false;
   DateTime? _lastFullScreenToggle; // 记录上次切换时间
+  bool _mouseOver = false;
 
   // 检查是否处于分屏模式（使用本地状态）
   bool _isMultiScreenMode() {
@@ -1152,16 +1153,25 @@ class _PlayerScreenState extends State<PlayerScreen>
           autofocus: true,
           onKeyEvent: _handleKeyEvent,
           child: MouseRegion(
-            cursor: _showControls
+            cursor: _showControls || _mouseOver
                 ? SystemMouseCursors.basic
                 : SystemMouseCursors.none,
-            onHover: (_) => _showControlsTemporarily(),
+            onEnter: (_) {
+              _mouseOver = true;
+              _showControlsTemporarily();
+            },
+            onHover: (_) {
+              _showControlsTemporarily();
+            },
             onExit: (_) {
+              _mouseOver = false;
               if (mounted) {
                 _hideControlsTimer?.cancel();
                 _hideControlsTimer =
                     Timer(const Duration(milliseconds: 300), () {
-                  if (mounted) setState(() => _showControls = false);
+                  if (mounted && !_mouseOver) {
+                    setState(() => _showControls = false);
+                  }
                 });
               }
             },

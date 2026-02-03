@@ -95,6 +95,7 @@ class _WindowTitleBarState extends State<WindowTitleBar> {
           height: _triggerHeight,
           child: MouseRegion(
             onEnter: (_) => _showTitleBar(),
+            onExit: (_) => _startHideTimer(),
             child: Container(color: Colors.transparent),
           ),
         ),
