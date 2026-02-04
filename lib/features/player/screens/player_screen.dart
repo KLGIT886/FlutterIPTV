@@ -280,6 +280,15 @@ class _PlayerScreenState extends State<PlayerScreen>
         ServiceLocator.log.d(
             'PlayerScreen: Launching native player for ${widget.channelName} (isDlna=$isDlnaMode, index $currentIndex of ${urls.length})');
 
+        // TV端原生播放器也需要记录观看历史
+        if (!isDlnaMode && currentIndex >= 0 && currentIndex < channels.length) {
+          final channel = channels[currentIndex];
+          if (channel.id != null && channel.playlistId != null) {
+            await ServiceLocator.watchHistory.addWatchHistory(channel.id!, channel.playlistId!);
+            ServiceLocator.log.d('PlayerScreen: Recorded watch history for channel ${channel.name}');
+          }
+        }
+
         // 获取缓冲强度设置和显示设置
         final bufferStrength = settingsProvider.bufferStrength;
         final showFps = settingsProvider.showFps;

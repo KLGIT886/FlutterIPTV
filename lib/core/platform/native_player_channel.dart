@@ -57,6 +57,10 @@ class NativePlayerChannel {
         // Native player requests to check if channel is favorite
         final channelIndex = call.arguments['channelIndex'] as int?;
         return _isFavorite(channelIndex);
+      } else if (call.method == 'addWatchHistory') {
+        // Native player requests to add watch history
+        final channelIndex = call.arguments['channelIndex'] as int?;
+        return _addWatchHistory(channelIndex);
       }
     });
   }
@@ -146,6 +150,40 @@ class NativePlayerChannel {
     ServiceLocator.log.d(
         'NativePlayerChannel: isFavorite - channel: ${channel.name}, isFavorite: $isFav');
     return isFav;
+  }
+
+  /// Add watch history for a channel (called from native player)
+  static Future<bool> _addWatchHistory(int? channelIndex) async {
+    if (channelIndex == null || _channelProvider == null) {
+      ServiceLocator.log.d(
+          'NativePlayerChannel: addWatchHistory - invalid params: index=$channelIndex, chanProv=${_channelProvider != null}');
+      return false;
+    }
+
+    final channels = _channelProvider!.channels;
+    if (channelIndex < 0 || channelIndex >= channels.length) {
+      ServiceLocator.log.d(
+          'NativePlayerChannel: addWatchHistory - invalid index: $channelIndex, channels=${channels.length}');
+      return false;
+    }
+
+    final channel = channels[channelIndex];
+    if (channel.id == null || channel.playlistId == null) {
+      ServiceLocator.log.d(
+          'NativePlayerChannel: addWatchHistory - channel has no id or playlistId: ${channel.name}');
+      return false;
+    }
+
+    try {
+      await ServiceLocator.watchHistory.addWatchHistory(channel.id!, channel.playlistId!);
+      ServiceLocator.log.d(
+          'NativePlayerChannel: addWatchHistory - success for channel: ${channel.name}');
+      return true;
+    } catch (e) {
+      ServiceLocator.log.e(
+          'NativePlayerChannel: addWatchHistory - error: $e');
+      return false;
+    }
   }
 
   /// 保存分屏状态

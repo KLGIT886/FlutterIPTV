@@ -909,6 +909,12 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                                   // 找到当前点击频道的索引
                                   final clickedIndex = channels.indexWhere((c) => c.url == channel.url);
                                   
+                                  // TV端原生分屏播放器也需要记录观看历史
+                                  if (channel.id != null && channel.playlistId != null) {
+                                    await ServiceLocator.watchHistory.addWatchHistory(channel.id!, channel.playlistId!);
+                                    ServiceLocator.log.d('ChannelsScreen: Recorded watch history for channel ${channel.name} (TV multi-screen)');
+                                  }
+                                  
                                   // 准备频道数据
                                   final urls = channels.map((c) => c.url).toList();
                                   final names = channels.map((c) => c.name).toList();

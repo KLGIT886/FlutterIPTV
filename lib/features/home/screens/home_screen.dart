@@ -46,6 +46,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
   int _lastChannelCount = 0; // 跟踪上次的频道数量
   String _appVersion = '';
   AppUpdate? _availableUpdate; // 可用的更新
+  final ScrollController _scrollController = ScrollController(); // 添加滚动控制器
+  final FocusNode _continueButtonFocusNode = FocusNode(); // 继续观看按钮的焦点节点
 
   @override
   void initState() {
@@ -128,6 +130,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
 
   @override
   void dispose() {
+    _scrollController.dispose(); // 释放滚动控制器
+    _continueButtonFocusNode.dispose(); // 释放焦点节点
     WidgetsBinding.instance.removeObserver(this); // 移除生命周期监听
     AppRouter.routeObserver.unsubscribe(this); // 移除路由监听
     // 移除监听器时需要小心，因为 context 可能已经不可用
@@ -597,6 +601,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
             // 可滚动的频道列表
             Expanded(
               child: CustomScrollView(
+                controller: _scrollController, // 添加滚动控制器
                 slivers: [
                   SliverPadding(
                     padding: EdgeInsets.symmetric(
@@ -607,10 +612,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
                         if (_watchHistoryChannels.isNotEmpty)
                           _buildChannelRow(
                               AppStrings.of(context)?.watchHistory ?? 'Watch History',
-                              _watchHistoryChannels),
+                              _watchHistoryChannels,
+                              isFirstRow: true), // 观看历史是第一行
                         if (_watchHistoryChannels.isNotEmpty)
                           SizedBox(height: PlatformDetector.isMobile ? 8 : 12),
-                        ...channelProvider.groups.take(5).map((group) {
+                        ...channelProvider.groups.take(8).toList().asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final group = entry.value;
                           // 取足够多的频道，实际显示数量由宽度决定
                           final channels = channelProvider.channels
                               .where((c) => c.groupName == group.name)
@@ -626,6 +634,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
                               onMoreTap: () => Navigator.pushNamed(
                                   context, AppRouter.channels,
                                   arguments: {'groupName': group.name}),
+                              isFirstRow: index == 0 && _watchHistoryChannels.isEmpty, // 如果没有观看历史，第一个分类是第一行
                             ),
                           );
                         }),
@@ -815,7 +824,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
                   (lastChannel != null || isMultiScreenMode)
                       ? () => _continuePlayback(provider, lastChannel,
                           isMultiScreenMode, settingsProvider)
-                      : null),
+                      : null,
+                  focusNode: _continueButtonFocusNode), // 添加焦点节点
               SizedBox(width: isMobile ? 6 : 10),
               _buildHeaderButton(
                   Icons.playlist_add_rounded,
@@ -1026,7 +1036,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
         restoreScreenChannels: restoreScreenChannels,
         showChannelName: settingsProvider.showMultiScreenChannelName,
         onClosed: () {
-          ServiceLocator.log.i('原生分屏播放器关闭', tag: 'HomeScreen');
+          ServiceLocator.log.i('原生分屏播放器关闭，刷新观看记录', tag: 'HomeScreen');
+          // TV端原生分屏播放器关闭后，刷新观看记录
+          _refreshWatchHistory();
         },
       );
       ServiceLocator.log.i('原生分屏播放器启动成功', tag: 'HomeScreen');
@@ -1094,9 +1106,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
   }
 
   Widget _buildHeaderButton(
-      IconData icon, String label, bool isPrimary, VoidCallback? onTap) {
+      IconData icon, String label, bool isPrimary, VoidCallback? onTap, {FocusNode? focusNode}) {
     final isMobile = PlatformDetector.isMobile;
     return TVFocusable(
+      focusNode: focusNode, // 添加focusNode参数
       onSelect: onTap,
       focusScale: 1.0,
       showFocusBorder: false,
@@ -1226,7 +1239,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
 
   Widget _buildChannelRow(String title, List<Channel> channels,
       {bool showMore = false,
-      VoidCallback? onMoreTap}) {
+      VoidCallback? onMoreTap,
+      bool isFirstRow = false}) { // 添加isFirstRow参数
     if (channels.isEmpty) return const SizedBox.shrink();
     final isMobile = PlatformDetector.isMobile;
 
@@ -1309,6 +1323,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
                       child: _OptimizedChannelCard(
                         channel: channel,
                         onTap: () => _playChannel(channel),
+                        onUp: isFirstRow && PlatformDetector.isTV
+                            ? () {
+                                // TV端第一行（观看历史）按上键时，跳转到"继续观看"按钮
+                                if (_scrollController.hasClients && _scrollController.offset > 0) {
+                                  // 如果不在顶部，先滚动到顶部
+                                  _scrollController.animateTo(
+                                    0,
+                                    duration: const Duration(milliseconds: 300),
+                                    curve: Curves.easeOut,
+                                  );
+                                }
+                                // 请求"继续观看"按钮的焦点
+                                _continueButtonFocusNode.requestFocus();
+                              }
+                            : null,
                       ),
                     ),
                   );
@@ -1321,7 +1350,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
     );
   }
 
-  void _playChannel(Channel channel) {
+  Future<void> _playChannel(Channel channel) async {
     ServiceLocator.log
         .i('播放频道: ${channel.name} (ID: ${channel.id})', tag: 'HomeScreen');
     // final startTime = DateTime.now();
@@ -1349,6 +1378,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
         // 找到当前点击频道的索引
         final clickedIndex = channels.indexWhere((c) => c.url == channel.url);
 
+        // TV端原生分屏播放器也需要记录观看历史
+        if (channel.id != null && channel.playlistId != null) {
+          await ServiceLocator.watchHistory.addWatchHistory(channel.id!, channel.playlistId!);
+          ServiceLocator.log.d('HomeScreen: Recorded watch history for channel ${channel.name} (TV multi-screen)');
+        }
+
         // 准备频道数据
         final urls = channels.map((c) => c.url).toList();
         final names = channels.map((c) => c.name).toList();
@@ -1357,7 +1392,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
         final logos = channels.map((c) => c.logoUrl ?? '').toList();
 
         // 启动原生分屏播放器
-        NativePlayerChannel.launchMultiScreen(
+        await NativePlayerChannel.launchMultiScreen(
           urls: urls,
           names: names,
           groups: groups,
@@ -1368,7 +1403,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
           defaultScreenPosition: settingsProvider.defaultScreenPosition,
           showChannelName: settingsProvider.showMultiScreenChannelName,
           onClosed: () {
-            ServiceLocator.log.d('HomeScreen: Native multi-screen closed');
+            ServiceLocator.log.d('HomeScreen: Native multi-screen closed, refreshing watch history');
+            // TV端原生分屏播放器关闭后，刷新观看记录
+            _refreshWatchHistory();
           },
         );
       } else if (PlatformDetector.isDesktop) {
@@ -1397,8 +1434,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
         });
       }
     } else {
-      // 普通模式
-      context.read<PlayerProvider>().playChannel(channel);
+      // 普通模式：直接导航到播放器页面，不调用PlayerProvider.playChannel()
+      // 避免重复记录观看历史（PlayerScreen会记录）
       Navigator.pushNamed(context, AppRouter.player, arguments: {
         'channelUrl': channel.url,
         'channelName': channel.name,
@@ -1698,10 +1735,12 @@ class _ResponsiveCategoryChipsState extends State<_ResponsiveCategoryChips> {
 class _OptimizedChannelCard extends StatelessWidget {
   final Channel channel;
   final VoidCallback onTap;
+  final VoidCallback? onUp; // 添加onUp回调
 
   const _OptimizedChannelCard({
     required this.channel,
     required this.onTap,
+    this.onUp, // 添加onUp参数
   });
 
   @override
@@ -1731,6 +1770,7 @@ class _OptimizedChannelCard extends StatelessWidget {
           onFavoriteToggle: () =>
               context.read<FavoritesProvider>().toggleFavorite(channel),
           onTap: onTap,
+          onUp: onUp, // 传递onUp回调
         );
       },
     );

@@ -137,6 +137,12 @@ class MultiScreenProvider extends ChangeNotifier {
       return;
     }
     
+    // Windows端分屏模式也需要记录观看历史
+    if (channel.id != null && channel.playlistId != null) {
+      await ServiceLocator.watchHistory.addWatchHistory(channel.id!, channel.playlistId!);
+      ServiceLocator.log.d('MultiScreenProvider: Recorded watch history for channel ${channel.name} (Windows multi-screen)');
+    }
+    
     screen.isLoading = true;
     screen.error = null;
     screen.channel = channel;

@@ -495,6 +495,9 @@ class MultiScreenPlayerFragment : Fragment() {
         if (screenIndex < 0 || screenIndex > 3) return
         if (channelIndex < 0 || channelIndex >= channelUrls.size) return
 
+        // 记录观看历史
+        (activity as? MainActivity)?.addWatchHistory(channelIndex)
+
         // 获取源列表
         // 获取源列表
         val sources = if (channelIndex < channelSources.size) channelSources[channelIndex] else arrayListOf()

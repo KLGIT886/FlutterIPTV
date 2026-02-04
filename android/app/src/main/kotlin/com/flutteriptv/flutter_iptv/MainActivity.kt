@@ -822,6 +822,30 @@ class MainActivity: FlutterFragmentActivity() {
     }
     
     /**
+     * Add watch history for a channel
+     */
+    fun addWatchHistory(channelIndex: Int) {
+        Log.d(TAG, "addWatchHistory: channelIndex=$channelIndex")
+        playerMethodChannel?.invokeMethod(
+            "addWatchHistory",
+            mapOf("channelIndex" to channelIndex),
+            object : MethodChannel.Result {
+                override fun success(result: Any?) {
+                    Log.d(TAG, "addWatchHistory success: $result")
+                }
+                
+                override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
+                    Log.e(TAG, "addWatchHistory error: $errorCode - $errorMessage")
+                }
+                
+                override fun notImplemented() {
+                    Log.w(TAG, "addWatchHistory not implemented")
+                }
+            }
+        )
+    }
+    
+    /**
      * Install APK file using FileProvider
      */
     private fun installApk(filePath: String) {

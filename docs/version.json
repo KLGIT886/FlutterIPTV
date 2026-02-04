@@ -1,23 +1,23 @@
 {
-  "version": "1.4.31",
-  "build": 151,
+  "version": "1.4.32",
+  "build": 152,
   "releaseDate": "2026-02-04",
   "assets": {
-    "windows": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.31/flutteriptv-Windows-x64-Setup.exe",
+    "windows": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.32/flutteriptv-Windows-x64-Setup.exe",
     "android_mobile": {
-      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.31/flutteriptv-Android-Mobile-arm64-v8a.apk",
-      "armeabi-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.31/flutteriptv-Android-Mobile-armeabi-v7a.apk",
-      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.31/flutteriptv-Android-Mobile-x86_64.apk"
+      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.32/flutteriptv-Android-Mobile-arm64-v8a.apk",
+      "armeabi-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.32/flutteriptv-Android-Mobile-armeabi-v7a.apk",
+      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.32/flutteriptv-Android-Mobile-x86_64.apk"
     },
     "android_tv": {
-      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.31/flutteriptv-AndroidTV-arm64-v8a.apk",
-      "armeabi-v7a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.31/flutteriptv-AndroidTV-armeabi-v7a.apk",
-      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.31/flutteriptv-AndroidTV-x86_64.apk"
+      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.32/flutteriptv-AndroidTV-arm64-v8a.apk",
+      "armeabi-v7a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.32/flutteriptv-AndroidTV-armeabi-v7a.apk",
+      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.4.32/flutteriptv-AndroidTV-x86_64.apk"
     }
   },
   "changelog": {
-    "zh": "- 新增：首页推荐列表改为观看记录功能\n- 优化：刷新播放列表后自动更新观看记录的频道ID\n- 优化：使用路由监听实现播放后自动刷新观看记录\n- 修复：首页CPU占用过高的问题",
-    "en": "- Added: Home page recommendations replaced with watch history\n- Improved: Auto-update channel IDs in watch history after playlist refresh\n- Improved: Auto-refresh watch history using route observer\n- Fixed: High CPU usage on home screen"
+    "zh": "- 修复：TV端观看历史记录问题（所有场景完整覆盖）\n- 修复：TV端首页焦点导航问题（观看记录可跳转到继续观看按钮）\n- 修复：首页点击频道重复记录观看历史的问题\n- 新增：TV端分屏模式内切换频道自动记录观看历史\n- 新增：TV端分屏模式退出后自动刷新观看历史\n- 优化：首页显示8个分类（原5个）",
+    "en": "- Fixed: TV watch history recording issues (all scenarios covered)\n- Fixed: TV home page focus navigation (watch history can jump to continue button)\n- Fixed: Duplicate watch history recording when clicking channels from home\n- Added: Auto-record watch history when switching channels in TV multi-screen mode\n- Added: Auto-refresh watch history after exiting TV multi-screen mode\n- Improved: Home page now shows 8 categories (was 5)"
   },
   "minVersion": "1.0.0"
 }

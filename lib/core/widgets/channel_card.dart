@@ -34,6 +34,7 @@ class ChannelCard extends StatefulWidget {
   final VoidCallback? onTest;
   final VoidCallback? onLeft;
   final VoidCallback? onDown;
+  final VoidCallback? onUp; // 添加onUp回调
   final VoidCallback? onFocused; // 获得焦点时的回调
   final bool autofocus;
   final FocusNode? focusNode;
@@ -55,6 +56,7 @@ class ChannelCard extends StatefulWidget {
     this.onTest,
     this.onLeft,
     this.onDown,
+    this.onUp, // 添加onUp参数
     this.onFocused,
     this.autofocus = false,
     this.focusNode,
@@ -86,6 +88,7 @@ class _ChannelCardState extends State<ChannelCard> {
       },
       onLeft: widget.onLeft,
       onDown: widget.onDown,
+      onUp: widget.onUp, // 添加onUp回调
       focusScale: isTV ? 1.0 : 1.03, // TV端不缩放
       showFocusBorder: false,
       builder: (context, isFocused, child) {
