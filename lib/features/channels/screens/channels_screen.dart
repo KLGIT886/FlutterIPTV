@@ -163,43 +163,44 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
       return Stack(
         children: [
           content,
-          // 手机端嵌入模式使用浮动按钮打开分类
-          Positioned(
-            left: isLandscape ? 8 : 8,  // 横屏时位置
-            top: topPadding + (isLandscape ? 4 : 8),   // 使用和AppBar相同的topPadding，再加上一点间距
-            child: Material(
-              color: AppTheme.getSurfaceColor(context),
-              borderRadius: BorderRadius.circular(isLandscape ? 8 : 8),  // 横屏时圆角
-              elevation: 2,  // 添加阴影使其更突出
-              child: InkWell(
-                onTap: () => _showMobileGroupsBottomSheet(context),
-                borderRadius: BorderRadius.circular(isLandscape ? 8 : 8),
-                child: Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isLandscape ? 10 : 12,  // 横屏时增加padding
-                    vertical: isLandscape ? 6 : 8,     // 横屏时增加padding
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.menu_rounded, color: AppTheme.getTextPrimary(context), size: isLandscape ? 18 : 18),  // 横屏时图标更大
-                      const SizedBox(width: 6),
-                      Text(
-                        _selectedGroup ?? (AppStrings.of(context)?.allChannels ?? 'All'),
-                        style: TextStyle(
-                          color: AppTheme.getTextPrimary(context), 
-                          fontSize: isLandscape ? 14 : 13,  // 横屏时字体更大
-                          fontWeight: FontWeight.w500,  // 加粗
+          // 手机端嵌入模式：竖屏时显示浮动按钮，横屏时不显示（因为有固定分类栏）
+          if (!isLandscape)
+            Positioned(
+              left: 8,
+              top: topPadding + 8,
+              child: Material(
+                color: AppTheme.getSurfaceColor(context),
+                borderRadius: BorderRadius.circular(8),
+                elevation: 2,
+                child: InkWell(
+                  onTap: () => _showMobileGroupsBottomSheet(context),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.menu_rounded, color: AppTheme.getTextPrimary(context), size: 18),
+                        const SizedBox(width: 6),
+                        Text(
+                          _selectedGroup ?? (AppStrings.of(context)?.allChannels ?? 'All'),
+                          style: TextStyle(
+                            color: AppTheme.getTextPrimary(context), 
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 4),
-                      Icon(Icons.arrow_drop_down, color: AppTheme.getTextMuted(context), size: isLandscape ? 18 : 18),  // 横屏时图标更大
-                    ],
+                        const SizedBox(width: 4),
+                        Icon(Icons.arrow_drop_down, color: AppTheme.getTextMuted(context), size: 18),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
         ],
       );
     }
@@ -679,21 +680,49 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
         return CustomScrollView(
           controller: _scrollController,
           slivers: [
-            // 手机端添加顶部间距
-            if (isMobile)
+            // 手机竖屏：添加顶部间距
+            if (isMobile && !isLandscape)
               SliverToBoxAdapter(
                 child: SizedBox(height: topPadding),
               ),
-            // App Bar
-            SliverAppBar(
+            
+            // 手机横屏：使用 SliverPersistentHeader 实现固定分类栏（不遮挡状态栏）
+            if (isLandscape && widget.embedded)
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: _LandscapeCategoryBarDelegate(
+                  provider: provider,
+                  selectedGroup: _selectedGroup,
+                  channels: channels,
+                  statusBarHeight: statusBarHeight,
+                  onGroupSelected: (groupName) {
+                    setState(() => _selectedGroup = groupName);
+                    if (groupName == null) {
+                      provider.clearGroupFilter();
+                    } else {
+                      provider.selectGroup(groupName);
+                    }
+                  },
+                  onTestChannels: () => _showChannelTestDialog(context, channels),
+                  onShowBackgroundTest: () => _showBackgroundTestProgress(context),
+                  onDeleteUnavailable: _selectedGroup == ChannelProvider.unavailableGroupName && channels.isNotEmpty
+                      ? () => _confirmDeleteAllUnavailable(context, provider)
+                      : null,
+                ),
+              ),
+            
+            // 竖屏或非嵌入模式：使用普通 AppBar
+            if (!isLandscape || !widget.embedded)
+              SliverAppBar(
+              pinned: false,
               floating: true,
               primary: false,  // 禁用自动SafeArea
               backgroundColor: Colors.transparent,
-              toolbarHeight: isLandscape ? 32.0 : 56.0,  // 手机端横屏时高度从28增加到32
-              expandedHeight: 0,  // 不需要展开高度
-              collapsedHeight: isLandscape ? 32.0 : 56.0,  // 手机端横屏时高度从28增加到32
-              titleSpacing: 0,  // 减少标题间距
-              leadingWidth: isLandscape ? 40 : 56,  // 横屏时减少leading宽度
+              toolbarHeight: 56.0,
+              expandedHeight: 0,
+              collapsedHeight: 56.0,
+              titleSpacing: 0,
+              leadingWidth: 56,
                 flexibleSpace: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -701,32 +730,29 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                       end: Alignment.bottomRight,
                       colors: Theme.of(context).brightness == Brightness.dark
                           ? [
-                              const Color(0xFF0A0A0A),
+                              const Color(0xFF0A0A0A).withOpacity(0.95),
                               AppTheme.getPrimaryColor(context).withOpacity(0.15),
                             ]
                           : [
-                              const Color(0xFFE0E0E0),
-                              AppTheme.getPrimaryColor(context).withOpacity(0.15),
+                              const Color(0xFFE0E0E0).withOpacity(0.95),
+                              AppTheme.getPrimaryColor(context).withOpacity(0.12),
                             ],
                     ),
                   ),
                 ),
-                leading: isMobile
-                    ? (widget.embedded 
-                        ? null  // 嵌入模式不显示菜单按钮
-                        : IconButton(
-                            icon: Icon(Icons.menu_rounded, color: AppTheme.getTextPrimary(context), size: isLandscape ? 18 : 24),
-                            padding: isLandscape ? const EdgeInsets.all(4) : null,  // 横屏时减少padding
-                            onPressed: () => Scaffold.of(context).openDrawer(),
-                          ))
+                leading: isMobile && !widget.embedded
+                    ? IconButton(
+                        icon: Icon(Icons.menu_rounded, color: AppTheme.getTextPrimary(context), size: 24),
+                        onPressed: () => Scaffold.of(context).openDrawer(),
+                      )
                     : null,
                 title: widget.embedded 
-                    ? null  // 嵌入模式不显示标题（使用浮动按钮）
+                    ? null
                     : Text(
                         _selectedGroup ?? (AppStrings.of(context)?.allChannels ?? 'All Channels'),
                         style: TextStyle(
                           color: AppTheme.getTextPrimary(context),
-                          fontSize: isLandscape ? 13 : 20,  // 横屏时字体更小
+                          fontSize: 20,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -738,18 +764,16 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                   // Test channels button
                   IconButton(
                     icon: const Icon(Icons.speed_rounded),
-                    iconSize: isLandscape ? 16 : 24,  // 横屏时图标更小
-                    padding: isLandscape ? const EdgeInsets.all(2) : null,  // 横屏时减少padding
+                    iconSize: 24,
                     color: AppTheme.getTextSecondary(context),
                     tooltip: '测试频道',
                     onPressed: channels.isEmpty ? null : () => _showChannelTestDialog(context, channels),
                   ),
-                  // Delete all unavailable channels button (only show when in unavailable group)
+                  // Delete all unavailable channels button
                   if (_selectedGroup == ChannelProvider.unavailableGroupName && channels.isNotEmpty)
                     IconButton(
                       icon: const Icon(Icons.delete_sweep_rounded),
-                      iconSize: isLandscape ? 16 : 24,  // 横屏时图标更小
-                      padding: isLandscape ? const EdgeInsets.all(2) : null,  // 横屏时减少padding
+                      iconSize: 24,
                       color: AppTheme.errorColor,
                       tooltip: '删除所有失效频道',
                       onPressed: () => _confirmDeleteAllUnavailable(context, provider),
@@ -757,21 +781,18 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                   // Channel count
                   Center(
                     child: Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isLandscape ? 6 : 12,
-                        vertical: isLandscape ? 2 : 6,
-                      ),
-                      margin: EdgeInsets.only(right: isLandscape ? 6 : 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      margin: EdgeInsets.only(right: isLandscape ? 8 : 16),
                       decoration: BoxDecoration(
-                        color: AppTheme.getSurfaceColor(context),
+                        color: AppTheme.getSurfaceColor(context).withOpacity(0.8),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        '${channels.length} ${AppStrings.of(context)?.channels ?? 'channels'}',
+                        isLandscape ? '${channels.length}' : '${channels.length} ${AppStrings.of(context)?.channels ?? 'channels'}',
                         style: TextStyle(
                           color: AppTheme.getTextSecondary(context),
-                          fontSize: isLandscape ? 9 : 12,  // 横屏时字体更小
-                          fontWeight: FontWeight.w500,
+                          fontSize: isLandscape ? 11 : 12,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
@@ -1369,6 +1390,239 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
         );
       },
     );
+  }
+}
+
+/// 横屏分类栏 Delegate（固定在状态栏下方）
+class _LandscapeCategoryBarDelegate extends SliverPersistentHeaderDelegate {
+  final ChannelProvider provider;
+  final String? selectedGroup;
+  final List<dynamic> channels;
+  final Function(String?) onGroupSelected;
+  final VoidCallback onTestChannels;
+  final VoidCallback onShowBackgroundTest;
+  final VoidCallback? onDeleteUnavailable;
+  final double statusBarHeight;
+
+  _LandscapeCategoryBarDelegate({
+    required this.provider,
+    required this.selectedGroup,
+    required this.channels,
+    required this.onGroupSelected,
+    required this.onTestChannels,
+    required this.onShowBackgroundTest,
+    this.onDeleteUnavailable,
+    required this.statusBarHeight,
+  });
+
+  @override
+  double get minExtent => 40.0 + statusBarHeight;
+
+  @override
+  double get maxExtent => 40.0 + statusBarHeight;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      height: 40 + statusBarHeight,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: Theme.of(context).brightness == Brightness.dark
+              ? [
+                  const Color(0xFF0A0A0A).withOpacity(0.95),
+                  AppTheme.getPrimaryColor(context).withOpacity(0.15),
+                ]
+              : [
+                  const Color(0xFFE0E0E0).withOpacity(0.95),
+                  AppTheme.getPrimaryColor(context).withOpacity(0.12),
+                ],
+        ),
+      ),
+      child: Column(
+        children: [
+          // 顶部状态栏占位
+          SizedBox(height: statusBarHeight - 10),
+          // 分类栏内容
+          Container(
+            height: 40,
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: AppTheme.getCardColor(context).withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                // 左侧：横向滚动的分类列表
+                Expanded(
+                  child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              itemCount: provider.groups.length + 1,
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  final isSelected = selectedGroup == null;
+                  return _buildCategoryChip(
+                    context: context,
+                    name: AppStrings.of(context)?.allChannels ?? 'All',
+                    count: provider.totalChannelCount,
+                    isSelected: isSelected,
+                    onTap: () => onGroupSelected(null),
+                  );
+                } else {
+                  final group = provider.groups[index - 1];
+                  final isSelected = selectedGroup == group.name;
+                  return _buildCategoryChip(
+                    context: context,
+                    name: group.name,
+                    count: group.channelCount,
+                    isSelected: isSelected,
+                    onTap: () => onGroupSelected(group.name),
+                  );
+                }
+              },
+            ),
+          ),
+          // 右侧：操作按钮
+          _buildActions(context),
+        ],
+      ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActions(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 分隔线
+        Container(
+          width: 1,
+          height: 24,
+          color: AppTheme.getCardColor(context).withOpacity(0.5),
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+        ),
+        // 后台测试进度
+        _BackgroundTestIndicator(onTap: onShowBackgroundTest),
+        // 测试按钮
+        IconButton(
+          icon: const Icon(Icons.speed_rounded),
+          iconSize: 18,
+          padding: const EdgeInsets.all(6),
+          color: channels.isEmpty ? AppTheme.getTextMuted(context).withOpacity(0.3) : AppTheme.getTextSecondary(context),
+          onPressed: channels.isEmpty ? null : onTestChannels,
+        ),
+        // 删除失效频道按钮
+        if (onDeleteUnavailable != null)
+          IconButton(
+            icon: const Icon(Icons.delete_sweep_rounded),
+            iconSize: 18,
+            padding: const EdgeInsets.all(6),
+            color: AppTheme.errorColor,
+            onPressed: onDeleteUnavailable,
+          ),
+        // 频道数量
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          margin: const EdgeInsets.only(right: 8),
+          decoration: BoxDecoration(
+            color: AppTheme.getSurfaceColor(context).withOpacity(0.8),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            '${channels.length}',
+            style: TextStyle(
+              color: AppTheme.getTextSecondary(context),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategoryChip({
+    required BuildContext context,
+    required String name,
+    required int count,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              gradient: isSelected ? AppTheme.getGradient(context) : null,
+              color: isSelected ? null : AppTheme.getCardColor(context).withOpacity(0.5),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isSelected
+                    ? AppTheme.getPrimaryColor(context)
+                    : AppTheme.getGlassBorderColor(context),
+                width: isSelected ? 2 : 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  CategoryCard.getIconForCategory(name),
+                  size: 12,
+                  color: isSelected ? Colors.white : AppTheme.getTextSecondary(context),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  name,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : AppTheme.getTextPrimary(context),
+                    fontSize: 11,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+                const SizedBox(width: 3),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? Colors.white.withOpacity(0.2)
+                        : AppTheme.getCardColor(context),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    count.toString(),
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : AppTheme.getTextMuted(context),
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _LandscapeCategoryBarDelegate oldDelegate) {
+    return oldDelegate.selectedGroup != selectedGroup ||
+        oldDelegate.provider.groups.length != provider.groups.length ||
+        oldDelegate.channels.length != channels.length;
   }
 }
 
