@@ -526,9 +526,9 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
             final fallbackEpgUrl = settingsProvider.epgUrl;
             
             if (playlistEpgUrl != null && playlistEpgUrl.isNotEmpty) {
-              await epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl);
+              await epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl, silent: true);
             } else if (fallbackEpgUrl != null && fallbackEpgUrl.isNotEmpty) {
-              await epgProvider.loadEpg(fallbackEpgUrl);
+              await epgProvider.loadEpg(fallbackEpgUrl, silent: true);
             }
           }
         }
@@ -614,9 +614,9 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
                   final fallbackEpgUrl = settingsProvider.epgUrl;
                   
                   if (playlistEpgUrl != null && playlistEpgUrl.isNotEmpty) {
-                    await epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl);
+                    await epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl, silent: true);
                   } else if (fallbackEpgUrl != null && fallbackEpgUrl.isNotEmpty) {
-                    await epgProvider.loadEpg(fallbackEpgUrl);
+                    await epgProvider.loadEpg(fallbackEpgUrl, silent: true);
                   }
                 }
               }
@@ -664,3 +664,4 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
     }
   }
 }
+

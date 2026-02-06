@@ -15,6 +15,7 @@ import 'core/services/service_locator.dart';
 import 'core/services/auto_refresh_service.dart';
 import 'core/platform/native_player_channel.dart';
 import 'core/platform/platform_detector.dart';
+import 'core/widgets/channel_logo_widget.dart';
 import 'features/channels/providers/channel_provider.dart';
 import 'features/player/providers/player_provider.dart';
 import 'features/playlist/providers/playlist_provider.dart';
@@ -83,6 +84,9 @@ void main() async {
 
     // Initialize PlatformDetector for settings page
     await PlatformDetector.init();
+    
+    // ✅ 初始化台标加载的HTTP连接池
+    initializeLogoConnectionPool();
 
     // 初始屏幕方向将在 MaterialApp 构建后根据设置应用
     // 这里先允许所有方向，避免启动时的限制

@@ -14,7 +14,7 @@ class DatabaseHelper {
   Future<void> initialize() async {
     ServiceLocator.log.d('DatabaseHelper: 开始初始化数据库');
     final startTime = DateTime.now();
-    
+
     if (_database != null) {
       ServiceLocator.log.d('DatabaseHelper: 数据库已初始化，跳过');
       return;
@@ -32,10 +32,10 @@ class DatabaseHelper {
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
-    
+
     // 检查台标表是否为空，如果为空则导入数据
     await _ensureChannelLogosImported();
-    
+
     final initTime = DateTime.now().difference(startTime).inMilliseconds;
     ServiceLocator.log.d('DatabaseHelper: 数据库初始化完成，耗时: ${initTime}ms');
   }
@@ -43,11 +43,12 @@ class DatabaseHelper {
   /// 确保台标数据已导入
   Future<void> _ensureChannelLogosImported() async {
     try {
-      final result = await _database!.rawQuery('SELECT COUNT(*) as count FROM channel_logos');
+      final result = await _database!
+          .rawQuery('SELECT COUNT(*) as count FROM channel_logos');
       final count = result.first['count'] as int;
-      
+
       print('🔍 DatabaseHelper: 台标表当前有 $count 条数据');
-      
+
       if (count == 0) {
         print('⚠️ DatabaseHelper: 台标表为空，开始导入数据');
         ServiceLocator.log.d('DatabaseHelper: 台标表为空，开始导入数据');
@@ -136,13 +137,19 @@ class DatabaseHelper {
     ''');
 
     // Create indexes for better performance
-    await db.execute('CREATE INDEX idx_channels_playlist ON channels(playlist_id)');
+    await db
+        .execute('CREATE INDEX idx_channels_playlist ON channels(playlist_id)');
     await db.execute('CREATE INDEX idx_channels_group ON channels(group_name)');
-    await db.execute('CREATE INDEX idx_favorites_channel ON favorites(channel_id)');
-    await db.execute('CREATE INDEX idx_history_channel ON watch_history(channel_id)');
-    await db.execute('CREATE INDEX idx_history_playlist ON watch_history(playlist_id)');
-    await db.execute('CREATE INDEX idx_epg_channel ON epg_data(channel_epg_id)');
-    await db.execute('CREATE INDEX idx_epg_time ON epg_data(start_time, end_time)');
+    await db
+        .execute('CREATE INDEX idx_favorites_channel ON favorites(channel_id)');
+    await db.execute(
+        'CREATE INDEX idx_history_channel ON watch_history(channel_id)');
+    await db.execute(
+        'CREATE INDEX idx_history_playlist ON watch_history(playlist_id)');
+    await db
+        .execute('CREATE INDEX idx_epg_channel ON epg_data(channel_epg_id)');
+    await db
+        .execute('CREATE INDEX idx_epg_time ON epg_data(start_time, end_time)');
 
     // Channel logos table
     await db.execute('''
@@ -154,7 +161,8 @@ class DatabaseHelper {
         created_at INTEGER NOT NULL
       )
     ''');
-    await db.execute('CREATE INDEX idx_channel_logos_name ON channel_logos(channel_name)');
+    await db.execute(
+        'CREATE INDEX idx_channel_logos_name ON channel_logos(channel_name)');
 
     // Import channel logos from SQL script
     await _importChannelLogos(db);
@@ -166,35 +174,41 @@ class DatabaseHelper {
       print('🔍 DatabaseHelper: 开始导入台标数据');
       ServiceLocator.log.d('DatabaseHelper: 开始导入台标数据');
       final startTime = DateTime.now();
-      
+
       // Load SQL script from assets
-      final sqlScript = await rootBundle.loadString('assets/sql/channel_logos.sql');
-      
+      final sqlScript =
+          await rootBundle.loadString('assets/sql/channel_logos.sql');
+
       // Split into individual statements
       final statements = sqlScript
           .split('\n')
           .where((line) => line.trim().startsWith('INSERT'))
           .toList();
-      
+
       print('🔍 DatabaseHelper: 准备执行 ${statements.length} 条 SQL 语句');
-      ServiceLocator.log.d('DatabaseHelper: 准备执行 ${statements.length} 条 SQL 语句');
-      
+      ServiceLocator.log
+          .d('DatabaseHelper: 准备执行 ${statements.length} 条 SQL 语句');
+
       // Execute in batches for better performance
       const batchSize = 100;
       for (var i = 0; i < statements.length; i += batchSize) {
         final batch = db.batch();
-        final end = (i + batchSize < statements.length) ? i + batchSize : statements.length;
-        
+        final end = (i + batchSize < statements.length)
+            ? i + batchSize
+            : statements.length;
+
         for (var j = i; j < end; j++) {
           batch.rawInsert(statements[j]);
         }
-        
+
         await batch.commit(noResult: true);
       }
-      
+
       final duration = DateTime.now().difference(startTime).inMilliseconds;
-      print('✅ DatabaseHelper: 台标数据导入完成，共 ${statements.length} 条记录，耗时 ${duration}ms');
-      ServiceLocator.log.d('DatabaseHelper: 台标数据导入完成，共 ${statements.length} 条记录，耗时 ${duration}ms');
+      print(
+          '✅ DatabaseHelper: 台标数据导入完成，共 ${statements.length} 条记录，耗时 ${duration}ms');
+      ServiceLocator.log.d(
+          'DatabaseHelper: 台标数据导入完成，共 ${statements.length} 条记录，耗时 ${duration}ms');
     } catch (e) {
       print('❌ DatabaseHelper: 台标数据导入失败: $e');
       ServiceLocator.log.e('DatabaseHelper: 台标数据导入失败: $e');
@@ -205,7 +219,8 @@ class DatabaseHelper {
     if (oldVersion < 2) {
       // Add channel_count column to playlists table
       try {
-        await db.execute('ALTER TABLE playlists ADD COLUMN channel_count INTEGER DEFAULT 0');
+        await db.execute(
+            'ALTER TABLE playlists ADD COLUMN channel_count INTEGER DEFAULT 0');
       } catch (e) {
         // Ignore if column already exists
         ServiceLocator.log.d('Migration error (ignored): $e');
@@ -241,8 +256,9 @@ class DatabaseHelper {
             created_at INTEGER NOT NULL
           )
         ''');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_channel_logos_name ON channel_logos(channel_name)');
-        
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_channel_logos_name ON channel_logos(channel_name)');
+
         // Import channel logos data
         await _importChannelLogos(db);
       } catch (e) {
@@ -252,9 +268,11 @@ class DatabaseHelper {
     if (oldVersion < 6) {
       // Add playlist_id column to watch_history table
       try {
-        await db.execute('ALTER TABLE watch_history ADD COLUMN playlist_id INTEGER');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_history_playlist ON watch_history(playlist_id)');
-        
+        await db.execute(
+            'ALTER TABLE watch_history ADD COLUMN playlist_id INTEGER');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_history_playlist ON watch_history(playlist_id)');
+
         // Update existing records to use the first available playlist_id
         final playlists = await db.query('playlists', limit: 1);
         if (playlists.isNotEmpty) {
@@ -323,7 +341,44 @@ class DatabaseHelper {
     return await db.delete(table, where: where, whereArgs: whereArgs);
   }
 
-  Future<List<Map<String, dynamic>>> rawQuery(String sql, [List<Object?>? arguments]) async {
+  Future<List<Map<String, dynamic>>> rawQuery(String sql,
+      [List<Object?>? arguments]) async {
     return await db.rawQuery(sql, arguments);
+  }
+
+  Batch batch() => db.batch();
+
+  /// Optimize database by reclaiming unused space
+  /// This should be called periodically or after large deletions
+  Future<void> vacuum() async {
+    try {
+      ServiceLocator.log.d('开始执行 VACUUM 优化数据库');
+      final startTime = DateTime.now();
+
+      await db.execute('VACUUM');
+
+      final duration = DateTime.now().difference(startTime).inMilliseconds;
+      ServiceLocator.log.d('VACUUM 完成，耗时: ${duration}ms');
+    } catch (e) {
+      ServiceLocator.log.e('VACUUM 执行失败', error: e);
+      rethrow;
+    }
+  }
+
+  /// Get database file size in bytes
+  Future<int> getDatabaseSize() async {
+    try {
+      final Directory appDir = await getApplicationDocumentsDirectory();
+      final String path = join(appDir.path, _databaseName);
+      final file = File(path);
+
+      if (await file.exists()) {
+        return await file.length();
+      }
+      return 0;
+    } catch (e) {
+      ServiceLocator.log.e('获取数据库大小失败', error: e);
+      return 0;
+    }
   }
 }

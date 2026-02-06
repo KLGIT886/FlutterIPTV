@@ -11,6 +11,7 @@ import '../../../core/platform/platform_detector.dart';
 import '../../../core/i18n/app_strings.dart';
 import '../../../core/utils/card_size_calculator.dart';
 import '../../../core/services/service_locator.dart';
+import '../../../core/services/epg_service.dart';
 import '../../channels/providers/channel_provider.dart';
 import '../../favorites/providers/favorites_provider.dart';
 import '../../settings/providers/settings_provider.dart';
@@ -717,6 +718,8 @@ class _SearchScreenState extends State<SearchScreen> {
               
               return GridView.builder(
                 padding: EdgeInsets.symmetric(horizontal: PlatformDetector.isMobile ? 8 : 20),
+                // ✅ 性能优化：限制缓存范围，减少内存占用
+                cacheExtent: 500,
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: crossAxisCount,
                   childAspectRatio: CardSizeCalculator.aspectRatio(),
@@ -726,10 +729,19 @@ class _SearchScreenState extends State<SearchScreen> {
                 itemCount: results.length,
                 itemBuilder: (context, index) {
                   final channel = results[index];
-                  final isFavorite = context.read<FavoritesProvider>().isFavorite(channel.id ?? 0);
-                  final epgProvider = context.watch<EpgProvider>();
-                  final currentProgram = epgProvider.getCurrentProgram(channel.epgId, channel.name);
-                  final nextProgram = epgProvider.getNextProgram(channel.epgId, channel.name);
+                  
+                  // ✅ 使用 select 替代 watch，避免所有搜索结果重建
+                  final isFavorite = context.select<FavoritesProvider, bool>(
+                    (provider) => provider.isFavorite(channel.id ?? 0),
+                  );
+                  
+                  final currentProgram = context.select<EpgProvider, EpgProgram?>(
+                    (provider) => provider.getCurrentProgram(channel.epgId, channel.name),
+                  );
+                  
+                  final nextProgram = context.select<EpgProvider, EpgProgram?>(
+                    (provider) => provider.getNextProgram(channel.epgId, channel.name),
+                  );
 
                   return ChannelCard(
                     name: channel.name,

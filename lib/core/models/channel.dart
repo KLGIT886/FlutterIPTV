@@ -24,6 +24,8 @@ class Channel {
   bool isCurrentlyPlaying;
   int currentSourceIndex; // Current playing source index
 
+  String? fallbackLogoUrl;
+
   Channel({
     this.id,
     required this.playlistId,
@@ -38,6 +40,7 @@ class Channel {
     this.isFavorite = false,
     this.isCurrentlyPlaying = false,
     this.currentSourceIndex = 0,
+    this.fallbackLogoUrl,
   }) : sources = sources ?? [url],
        createdAt = createdAt ?? DateTime.now();
 
@@ -167,6 +170,7 @@ class Channel {
     bool? isFavorite,
     bool? isCurrentlyPlaying,
     int? currentSourceIndex,
+    String? fallbackLogoUrl,
   }) {
     return Channel(
       id: id ?? this.id,
@@ -182,6 +186,7 @@ class Channel {
       isFavorite: isFavorite ?? this.isFavorite,
       isCurrentlyPlaying: isCurrentlyPlaying ?? this.isCurrentlyPlaying,
       currentSourceIndex: currentSourceIndex ?? this.currentSourceIndex,
+      fallbackLogoUrl: fallbackLogoUrl ?? this.fallbackLogoUrl,
     );
   }
 

@@ -9,6 +9,7 @@ import '../../../core/widgets/channel_logo_widget.dart';
 import '../../../core/widgets/auto_scroll_text.dart';
 import '../../../core/platform/windows_pip_channel.dart';
 import '../../../core/i18n/app_strings.dart';
+import '../../../core/services/epg_service.dart';
 import '../providers/multi_screen_provider.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../../epg/providers/epg_provider.dart';
@@ -768,10 +769,14 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
       return const SizedBox.shrink();
     }
 
-    final epgProvider = context.watch<EpgProvider>();
+    // ✅ 使用 select 只监听当前屏幕频道的 EPG 数据
     final currentProgram = screen.channel != null
-        ? epgProvider.getCurrentProgram(
-            screen.channel!.epgId, screen.channel!.name)
+        ? context.select<EpgProvider, EpgProgram?>(
+            (provider) => provider.getCurrentProgram(
+              screen.channel!.epgId, 
+              screen.channel!.name,
+            ),
+          )
         : null;
 
     return Container(

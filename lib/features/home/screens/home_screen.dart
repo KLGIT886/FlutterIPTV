@@ -253,15 +253,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
           activePlaylist!.epgUrl!.isNotEmpty) {
         ServiceLocator.log
             .d('HomeScreen: 初始加载播放列表的 EPG URL: ${activePlaylist.epgUrl}');
+        // Background loading - don't block UI
         await epgProvider.loadEpg(
           activePlaylist.epgUrl!,
           fallbackUrl: settingsProvider.epgUrl,
+          silent: true,
         );
       } else if (settingsProvider.epgUrl != null &&
           settingsProvider.epgUrl!.isNotEmpty) {
         ServiceLocator.log
             .d('HomeScreen: 初始加载设置中的兜底 EPG URL: ${settingsProvider.epgUrl}');
-        await epgProvider.loadEpg(settingsProvider.epgUrl!);
+        // Background loading - don't block UI
+        await epgProvider.loadEpg(settingsProvider.epgUrl!, silent: true);
       } else {
         ServiceLocator.log.d('HomeScreen: 没有可用的 EPG URL（播放列表和设置中都没有配置）');
       }
@@ -894,8 +897,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
   /// 刷新当前播放列表
   Future<void> _refreshCurrentPlaylist(PlaylistProvider playlistProvider,
       ChannelProvider channelProvider) async {
-    ServiceLocator.log.i('开始刷新当前播放列表', tag: 'HomeScreen');
-    final startTime = DateTime.now();
+    ServiceLocator.log.i('开始刷新当前播放列表（后台模式）', tag: 'HomeScreen');
 
     final activePlaylist = playlistProvider.activePlaylist;
     if (activePlaylist == null) {
@@ -903,77 +905,55 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
       return;
     }
 
-    // 清理台标加载队列和缓存，准备重新加载
-    clearAllLogoCache(); // 完全清理，包括已加载的缓存
-
-    // 显示加载提示
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('刷新中 ${activePlaylist.name}...'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-
-    ServiceLocator.log.d(
-        '刷新播放列表: ${activePlaylist.name} (ID: ${activePlaylist.id})',
-        tag: 'HomeScreen');
-
-    // 执行刷新
-    final success = await playlistProvider.refreshPlaylist(activePlaylist);
-
     if (!mounted) return;
 
-    if (success) {
-      // 刷新成功，重新加载频道
-      if (activePlaylist.id != null) {
-        await channelProvider.loadChannels(activePlaylist.id!);
-        // 刷新观看记录
-        _refreshWatchHistory();
+    // Use unified refresh method with callback (silent mode for background refresh)
+    await playlistProvider.refreshPlaylistWithCallback(
+      playlist: activePlaylist,
+      context: context,
+      silent: true,
+      onComplete: (success, error) async {
+        if (!mounted) return;
 
-        // 重新加载 EPG（使用播放列表的 EPG URL，如果失败则使用设置中的兜底 URL）
-        final epgProvider = context.read<EpgProvider>();
-        final settingsProvider = context.read<SettingsProvider>();
+        if (success) {
+          // Reload channels
+          if (activePlaylist.id != null) {
+            await channelProvider.loadChannels(activePlaylist.id!);
+            
+            // Clear logo cache
+            clearAllLogoCache();
+            
+            // Refresh watch history
+            _refreshWatchHistory();
 
-        // 重新加载播放列表以获取最新的 EPG URL
-        await playlistProvider.loadPlaylists();
-        final updatedPlaylist = playlistProvider.activePlaylist;
+            // Reload EPG
+            final epgProvider = context.read<EpgProvider>();
+            final settingsProvider = context.read<SettingsProvider>();
 
-        if (updatedPlaylist?.epgUrl != null) {
-          ServiceLocator.log.d(
-              'HomeScreen: 使用播放列表的 EPG URL 重新加载: ${updatedPlaylist!.epgUrl}');
-          await epgProvider.loadEpg(
-            updatedPlaylist.epgUrl!,
-            fallbackUrl: settingsProvider.epgUrl,
-          );
-        } else if (settingsProvider.epgUrl != null) {
-          ServiceLocator.log.d(
-              'HomeScreen: 使用设置中的兜底 EPG URL 重新加载: ${settingsProvider.epgUrl}');
-          await epgProvider.loadEpg(settingsProvider.epgUrl!);
+            await playlistProvider.loadPlaylists();
+            final updatedPlaylist = playlistProvider.activePlaylist;
+
+            if (updatedPlaylist?.epgUrl != null) {
+              ServiceLocator.log.d(
+                  'HomeScreen: 使用播放列表的 EPG URL 重新加载: ${updatedPlaylist!.epgUrl}',
+                  tag: 'HomeScreen');
+              // Background loading - don't block UI
+              await epgProvider.loadEpg(
+                updatedPlaylist.epgUrl!,
+                fallbackUrl: settingsProvider.epgUrl,
+                silent: true,
+              );
+            } else if (settingsProvider.epgUrl != null) {
+              ServiceLocator.log.d(
+                  'HomeScreen: 使用设置中的兜底 EPG URL 重新加载: ${settingsProvider.epgUrl}',
+                  tag: 'HomeScreen');
+              // Background loading - don't block UI
+              await epgProvider.loadEpg(settingsProvider.epgUrl!, silent: true);
+            }
+          }
         }
-      }
-
-      final refreshTime = DateTime.now().difference(startTime).inMilliseconds;
-      ServiceLocator.log.i('播放列表刷新成功，耗时: ${refreshTime}ms', tag: 'HomeScreen');
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('刷新成功'),
-          duration: const Duration(seconds: 2),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } else {
-      ServiceLocator.log.e('播放列表刷新失败', tag: 'HomeScreen');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-              '刷新失败: ${playlistProvider.error?.replaceAll("Exception:", "").trim() ?? ""}'),
-          duration: const Duration(seconds: 5),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
+      },
+    );
   }
 
   /// 恢复分屏播放

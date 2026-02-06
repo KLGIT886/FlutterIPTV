@@ -1567,7 +1567,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   final strings = AppStrings.of(context);
 
                   if (newUrl != null && newUrl.isNotEmpty && settings.enableEpg) {
-                    final success = await epgProvider.loadEpg(newUrl);
+                    // User-initiated action, show loading state
+                    final success = await epgProvider.loadEpg(newUrl, silent: false);
                     if (success) {
                       _showSuccess(context, strings?.epgUrlSavedAndLoaded ?? 'EPG URL saved and loaded successfully');
                     } else {

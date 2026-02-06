@@ -429,17 +429,24 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
 
   Future<void> _refreshPlaylist(
       PlaylistProvider provider, dynamic playlist) async {
-    final success = await provider.refreshPlaylist(playlist);
-    await Future.delayed(const Duration(milliseconds: 100));
+    if (!mounted) return;
 
-    if (mounted) {
-      if (success) {
-        final channelProvider = context.read<ChannelProvider>();
-        if (provider.activePlaylist?.id == playlist.id) {
-          await channelProvider.loadChannels(playlist.id);
-        }
+    // Use unified refresh method with callback
+    await provider.refreshPlaylistWithCallback(
+      playlist: playlist,
+      context: context,
+      silent: false,
+      onComplete: (success, error) async {
+        if (!mounted) return;
 
-        if (mounted) {
+        if (success) {
+          // Reload channels if this is the active playlist
+          final channelProvider = context.read<ChannelProvider>();
+          if (provider.activePlaylist?.id == playlist.id) {
+            await channelProvider.loadChannels(playlist.id);
+          }
+
+          // Reload EPG if enabled
           final settingsProvider = context.read<SettingsProvider>();
           final epgProvider = context.read<EpgProvider>();
 
@@ -447,30 +454,16 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
             final playlistEpgUrl = provider.lastExtractedEpgUrl;
             final fallbackEpgUrl = settingsProvider.epgUrl;
 
+            // Background loading - don't block UI, don't await
             if (playlistEpgUrl != null && playlistEpgUrl.isNotEmpty) {
-              epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl);
+              epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl, silent: true);
             } else if (fallbackEpgUrl != null && fallbackEpgUrl.isNotEmpty) {
-              epgProvider.loadEpg(fallbackEpgUrl);
+              epgProvider.loadEpg(fallbackEpgUrl, silent: true);
             }
           }
         }
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              success
-                  ? (AppStrings.of(context)?.playlistRefreshed ??
-                      'Playlist refreshed successfully')
-                  : '${AppStrings.of(context)?.playlistRefreshFailed ?? "Failed to refresh playlist"}: ${provider.error?.replaceAll("Exception:", "").trim() ?? ""}',
-            ),
-            backgroundColor:
-                success ? AppTheme.successColor : AppTheme.errorColor,
-          ),
-        );
-      }
-    }
+      },
+    );
   }
 
   void _copyUrl(String url) {

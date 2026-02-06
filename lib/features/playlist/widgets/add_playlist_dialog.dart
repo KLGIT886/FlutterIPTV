@@ -822,10 +822,11 @@ class _AddPlaylistDialogState extends State<AddPlaylistDialog> {
             final playlistEpgUrl = provider.lastExtractedEpgUrl;
             final fallbackEpgUrl = settingsProvider.epgUrl;
             
+            // Background loading after import - don't block UI
             if (playlistEpgUrl != null && playlistEpgUrl.isNotEmpty) {
-              await epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl);
+              await epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl, silent: true);
             } else if (fallbackEpgUrl != null && fallbackEpgUrl.isNotEmpty) {
-              await epgProvider.loadEpg(fallbackEpgUrl);
+              await epgProvider.loadEpg(fallbackEpgUrl, silent: true);
             }
           }
         }
@@ -907,10 +908,11 @@ class _AddPlaylistDialogState extends State<AddPlaylistDialog> {
                   final playlistEpgUrl = provider.lastExtractedEpgUrl;
                   final fallbackEpgUrl = settingsProvider.epgUrl;
                   
+                  // Background loading after import - don't block UI
                   if (playlistEpgUrl != null && playlistEpgUrl.isNotEmpty) {
-                    await epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl);
+                    await epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl, silent: true);
                   } else if (fallbackEpgUrl != null && fallbackEpgUrl.isNotEmpty) {
-                    await epgProvider.loadEpg(fallbackEpgUrl);
+                    await epgProvider.loadEpg(fallbackEpgUrl, silent: true);
                   }
                 }
               }

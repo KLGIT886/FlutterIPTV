@@ -33,9 +33,9 @@ class M3UParser {
 
       // Use Dio for better handling of large files and redirects
       final dio = Dio();
-      // Reduce timeout to 10 seconds as requested
-      dio.options.connectTimeout = const Duration(seconds: 5);
-      dio.options.receiveTimeout = const Duration(seconds: 5);
+      // Increased timeout for large playlists
+      dio.options.connectTimeout = const Duration(seconds: 15);
+      dio.options.receiveTimeout = const Duration(seconds: 30);
 
       final response = await dio.get(
         url,
@@ -46,12 +46,22 @@ class M3UParser {
       );
 
       ServiceLocator.log.d('DEBUG: 成功获取播放列表内容，状态码: ${response.statusCode}');
-      ServiceLocator.log
-          .d('DEBUG: 内容大小: ${response.data.toString().length} 字符');
+      final contentLength = response.data.toString().length;
+      ServiceLocator.log.d('DEBUG: 内容大小: $contentLength 字符');
 
-      // 使用 compute 在独立 isolate 中解析，避免阻塞主线程
-      final result = await compute(
-          _parseInIsolate, _ParseParams(response.data.toString(), playlistId));
+      // Only use isolate for large files (>500KB) to avoid overhead
+      final useIsolate = contentLength > 500 * 1024;
+      ServiceLocator.log.d('DEBUG: ${useIsolate ? "使用" : "不使用"} isolate 解析 (大小: ${(contentLength / 1024).toStringAsFixed(1)}KB)');
+
+      final M3UParseResult result;
+      if (useIsolate) {
+        result = await compute(
+            _parseInIsolate, _ParseParams(response.data.toString(), playlistId));
+      } else {
+        // Parse directly in main thread for small files
+        final channels = parse(response.data.toString(), playlistId);
+        result = _lastParseResult ?? M3UParseResult(channels: channels, epgUrl: null);
+      }
 
       // 保存解析结果（包括 EPG URL）到主线程的静态变量
       _lastParseResult = result;
@@ -78,7 +88,7 @@ class M3UParser {
         throw Exception('Access denied (403)');
       }
 
-      throw e;
+      rethrow;
     }
   }
 
@@ -95,11 +105,21 @@ class M3UParser {
       }
 
       final content = await file.readAsString();
-      ServiceLocator.log.d('DEBUG: 成功读取本地文件，内容大小: ${content.length} 字符');
+      final contentLength = content.length;
+      ServiceLocator.log.d('DEBUG: 成功读取本地文件，内容大小: $contentLength 字符');
 
-      // 使用 compute 在独立 isolate 中解析，避免阻塞主线程
-      final result =
-          await compute(_parseInIsolate, _ParseParams(content, playlistId));
+      // Only use isolate for large files (>500KB)
+      final useIsolate = contentLength > 500 * 1024;
+      ServiceLocator.log.d('DEBUG: ${useIsolate ? "使用" : "不使用"} isolate 解析 (大小: ${(contentLength / 1024).toStringAsFixed(1)}KB)');
+
+      final M3UParseResult result;
+      if (useIsolate) {
+        result = await compute(_parseInIsolate, _ParseParams(content, playlistId));
+      } else {
+        // Parse directly in main thread for small files
+        final channels = parse(content, playlistId);
+        result = _lastParseResult ?? M3UParseResult(channels: channels, epgUrl: null);
+      }
 
       // 保存解析结果（包括 EPG URL）到主线程的静态变量
       _lastParseResult = result;
@@ -248,9 +268,10 @@ class M3UParser {
 
   /// Merge channels with same epgId into single channel with multiple sources
   /// Preserves the order of first occurrence, but prefers non-special groups
+  /// Optimized using LinkedHashMap for better performance
   static List<Channel> _mergeChannelSources(List<Channel> channels) {
+    // Use Map to maintain insertion order while providing O(1) lookup
     final Map<String, Channel> mergedMap = {};
-    final List<String> orderKeys = []; // Preserve order
 
     // Special groups that should not be the primary group
     final specialGroups = {'🕘️更新时间', '更新时间', 'update', 'info'};
@@ -292,12 +313,11 @@ class M3UParser {
       } else {
         // New channel
         mergedMap[mergeKey] = channel.copyWith(sources: [channel.url]);
-        orderKeys.add(mergeKey);
       }
     }
 
-    // Return in original order
-    return orderKeys.map((key) => mergedMap[key]!).toList();
+    // Return in original order (Map maintains insertion order in Dart)
+    return mergedMap.values.toList();
   }
 
   /// Extract EPG URL from M3U header line

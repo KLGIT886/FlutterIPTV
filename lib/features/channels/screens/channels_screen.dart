@@ -15,14 +15,17 @@ import '../../../core/i18n/app_strings.dart';
 import '../../../core/services/channel_test_service.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/background_test_service.dart';
+import '../../../core/services/epg_service.dart';
 import '../../../core/models/channel.dart';
 import '../../../core/utils/card_size_calculator.dart';
+
 import '../providers/channel_provider.dart';
 import '../widgets/channel_test_dialog.dart';
 import '../../favorites/providers/favorites_provider.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../../epg/providers/epg_provider.dart';
 import '../../multi_screen/providers/multi_screen_provider.dart';
+import '../../playlist/providers/playlist_provider.dart';
 
 class ChannelsScreen extends StatefulWidget {
   final String? groupName;
@@ -43,6 +46,10 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
   final ScrollController _scrollController = ScrollController();
   final ScrollController _groupScrollController = ScrollController();
 
+  // ✅ 本地缓存频道列表，避免每次 Provider 更新都重建
+  List<Channel> _cachedChannels = [];
+  bool _isLoadingMore = false;
+
   // 用于TV端分类焦点管理
   final List<FocusNode> _groupFocusNodes = [];
   final List<FocusNode> _channelFocusNodes = [];
@@ -52,10 +59,16 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
   // 延迟选中分类的定时器
   Timer? _groupSelectTimer;
 
+  // ✅ 滚动状态管理：用于暂停台标加载
+  Timer? _scrollEndTimer;
+
   @override
   void initState() {
     super.initState();
     _selectedGroup = widget.groupName;
+
+    // ✅ 添加滚动监听，滚动时暂停台标加载
+    _scrollController.addListener(_onScroll);
 
     // 嵌入模式下清除分类筛选，显示全部频道
     if (widget.embedded) {
@@ -64,7 +77,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
       });
     } else if (_selectedGroup != null) {
       context.read<ChannelProvider>().selectGroup(_selectedGroup!);
-      
+
       // 如果是从首页"更多"按钮跳转过来的，延迟跳转焦点到第一个频道
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (PlatformDetector.isTV) {
@@ -73,12 +86,13 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
             if (mounted) {
               // 找到对应分类的索引
               final provider = context.read<ChannelProvider>();
-              final groupIndex = provider.groups.indexWhere((g) => g.name == _selectedGroup);
+              final groupIndex =
+                  provider.groups.indexWhere((g) => g.name == _selectedGroup);
               if (groupIndex >= 0) {
                 // +1 因为第一个是"全部频道"
                 _currentGroupIndex = groupIndex + 1;
               }
-              
+
               // 跳转焦点到第一个频道并记住索引
               if (_channelFocusNodes.isNotEmpty) {
                 _lastChannelIndex = 0; // 记住是第一个频道
@@ -93,7 +107,17 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
 
   @override
   void dispose() {
+    // 确保退出页面时恢复台标加载
+    try {
+      if (mounted) {
+        context.read<ChannelProvider>().resumeLogoLoading();
+      }
+    } catch (e) {
+      // Ignore provider error on dispose
+    }
+
     _groupSelectTimer?.cancel();
+    _scrollEndTimer?.cancel();
     _scrollController.dispose();
     _groupScrollController.dispose();
     for (final node in _groupFocusNodes) {
@@ -103,6 +127,124 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
       node.dispose();
     }
     super.dispose();
+  }
+
+  // ✅ 控制台标加载状态
+  void setLogoLoadingScrolling(bool isScrolling) {
+    if (!mounted) return;
+    try {
+      final provider = context.read<ChannelProvider>();
+      if (isScrolling) {
+        provider.pauseLogoLoading();
+      } else {
+        provider.resumeLogoLoading();
+      }
+    } catch (_) {}
+  }
+
+  /// ✅ 滚动监听：滚动时暂停台标加载 + 滚动到底部时加载更多
+  void _onScroll() {
+    // 标记为正在滚动
+    setLogoLoadingScrolling(true);
+
+    // 取消之前的定时器
+    _scrollEndTimer?.cancel();
+
+    // 滚动停止500ms后恢复台标加载
+    _scrollEndTimer = Timer(const Duration(milliseconds: 500), () {
+      setLogoLoadingScrolling(false);
+    });
+
+    // ✅ 检查是否滚动到底部，触发加载更多
+    if (!_scrollController.hasClients) return;
+
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.position.pixels;
+    final delta = maxScroll - currentScroll;
+
+    // 距离底部还有1000像素时开始加载下一页
+    if (delta < 1000 && mounted && !_isLoadingMore) {
+      final provider = context.read<ChannelProvider>();
+
+      if (provider.hasMore) {
+        ServiceLocator.log.i(
+            '[ChannelsScreen] 触发加载更多: delta=${delta.toStringAsFixed(0)}px, loaded=${provider.loadedChannelCount}/${provider.totalChannelCount}');
+
+        setState(() => _isLoadingMore = true);
+
+        // 判断是加载所有频道还是特定播放列表
+        Future<void> loadFuture;
+        if (provider.selectedGroup == null) {
+          ServiceLocator.log.d('[ChannelsScreen] 加载所有频道（分页）');
+          loadFuture = provider.loadAllChannels(loadMore: true);
+        } else {
+          final playlistProvider = context.read<PlaylistProvider>();
+          final activePlaylist = playlistProvider.activePlaylist;
+          final playlistId = activePlaylist?.id;
+          if (playlistId != null) {
+            ServiceLocator.log.d('[ChannelsScreen] 加载播放列表 $playlistId 的频道（分页）');
+            loadFuture = provider.loadChannels(playlistId, loadMore: true);
+          } else {
+            ServiceLocator.log.w('[ChannelsScreen] 无法加载更多：playlistId 为 null');
+            setState(() => _isLoadingMore = false);
+            return;
+          }
+        }
+
+        // 加载完成后更新本地缓存和状态
+        loadFuture.then((_) {
+          ServiceLocator.log.i('[ChannelsScreen] 加载更多完成，开始更新缓存');
+          if (mounted) {
+            setState(() {
+              _cachedChannels = provider.filteredChannels;
+              ServiceLocator.log
+                  .i('[ChannelsScreen] 缓存更新完成: ${_cachedChannels.length} 个频道');
+            });
+
+            // ✅ 等待UI渲染完成后再解锁“加载更多”，防止快速连续触发
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                setState(() {
+                  _isLoadingMore = false;
+                });
+                ServiceLocator.log.d('[ChannelsScreen] "加载更多"已解锁');
+
+                // NEW LOGIC: Check again if we're at the bottom and need to load more
+                final currentMaxScroll =
+                    _scrollController.position.maxScrollExtent;
+                final currentScrollPosition = _scrollController.position.pixels;
+
+                const threshold = 0.9; // Moved threshold declaration here
+
+                bool shouldLoadNextPage = false;
+                if (currentMaxScroll == 0.0) {
+                  // No scrollable content yet, or very little (e.g., first load)
+                  shouldLoadNextPage =
+                      true; // Always try to load if nothing loaded yet
+                } else {
+                  shouldLoadNextPage =
+                      (currentScrollPosition / currentMaxScroll) > threshold;
+                }
+
+                if (shouldLoadNextPage && provider.hasMore) {
+                  ServiceLocator.log.d(
+                      '[ChannelsScreen] "加载更多"解锁后再次触发加载 (position/max: ${currentScrollPosition.toStringAsFixed(0)}/${currentMaxScroll.toStringAsFixed(0)}, threshold: ${threshold * 100}%)');
+                  _onScroll(); // Recursive call, but now with a guaranteed frame break.
+                } else {
+                  ServiceLocator.log.d(
+                      '[ChannelsScreen] "加载更多"解锁，但不再触发下一页加载 (position/max: ${currentScrollPosition.toStringAsFixed(0)}/${currentMaxScroll.toStringAsFixed(0)}, hasMore: ${provider.hasMore}, threshold: ${threshold * 100}%)');
+                }
+              }
+            });
+          }
+        }).catchError((e) {
+          ServiceLocator.log.e('[ChannelsScreen] 加载更多失败', error: e);
+          if (mounted) {
+            setState(() => _isLoadingMore = false);
+          }
+        });
+      }
+    }
   }
 
   @override
@@ -123,27 +265,28 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
       return Scaffold(
         body: Container(
           decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: Theme.of(context).brightness == Brightness.dark
-                        ? [
-                            AppTheme.getBackgroundColor(context),
-                            AppTheme.getPrimaryColor(context).withOpacity(0.15),
-                            AppTheme.getBackgroundColor(context),
-                          ]
-                        : [
-                            AppTheme.getBackgroundColor(context),
-                            AppTheme.getBackgroundColor(context).withOpacity(0.9),
-                            AppTheme.getPrimaryColor(context).withOpacity(0.08),
-                          ],
-                  ),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: Theme.of(context).brightness == Brightness.dark
+                  ? [
+                      AppTheme.getBackgroundColor(context),
+                      AppTheme.getPrimaryColor(context).withOpacity(0.15),
+                      AppTheme.getBackgroundColor(context),
+                    ]
+                  : [
+                      AppTheme.getBackgroundColor(context),
+                      AppTheme.getBackgroundColor(context).withOpacity(0.9),
+                      AppTheme.getPrimaryColor(context).withOpacity(0.08),
+                    ],
+            ),
           ),
           child: TVSidebar(
             selectedIndex: 1, // 频道页
             onRight: () {
               // 主菜单按右键，跳转到当前分类
-              if (_groupFocusNodes.isNotEmpty && _currentGroupIndex < _groupFocusNodes.length) {
+              if (_groupFocusNodes.isNotEmpty &&
+                  _currentGroupIndex < _groupFocusNodes.length) {
                 _groupFocusNodes[_currentGroupIndex].requestFocus();
               }
             },
@@ -157,9 +300,11 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
     if (widget.embedded) {
       final isMobile = PlatformDetector.isMobile;
       final isLandscape = isMobile && MediaQuery.of(context).size.width > 700;
-      final statusBarHeight = isMobile ? MediaQuery.of(context).padding.top : 0.0;
-      final topPadding = isMobile ? (statusBarHeight > 0 ? statusBarHeight - 15 : 0.0) : 0.0;
-      
+      final statusBarHeight =
+          isMobile ? MediaQuery.of(context).padding.top : 0.0;
+      final topPadding =
+          isMobile ? (statusBarHeight > 0 ? statusBarHeight - 15 : 0.0) : 0.0;
+
       return Stack(
         children: [
           content,
@@ -183,18 +328,21 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.menu_rounded, color: AppTheme.getTextPrimary(context), size: 18),
+                        Icon(Icons.menu_rounded,
+                            color: AppTheme.getTextPrimary(context), size: 18),
                         const SizedBox(width: 6),
                         Text(
-                          _selectedGroup ?? (AppStrings.of(context)?.allChannels ?? 'All'),
+                          _selectedGroup ??
+                              (AppStrings.of(context)?.allChannels ?? 'All'),
                           style: TextStyle(
-                            color: AppTheme.getTextPrimary(context), 
+                            color: AppTheme.getTextPrimary(context),
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                         const SizedBox(width: 4),
-                        Icon(Icons.arrow_drop_down, color: AppTheme.getTextMuted(context), size: 18),
+                        Icon(Icons.arrow_drop_down,
+                            color: AppTheme.getTextMuted(context), size: 18),
                       ],
                     ),
                   ),
@@ -265,15 +413,15 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                     },
                   ),
                   ...provider.groups.map((group) => _buildMobileGroupItem(
-                    name: group.name,
-                    count: group.channelCount,
-                    isSelected: _selectedGroup == group.name,
-                    onTap: () {
-                      setState(() => _selectedGroup = group.name);
-                      provider.selectGroup(group.name);
-                      Navigator.pop(ctx);
-                    },
-                  )),
+                        name: group.name,
+                        count: group.channelCount,
+                        isSelected: _selectedGroup == group.name,
+                        onTap: () {
+                          setState(() => _selectedGroup = group.name);
+                          provider.selectGroup(group.name);
+                          Navigator.pop(ctx);
+                        },
+                      )),
                 ],
               ),
             ),
@@ -335,11 +483,13 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                       colors: Theme.of(context).brightness == Brightness.dark
                           ? [
                               const Color(0xFF0A0A0A),
-                              AppTheme.getPrimaryColor(context).withOpacity(0.1),
+                              AppTheme.getPrimaryColor(context)
+                                  .withOpacity(0.1),
                             ]
                           : [
                               const Color(0xFFE0E0E0),
-                              AppTheme.getPrimaryColor(context).withOpacity(0.12),
+                              AppTheme.getPrimaryColor(context)
+                                  .withOpacity(0.12),
                             ],
                     ),
                     border: Border(
@@ -382,12 +532,15 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
 
                 // All Channels Option
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   child: _buildGroupItem(
                     name: AppStrings.of(context)?.allChannels ?? 'All Channels',
                     count: provider.totalChannelCount,
                     isSelected: _selectedGroup == null,
-                    focusNode: _groupFocusNodes.isNotEmpty ? _groupFocusNodes[0] : null,
+                    focusNode: _groupFocusNodes.isNotEmpty
+                        ? _groupFocusNodes[0]
+                        : null,
                     groupIndex: 0,
                     onTap: () {
                       setState(() {
@@ -405,7 +558,8 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                 Expanded(
                   child: ListView.builder(
                     controller: _groupScrollController,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     itemCount: provider.groups.length,
                     itemBuilder: (context, index) {
                       final group = provider.groups[index];
@@ -414,7 +568,9 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                         name: group.name,
                         count: group.channelCount,
                         isSelected: _selectedGroup == group.name,
-                        focusNode: focusIndex < _groupFocusNodes.length ? _groupFocusNodes[focusIndex] : null,
+                        focusNode: focusIndex < _groupFocusNodes.length
+                            ? _groupFocusNodes[focusIndex]
+                            : null,
                         groupIndex: focusIndex,
                         onTap: () {
                           setState(() {
@@ -448,7 +604,8 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
               children: [
                 // Header
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: const BoxDecoration(
                     gradient: AppTheme.lotusGradient,
                   ),
@@ -517,13 +674,17 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
       leading: Icon(
         CategoryCard.getIconForCategory(name),
-        color: isSelected ? AppTheme.getPrimaryColor(context) : AppTheme.getTextSecondary(context),
+        color: isSelected
+            ? AppTheme.getPrimaryColor(context)
+            : AppTheme.getTextSecondary(context),
         size: 20,
       ),
       title: Text(
         name,
         style: TextStyle(
-          color: isSelected ? AppTheme.getPrimaryColor(context) : AppTheme.getTextPrimary(context),
+          color: isSelected
+              ? AppTheme.getPrimaryColor(context)
+              : AppTheme.getTextPrimary(context),
           fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
           fontSize: 13,
         ),
@@ -531,13 +692,17 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.getPrimaryColor(context).withOpacity(0.2) : AppTheme.getCardColor(context),
+          color: isSelected
+              ? AppTheme.getPrimaryColor(context).withOpacity(0.2)
+              : AppTheme.getCardColor(context),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Text(
           count.toString(),
           style: TextStyle(
-            color: isSelected ? AppTheme.getPrimaryColor(context) : AppTheme.getTextMuted(context),
+            color: isSelected
+                ? AppTheme.getPrimaryColor(context)
+                : AppTheme.getTextMuted(context),
             fontSize: 11,
             fontWeight: FontWeight.w600,
           ),
@@ -567,7 +732,8 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                 // TV端焦点移动延迟选中分类，避免快速滚动时频繁刷新
                 _currentGroupIndex = groupIndex;
                 _groupSelectTimer?.cancel();
-                _groupSelectTimer = Timer(const Duration(milliseconds: 300), () {
+                _groupSelectTimer =
+                    Timer(const Duration(milliseconds: 300), () {
                   if (mounted) {
                     // 切换分类时重置频道索引并滚动到顶部
                     _lastChannelIndex = 0;
@@ -581,7 +747,8 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
             ? () {
                 // 按右键跳转到上次聚焦的频道（或第一个）
                 if (_channelFocusNodes.isNotEmpty) {
-                  final targetIndex = _lastChannelIndex.clamp(0, _channelFocusNodes.length - 1);
+                  final targetIndex =
+                      _lastChannelIndex.clamp(0, _channelFocusNodes.length - 1);
                   _channelFocusNodes[targetIndex].requestFocus();
                 }
               }
@@ -602,7 +769,9 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
             duration: AppTheme.animationFast,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              gradient: isSelected || isFocused ? AppTheme.getSoftGradient(context) : null,
+              gradient: isSelected || isFocused
+                  ? AppTheme.getSoftGradient(context)
+                  : null,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color: isFocused
@@ -621,7 +790,9 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                   width: 4,
                   height: 24,
                   decoration: BoxDecoration(
-                    color: isSelected ? AppTheme.getPrimaryColor(context) : Colors.transparent,
+                    color: isSelected
+                        ? AppTheme.getPrimaryColor(context)
+                        : Colors.transparent,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -632,9 +803,12 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                   child: Text(
                     name,
                     style: TextStyle(
-                      color: isSelected ? AppTheme.getPrimaryColor(context) : AppTheme.getTextPrimary(context),
+                      color: isSelected
+                          ? AppTheme.getPrimaryColor(context)
+                          : AppTheme.getTextPrimary(context),
                       fontSize: 14,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.normal,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -643,15 +817,20 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
 
                 // Count badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: isSelected ? AppTheme.getPrimaryColor(context).withOpacity(0.2) : AppTheme.getCardColor(context),
+                    color: isSelected
+                        ? AppTheme.getPrimaryColor(context).withOpacity(0.2)
+                        : AppTheme.getCardColor(context),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     count.toString(),
                     style: TextStyle(
-                      color: isSelected ? AppTheme.getPrimaryColor(context) : AppTheme.getTextMuted(context),
+                      color: isSelected
+                          ? AppTheme.getPrimaryColor(context)
+                          : AppTheme.getTextMuted(context),
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
@@ -667,25 +846,68 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
   }
 
   Widget _buildChannelsContent() {
+    ServiceLocator.log.d('[ChannelsScreen] _buildChannelsContent 被调用');
+
+    // ✅ 使用 Consumer 只监听分组变化，频道列表使用本地缓存
     return Consumer<ChannelProvider>(
       builder: (context, provider, _) {
-        final channels = provider.filteredChannels;
+        ServiceLocator.log.d(
+            '[ChannelsScreen] Consumer builder 被调用 - filteredChannels=${provider.filteredChannels.length}, cached=${_cachedChannels.length}');
+
+        // 首次加载或切换分类时更新缓存
+        if (_cachedChannels.isEmpty ||
+            provider.filteredChannels.length != _cachedChannels.length) {
+          ServiceLocator.log.d(
+              '[ChannelsScreen] 需要更新缓存: empty=${_cachedChannels.isEmpty}, lengthChanged=${provider.filteredChannels.length != _cachedChannels.length}');
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {
+                _cachedChannels = provider.filteredChannels;
+                ServiceLocator.log
+                    .d('[ChannelsScreen] 缓存已更新: ${_cachedChannels.length} 个频道');
+              });
+
+              // ✅ 检查是否填满屏幕，如果未填满且还有更多数据，自动触发加载下一页
+              Future.delayed(const Duration(milliseconds: 200), () {
+                if (mounted && _scrollController.hasClients) {
+                  final maxScroll = _scrollController.position.maxScrollExtent;
+                  // 如果最大滚动距离很小（说明内容没有填满屏幕），且还有更多数据，则触发加载
+                  if (maxScroll < 100 && provider.hasMore && !_isLoadingMore) {
+                    ServiceLocator.log.i(
+                        '[ChannelsScreen] 内容不足以滚动(maxScroll=$maxScroll)，自动触发加载更多');
+                    _onScroll();
+                  }
+                }
+              });
+            }
+          });
+        }
+
+        final channels = _cachedChannels.isNotEmpty
+            ? _cachedChannels
+            : provider.filteredChannels;
+        ServiceLocator.log.d('[ChannelsScreen] 使用频道列表: ${channels.length} 个');
         final isMobile = PlatformDetector.isMobile;
         final isLandscape = isMobile && MediaQuery.of(context).size.width > 700;
-        
+
         // 参考首页的设置，手机端获取状态栏高度并减少间距
-        final statusBarHeight = isMobile ? MediaQuery.of(context).padding.top : 0.0;
-        final topPadding = isMobile ? (statusBarHeight > 0 ? statusBarHeight - 15.0 : 0.0) : 0.0;
+        final statusBarHeight =
+            isMobile ? MediaQuery.of(context).padding.top : 0.0;
+        final topPadding = isMobile
+            ? (statusBarHeight > 0 ? statusBarHeight - 15.0 : 0.0)
+            : 0.0;
 
         return CustomScrollView(
           controller: _scrollController,
+          // ✅ 性能优化：限制缓存范围，减少内存占用
+          cacheExtent: 500,
           slivers: [
             // 手机竖屏：添加顶部间距
             if (isMobile && !isLandscape)
               SliverToBoxAdapter(
                 child: SizedBox(height: topPadding),
               ),
-            
+
             // 手机横屏：使用 SliverPersistentHeader 实现固定分类栏（不遮挡状态栏）
             if (isLandscape && widget.embedded)
               SliverPersistentHeader(
@@ -703,26 +925,30 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                       provider.selectGroup(groupName);
                     }
                   },
-                  onTestChannels: () => _showChannelTestDialog(context, channels),
-                  onShowBackgroundTest: () => _showBackgroundTestProgress(context),
-                  onDeleteUnavailable: _selectedGroup == ChannelProvider.unavailableGroupName && channels.isNotEmpty
+                  onTestChannels: () =>
+                      _showChannelTestDialog(context, channels),
+                  onShowBackgroundTest: () =>
+                      _showBackgroundTestProgress(context),
+                  onDeleteUnavailable: _selectedGroup ==
+                              ChannelProvider.unavailableGroupName &&
+                          channels.isNotEmpty
                       ? () => _confirmDeleteAllUnavailable(context, provider)
                       : null,
                 ),
               ),
-            
+
             // 竖屏或非嵌入模式：使用普通 AppBar
             if (!isLandscape || !widget.embedded)
               SliverAppBar(
-              pinned: false,
-              floating: true,
-              primary: false,  // 禁用自动SafeArea
-              backgroundColor: Colors.transparent,
-              toolbarHeight: 56.0,
-              expandedHeight: 0,
-              collapsedHeight: 56.0,
-              titleSpacing: 0,
-              leadingWidth: 56,
+                pinned: false,
+                floating: true,
+                primary: false, // 禁用自动SafeArea
+                backgroundColor: Colors.transparent,
+                toolbarHeight: 56.0,
+                expandedHeight: 0,
+                collapsedHeight: 56.0,
+                titleSpacing: 0,
+                leadingWidth: 56,
                 flexibleSpace: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -731,25 +957,30 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                       colors: Theme.of(context).brightness == Brightness.dark
                           ? [
                               const Color(0xFF0A0A0A).withOpacity(0.95),
-                              AppTheme.getPrimaryColor(context).withOpacity(0.15),
+                              AppTheme.getPrimaryColor(context)
+                                  .withOpacity(0.15),
                             ]
                           : [
                               const Color(0xFFE0E0E0).withOpacity(0.95),
-                              AppTheme.getPrimaryColor(context).withOpacity(0.12),
+                              AppTheme.getPrimaryColor(context)
+                                  .withOpacity(0.12),
                             ],
                     ),
                   ),
                 ),
                 leading: isMobile && !widget.embedded
                     ? IconButton(
-                        icon: Icon(Icons.menu_rounded, color: AppTheme.getTextPrimary(context), size: 24),
+                        icon: Icon(Icons.menu_rounded,
+                            color: AppTheme.getTextPrimary(context), size: 24),
                         onPressed: () => Scaffold.of(context).openDrawer(),
                       )
                     : null,
-                title: widget.embedded 
+                title: widget.embedded
                     ? null
                     : Text(
-                        _selectedGroup ?? (AppStrings.of(context)?.allChannels ?? 'All Channels'),
+                        _selectedGroup ??
+                            (AppStrings.of(context)?.allChannels ??
+                                'All Channels'),
                         style: TextStyle(
                           color: AppTheme.getTextPrimary(context),
                           fontSize: 20,
@@ -767,28 +998,36 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                     iconSize: 24,
                     color: AppTheme.getTextSecondary(context),
                     tooltip: '测试频道',
-                    onPressed: channels.isEmpty ? null : () => _showChannelTestDialog(context, channels),
+                    onPressed: channels.isEmpty
+                        ? null
+                        : () => _showChannelTestDialog(context, channels),
                   ),
                   // Delete all unavailable channels button
-                  if (_selectedGroup == ChannelProvider.unavailableGroupName && channels.isNotEmpty)
+                  if (_selectedGroup == ChannelProvider.unavailableGroupName &&
+                      channels.isNotEmpty)
                     IconButton(
                       icon: const Icon(Icons.delete_sweep_rounded),
                       iconSize: 24,
                       color: AppTheme.errorColor,
                       tooltip: '删除所有失效频道',
-                      onPressed: () => _confirmDeleteAllUnavailable(context, provider),
+                      onPressed: () =>
+                          _confirmDeleteAllUnavailable(context, provider),
                     ),
                   // Channel count
                   Center(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
                       margin: EdgeInsets.only(right: isLandscape ? 8 : 16),
                       decoration: BoxDecoration(
-                        color: AppTheme.getSurfaceColor(context).withOpacity(0.8),
+                        color:
+                            AppTheme.getSurfaceColor(context).withOpacity(0.8),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        isLandscape ? '${channels.length}' : '${channels.length} ${AppStrings.of(context)?.channels ?? 'channels'}',
+                        isLandscape
+                            ? '${channels.length}'
+                            : '${channels.length} ${AppStrings.of(context)?.channels ?? 'channels'}',
                         style: TextStyle(
                           color: AppTheme.getTextSecondary(context),
                           fontSize: isLandscape ? 11 : 12,
@@ -814,7 +1053,8 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        AppStrings.of(context)?.noChannelsFound ?? 'No channels found',
+                        AppStrings.of(context)?.noChannelsFound ??
+                            'No channels found',
                         style: TextStyle(
                           color: AppTheme.getTextSecondary(context),
                           fontSize: 16,
@@ -829,14 +1069,18 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                 padding: EdgeInsets.only(
                   left: isMobile ? (isLandscape ? 4 : 8) : 20,
                   right: isMobile ? (isLandscape ? 4 : 8) : 20,
-                  top: isMobile ? (isLandscape ? 4 : 8) : 20,  // 横屏时顶部间距4px
+                  top: isMobile ? (isLandscape ? 4 : 8) : 20, // 横屏时顶部间距4px
                   bottom: isMobile ? (isLandscape ? 4 : 8) : 20,
                 ),
                 sliver: SliverLayoutBuilder(
                   builder: (context, constraints) {
                     final availableWidth = constraints.crossAxisExtent;
-                    final crossAxisCount = CardSizeCalculator.calculateCardsPerRow(availableWidth);
-                    
+                    final crossAxisCount =
+                        CardSizeCalculator.calculateCardsPerRow(availableWidth);
+
+                    ServiceLocator.log.d(
+                        '[ChannelsScreen] SliverLayoutBuilder - 宽度=$availableWidth, 每行=$crossAxisCount 张卡片');
+
                     return SliverGrid(
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: crossAxisCount,
@@ -846,14 +1090,37 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                       ),
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
-                          final channel = channels[index];
-                          final isFavorite = context.watch<FavoritesProvider>().isFavorite(channel.id ?? 0);
-                          final isUnavailable = ChannelProvider.isUnavailableChannel(channel.groupName);
+                          // ✅ 只在前10个和最后10个卡片打印日志，避免日志过多
+                          if (index < 10 || index >= channels.length - 10) {
+                            ServiceLocator.log.d(
+                                '[ChannelsScreen] 构建卡片 #$index/${channels.length}');
+                          }
 
-                          // 获取 EPG 当前节目和下一个节目
-                          final epgProvider = context.watch<EpgProvider>();
-                          final currentProgram = epgProvider.getCurrentProgram(channel.epgId, channel.name);
-                          final nextProgram = epgProvider.getNextProgram(channel.epgId, channel.name);
+                          final channel = channels[index];
+
+                          // ✅ 使用 select 替代 watch，只监听特定频道的数据变化
+                          // 这样可以避免其他频道的更新导致所有卡片重建
+                          final isFavorite =
+                              context.select<FavoritesProvider, bool>(
+                            (provider) => provider.isFavorite(channel.id ?? 0),
+                          );
+
+                          final isUnavailable =
+                              ChannelProvider.isUnavailableChannel(
+                                  channel.groupName);
+
+                          // ✅ 使用 select 获取 EPG 数据，只在该频道的 EPG 变化时重建
+                          final currentProgram =
+                              context.select<EpgProvider, EpgProgram?>(
+                            (provider) => provider.getCurrentProgram(
+                                channel.epgId, channel.name),
+                          );
+
+                          final nextProgram =
+                              context.select<EpgProvider, EpgProgram?>(
+                            (provider) => provider.getNextProgram(
+                                channel.epgId, channel.name),
+                          );
 
                           // TV端：确保焦点节点数量正确
                           if (PlatformDetector.isTV) {
@@ -866,7 +1133,8 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                           final isFirstColumn = index % crossAxisCount == 0;
 
                           // TV端：判断是否是最后一行（需要处理下键切换分类）
-                          final totalRows = (channels.length / crossAxisCount).ceil();
+                          final totalRows =
+                              (channels.length / crossAxisCount).ceil();
                           final currentRow = index ~/ crossAxisCount;
                           final isLastRow = currentRow == totalRows - 1;
 
@@ -874,13 +1142,19 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                             name: channel.name,
                             logoUrl: channel.logoUrl,
                             channel: channel, // 传递完整的 channel 对象
-                            groupName: isUnavailable ? ChannelProvider.extractOriginalGroup(channel.groupName) : channel.groupName,
+                            groupName: isUnavailable
+                                ? ChannelProvider.extractOriginalGroup(
+                                    channel.groupName)
+                                : channel.groupName,
                             currentProgram: currentProgram?.title,
                             nextProgram: nextProgram?.title,
                             isFavorite: isFavorite,
                             isUnavailable: isUnavailable,
                             autofocus: index == 0,
-                            focusNode: PlatformDetector.isTV && index < _channelFocusNodes.length ? _channelFocusNodes[index] : null,
+                            focusNode: PlatformDetector.isTV &&
+                                    index < _channelFocusNodes.length
+                                ? _channelFocusNodes[index]
+                                : null,
                             onFocused: PlatformDetector.isTV
                                 ? () {
                                     // 记住当前聚焦的频道索引
@@ -890,9 +1164,12 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                             onLeft: (PlatformDetector.isTV && isFirstColumn)
                                 ? () {
                                     // 第一列按左键，跳转到当前选中的分类
-                                    ServiceLocator.log.d('ChannelsScreen: onLeft pressed, _currentGroupIndex=$_currentGroupIndex, _selectedGroup=$_selectedGroup');
-                                    if (_currentGroupIndex < _groupFocusNodes.length) {
-                                      _groupFocusNodes[_currentGroupIndex].requestFocus();
+                                    ServiceLocator.log.d(
+                                        'ChannelsScreen: onLeft pressed, _currentGroupIndex=$_currentGroupIndex, _selectedGroup=$_selectedGroup');
+                                    if (_currentGroupIndex <
+                                        _groupFocusNodes.length) {
+                                      _groupFocusNodes[_currentGroupIndex]
+                                          .requestFocus();
                                     }
                                   }
                                 : null,
@@ -902,113 +1179,195 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                                   }
                                 : null,
                             onFavoriteToggle: () {
-                              context.read<FavoritesProvider>().toggleFavorite(channel);
+                              context
+                                  .read<FavoritesProvider>()
+                                  .toggleFavorite(channel);
                             },
                             onTest: () => _testSingleChannel(context, channel),
                             onTap: () async {
-                              final settingsProvider = context.read<SettingsProvider>();
-                              
+                              final settingsProvider =
+                                  context.read<SettingsProvider>();
+
                               // 保存上次播放的频道ID
-                              if (settingsProvider.rememberLastChannel && channel.id != null) {
+                              if (settingsProvider.rememberLastChannel &&
+                                  channel.id != null) {
                                 settingsProvider.setLastChannelId(channel.id);
                               }
 
-                              ServiceLocator.log.d('ChannelsScreen: onTap - enableMultiScreen=${settingsProvider.enableMultiScreen}, isDesktop=${PlatformDetector.isDesktop}, isTV=${PlatformDetector.isTV}');
+                              ServiceLocator.log.d(
+                                  'ChannelsScreen: onTap - enableMultiScreen=${settingsProvider.enableMultiScreen}, isDesktop=${PlatformDetector.isDesktop}, isTV=${PlatformDetector.isTV}');
 
                               // 检查是否启用了分屏模式
                               if (settingsProvider.enableMultiScreen) {
                                 // TV 端使用原生分屏播放器
-                                if (PlatformDetector.isTV && PlatformDetector.isAndroid) {
-                                  ServiceLocator.log.d('ChannelsScreen: TV Multi-screen mode, launching native multi-screen player');
-                                  final channelProvider = context.read<ChannelProvider>();
-                                  final favoritesProvider = context.read<FavoritesProvider>();
+                                if (PlatformDetector.isTV &&
+                                    PlatformDetector.isAndroid) {
+                                  ServiceLocator.log.d(
+                                      'ChannelsScreen: TV Multi-screen mode, launching native multi-screen player');
+                                  final channelProvider =
+                                      context.read<ChannelProvider>();
+                                  final favoritesProvider =
+                                      context.read<FavoritesProvider>();
                                   final channels = channelProvider.channels;
-                                  
+
                                   // 设置 providers 用于收藏功能
-                                  NativePlayerChannel.setProviders(favoritesProvider, channelProvider, settingsProvider);
-                                  
+                                  NativePlayerChannel.setProviders(
+                                      favoritesProvider,
+                                      channelProvider,
+                                      settingsProvider);
+
                                   // 找到当前点击频道的索引
-                                  final clickedIndex = channels.indexWhere((c) => c.url == channel.url);
-                                  
+                                  final clickedIndex = channels
+                                      .indexWhere((c) => c.url == channel.url);
+
                                   // TV端原生分屏播放器也需要记录观看历史
-                                  if (channel.id != null && channel.playlistId != null) {
-                                    await ServiceLocator.watchHistory.addWatchHistory(channel.id!, channel.playlistId!);
-                                    ServiceLocator.log.d('ChannelsScreen: Recorded watch history for channel ${channel.name} (TV multi-screen)');
+                                  if (channel.id != null &&
+                                      channel.playlistId != null) {
+                                    await ServiceLocator.watchHistory
+                                        .addWatchHistory(
+                                            channel.id!, channel.playlistId!);
+                                    ServiceLocator.log.d(
+                                        'ChannelsScreen: Recorded watch history for channel ${channel.name} (TV multi-screen)');
                                   }
-                                  
+
                                   // 准备频道数据
-                                  final urls = channels.map((c) => c.url).toList();
-                                  final names = channels.map((c) => c.name).toList();
-                                  final groups = channels.map((c) => c.groupName ?? '').toList();
-                                  final sources = channels.map((c) => c.sources).toList();
-                                  final logos = channels.map((c) => c.logoUrl ?? '').toList();
-                                  
+                                  final urls =
+                                      channels.map((c) => c.url).toList();
+                                  final names =
+                                      channels.map((c) => c.name).toList();
+                                  final groups = channels
+                                      .map((c) => c.groupName ?? '')
+                                      .toList();
+                                  final sources =
+                                      channels.map((c) => c.sources).toList();
+                                  final logos = channels
+                                      .map((c) => c.logoUrl ?? '')
+                                      .toList();
+
                                   // 启动原生分屏播放器，传递初始频道索引和音量增强
                                   await NativePlayerChannel.launchMultiScreen(
                                     urls: urls,
                                     names: names,
-                                groups: groups,
-                                sources: sources,
-                                logos: logos,
-                                initialChannelIndex: clickedIndex >= 0 ? clickedIndex : 0,
-                                volumeBoostDb: settingsProvider.volumeBoost,
-                                defaultScreenPosition: settingsProvider.defaultScreenPosition,
-                                showChannelName: settingsProvider.showMultiScreenChannelName,
-                                onClosed: () {
-                                  ServiceLocator.log.d('ChannelsScreen: Native multi-screen closed');
-                                },
-                              );
-                            } else if (PlatformDetector.isDesktop) {
-                              ServiceLocator.log.d('ChannelsScreen: Desktop Multi-screen mode, playing channel: ${channel.name}');
-                              // 桌面端分屏模式：在指定位置播放频道
-                              final multiScreenProvider = context.read<MultiScreenProvider>();
-                              final defaultPosition = settingsProvider.defaultScreenPosition;
-                              // 设置音量增强到分屏Provider
-                              multiScreenProvider.setVolumeSettings(1.0, settingsProvider.volumeBoost);
-                              multiScreenProvider.playChannelAtDefaultPosition(channel, defaultPosition);
-                              
-                              // 分屏模式下导航到播放器页面，但不传递频道参数（由MultiScreenProvider处理播放）
-                              Navigator.pushNamed(
-                                context,
-                                AppRouter.player,
-                                arguments: {
-                                  'channelUrl': '', // 空URL表示分屏模式
-                                  'channelName': '',
-                                  'channelLogo': null,
-                                },
-                              );
-                            } else {
-                              // 其他平台普通播放
-                              Navigator.pushNamed(
-                                context,
-                                AppRouter.player,
-                                arguments: {
-                                  'channelUrl': channel.url,
-                                  'channelName': channel.name,
-                                  'channelLogo': channel.logoUrl,
-                                },
-                              );
-                            }
-                          } else {
-                            // 普通模式：导航到播放器页面并传递频道参数
-                            Navigator.pushNamed(
-                              context,
-                              AppRouter.player,
-                              arguments: {
-                                'channelUrl': channel.url,
-                                'channelName': channel.name,
-                                'channelLogo': channel.logoUrl,
-                              },
-                            );
-                          }
+                                    groups: groups,
+                                    sources: sources,
+                                    logos: logos,
+                                    initialChannelIndex:
+                                        clickedIndex >= 0 ? clickedIndex : 0,
+                                    volumeBoostDb: settingsProvider.volumeBoost,
+                                    defaultScreenPosition:
+                                        settingsProvider.defaultScreenPosition,
+                                    showChannelName: settingsProvider
+                                        .showMultiScreenChannelName,
+                                    onClosed: () {
+                                      ServiceLocator.log.d(
+                                          'ChannelsScreen: Native multi-screen closed');
+                                    },
+                                  );
+                                } else if (PlatformDetector.isDesktop) {
+                                  ServiceLocator.log.d(
+                                      'ChannelsScreen: Desktop Multi-screen mode, playing channel: ${channel.name}');
+                                  // 桌面端分屏模式：在指定位置播放频道
+                                  final multiScreenProvider =
+                                      context.read<MultiScreenProvider>();
+                                  final defaultPosition =
+                                      settingsProvider.defaultScreenPosition;
+                                  // 设置音量增强到分屏Provider
+                                  multiScreenProvider.setVolumeSettings(
+                                      1.0, settingsProvider.volumeBoost);
+                                  multiScreenProvider
+                                      .playChannelAtDefaultPosition(
+                                          channel, defaultPosition);
+
+                                  // 分屏模式下导航到播放器页面，但不传递频道参数（由MultiScreenProvider处理播放）
+                                  Navigator.pushNamed(
+                                    context,
+                                    AppRouter.player,
+                                    arguments: {
+                                      'channelUrl': '', // 空URL表示分屏模式
+                                      'channelName': '',
+                                      'channelLogo': null,
+                                    },
+                                  );
+                                } else {
+                                  // 其他平台普通播放
+                                  Navigator.pushNamed(
+                                    context,
+                                    AppRouter.player,
+                                    arguments: {
+                                      'channelUrl': channel.url,
+                                      'channelName': channel.name,
+                                      'channelLogo': channel.logoUrl,
+                                    },
+                                  );
+                                }
+                              } else {
+                                // 普通模式：导航到播放器页面并传递频道参数
+                                Navigator.pushNamed(
+                                  context,
+                                  AppRouter.player,
+                                  arguments: {
+                                    'channelUrl': channel.url,
+                                    'channelName': channel.name,
+                                    'channelLogo': channel.logoUrl,
+                                  },
+                                );
+                              }
+                            },
+                            onLongPress: () =>
+                                _showChannelOptions(context, channel),
+                          );
                         },
-                        onLongPress: () => _showChannelOptions(context, channel),
-                      );
-                    },
-                    childCount: channels.length,
-                  ),
+                        childCount: channels.length,
+                        // ✅ 性能优化：不保持已滚动出视口的卡片状态
+                        addAutomaticKeepAlives: false,
+                        // ✅ 性能优化：添加重绘边界，避免不必要的重绘
+                        addRepaintBoundaries: true,
+                      ),
                     );
                   },
+                ),
+              ),
+
+            // ✅ 加载更多指示器
+            if (_isLoadingMore)
+              SliverToBoxAdapter(
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        '加载更多频道... (${channels.length}/${provider.totalChannelCount})',
+                        style: TextStyle(
+                          color: AppTheme.getTextSecondary(context),
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            // ✅ 已加载全部提示
+            if (!provider.hasMore && channels.isNotEmpty)
+              SliverToBoxAdapter(
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '已加载全部 ${provider.totalChannelCount} 个频道',
+                    style: TextStyle(
+                      color: AppTheme.getTextSecondary(context),
+                      fontSize: 14,
+                    ),
+                  ),
                 ),
               ),
           ],
@@ -1017,7 +1376,8 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
     );
   }
 
-  Future<void> _confirmDeleteAllUnavailable(BuildContext context, ChannelProvider provider) async {
+  Future<void> _confirmDeleteAllUnavailable(
+      BuildContext context, ChannelProvider provider) async {
     final count = provider.unavailableChannelCount;
 
     final confirm = await showDialog<bool>(
@@ -1100,9 +1460,11 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
       // 如果测试通过且是失效频道，自动恢复到原分类
-      if (result.isAvailable && ChannelProvider.isUnavailableChannel(channelObj.groupName)) {
+      if (result.isAvailable &&
+          ChannelProvider.isUnavailableChannel(channelObj.groupName)) {
         final provider = context.read<ChannelProvider>();
-        final originalGroup = ChannelProvider.extractOriginalGroup(channelObj.groupName);
+        final originalGroup =
+            ChannelProvider.extractOriginalGroup(channelObj.groupName);
         await provider.restoreChannel(channelObj.id!);
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1133,12 +1495,15 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    result.isAvailable ? '${channelObj.name} 可用 (${result.responseTime}ms)' : '${channelObj.name} 不可用: ${result.error}',
+                    result.isAvailable
+                        ? '${channelObj.name} 可用 (${result.responseTime}ms)'
+                        : '${channelObj.name} 不可用: ${result.error}',
                   ),
                 ),
               ],
             ),
-            backgroundColor: result.isAvailable ? Colors.green : AppTheme.errorColor,
+            backgroundColor:
+                result.isAvailable ? Colors.green : AppTheme.errorColor,
             duration: const Duration(seconds: 3),
           ),
         );
@@ -1146,7 +1511,8 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
     }
   }
 
-  Future<void> _showChannelTestDialog(BuildContext context, List<dynamic> channels) async {
+  Future<void> _showChannelTestDialog(
+      BuildContext context, List<dynamic> channels) async {
     final result = await showDialog<ChannelTestDialogResult>(
       context: context,
       barrierDismissible: false,
@@ -1182,12 +1548,14 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
 
     // 如果用户选择移动到失效分类
     if (result.movedToUnavailable) {
-      final unavailableCount = result.results.where((r) => !r.isAvailable).length;
+      final unavailableCount =
+          result.results.where((r) => !r.isAvailable).length;
 
       // 显示提示
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('已将 $unavailableCount 个失效频道移至"${ChannelProvider.unavailableGroupName}"分类'),
+          content: Text(
+              '已将 $unavailableCount 个失效频道移至"${ChannelProvider.unavailableGroupName}"分类'),
           backgroundColor: Colors.orange,
           action: SnackBarAction(
             label: '查看',
@@ -1197,7 +1565,9 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
               setState(() {
                 _selectedGroup = ChannelProvider.unavailableGroupName;
               });
-              context.read<ChannelProvider>().selectGroup(ChannelProvider.unavailableGroupName);
+              context
+                  .read<ChannelProvider>()
+                  .selectGroup(ChannelProvider.unavailableGroupName);
             },
           ),
         ),
@@ -1207,7 +1577,9 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
       setState(() {
         _selectedGroup = ChannelProvider.unavailableGroupName;
       });
-      context.read<ChannelProvider>().selectGroup(ChannelProvider.unavailableGroupName);
+      context
+          .read<ChannelProvider>()
+          .selectGroup(ChannelProvider.unavailableGroupName);
     }
   }
 
@@ -1219,7 +1591,8 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
   }
 
   // ignore: unused_element
-  Future<void> _deleteUnavailableChannels(List<ChannelTestResult> results) async {
+  Future<void> _deleteUnavailableChannels(
+      List<ChannelTestResult> results) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1316,10 +1689,16 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
               ListTile(
                 leading: Icon(
                   isFavorite ? Icons.favorite : Icons.favorite_border,
-                  color: isFavorite ? AppTheme.accentColor : AppTheme.getTextSecondary(context),
+                  color: isFavorite
+                      ? AppTheme.accentColor
+                      : AppTheme.getTextSecondary(context),
                 ),
                 title: Text(
-                  isFavorite ? (AppStrings.of(context)?.removeFavorites ?? 'Remove from Favorites') : (AppStrings.of(context)?.addFavorites ?? 'Add to Favorites'),
+                  isFavorite
+                      ? (AppStrings.of(context)?.removeFavorites ??
+                          'Remove from Favorites')
+                      : (AppStrings.of(context)?.addFavorites ??
+                          'Add to Favorites'),
                   style: TextStyle(color: AppTheme.getTextPrimary(context)),
                 ),
                 onTap: () async {
@@ -1422,7 +1801,8 @@ class _LandscapeCategoryBarDelegate extends SliverPersistentHeaderDelegate {
   double get maxExtent => 40.0 + statusBarHeight;
 
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
       height: 40 + statusBarHeight,
       decoration: BoxDecoration(
@@ -1460,37 +1840,38 @@ class _LandscapeCategoryBarDelegate extends SliverPersistentHeaderDelegate {
                 // 左侧：横向滚动的分类列表
                 Expanded(
                   child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              itemCount: provider.groups.length + 1,
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  final isSelected = selectedGroup == null;
-                  return _buildCategoryChip(
-                    context: context,
-                    name: AppStrings.of(context)?.allChannels ?? 'All',
-                    count: provider.totalChannelCount,
-                    isSelected: isSelected,
-                    onTap: () => onGroupSelected(null),
-                  );
-                } else {
-                  final group = provider.groups[index - 1];
-                  final isSelected = selectedGroup == group.name;
-                  return _buildCategoryChip(
-                    context: context,
-                    name: group.name,
-                    count: group.channelCount,
-                    isSelected: isSelected,
-                    onTap: () => onGroupSelected(group.name),
-                  );
-                }
-              },
+                    scrollDirection: Axis.horizontal,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    itemCount: provider.groups.length + 1,
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        final isSelected = selectedGroup == null;
+                        return _buildCategoryChip(
+                          context: context,
+                          name: AppStrings.of(context)?.allChannels ?? 'All',
+                          count: provider.totalChannelCount,
+                          isSelected: isSelected,
+                          onTap: () => onGroupSelected(null),
+                        );
+                      } else {
+                        final group = provider.groups[index - 1];
+                        final isSelected = selectedGroup == group.name;
+                        return _buildCategoryChip(
+                          context: context,
+                          name: group.name,
+                          count: group.channelCount,
+                          isSelected: isSelected,
+                          onTap: () => onGroupSelected(group.name),
+                        );
+                      }
+                    },
+                  ),
+                ),
+                // 右侧：操作按钮
+                _buildActions(context),
+              ],
             ),
-          ),
-          // 右侧：操作按钮
-          _buildActions(context),
-        ],
-      ),
           ),
         ],
       ),
@@ -1515,7 +1896,9 @@ class _LandscapeCategoryBarDelegate extends SliverPersistentHeaderDelegate {
           icon: const Icon(Icons.speed_rounded),
           iconSize: 18,
           padding: const EdgeInsets.all(6),
-          color: channels.isEmpty ? AppTheme.getTextMuted(context).withOpacity(0.3) : AppTheme.getTextSecondary(context),
+          color: channels.isEmpty
+              ? AppTheme.getTextMuted(context).withOpacity(0.3)
+              : AppTheme.getTextSecondary(context),
           onPressed: channels.isEmpty ? null : onTestChannels,
         ),
         // 删除失效频道按钮
@@ -1566,7 +1949,9 @@ class _LandscapeCategoryBarDelegate extends SliverPersistentHeaderDelegate {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               gradient: isSelected ? AppTheme.getGradient(context) : null,
-              color: isSelected ? null : AppTheme.getCardColor(context).withOpacity(0.5),
+              color: isSelected
+                  ? null
+                  : AppTheme.getCardColor(context).withOpacity(0.5),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: isSelected
@@ -1581,20 +1966,26 @@ class _LandscapeCategoryBarDelegate extends SliverPersistentHeaderDelegate {
                 Icon(
                   CategoryCard.getIconForCategory(name),
                   size: 12,
-                  color: isSelected ? Colors.white : AppTheme.getTextSecondary(context),
+                  color: isSelected
+                      ? Colors.white
+                      : AppTheme.getTextSecondary(context),
                 ),
                 const SizedBox(width: 4),
                 Text(
                   name,
                   style: TextStyle(
-                    color: isSelected ? Colors.white : AppTheme.getTextPrimary(context),
+                    color: isSelected
+                        ? Colors.white
+                        : AppTheme.getTextPrimary(context),
                     fontSize: 11,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight:
+                        isSelected ? FontWeight.w600 : FontWeight.normal,
                   ),
                 ),
                 const SizedBox(width: 3),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                   decoration: BoxDecoration(
                     color: isSelected
                         ? Colors.white.withOpacity(0.2)
@@ -1604,7 +1995,9 @@ class _LandscapeCategoryBarDelegate extends SliverPersistentHeaderDelegate {
                   child: Text(
                     count.toString(),
                     style: TextStyle(
-                      color: isSelected ? Colors.white : AppTheme.getTextMuted(context),
+                      color: isSelected
+                          ? Colors.white
+                          : AppTheme.getTextMuted(context),
                       fontSize: 9,
                       fontWeight: FontWeight.w600,
                     ),
@@ -1633,7 +2026,8 @@ class _BackgroundTestIndicator extends StatefulWidget {
   const _BackgroundTestIndicator({required this.onTap});
 
   @override
-  State<_BackgroundTestIndicator> createState() => _BackgroundTestIndicatorState();
+  State<_BackgroundTestIndicator> createState() =>
+      _BackgroundTestIndicatorState();
 }
 
 class _BackgroundTestIndicatorState extends State<_BackgroundTestIndicator> {
@@ -1674,7 +2068,9 @@ class _BackgroundTestIndicatorState extends State<_BackgroundTestIndicator> {
         margin: const EdgeInsets.only(right: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: _progress.isRunning ? AppTheme.getPrimaryColor(context).withOpacity(0.2) : Colors.orange.withOpacity(0.2),
+          color: _progress.isRunning
+              ? AppTheme.getPrimaryColor(context).withOpacity(0.2)
+              : Colors.orange.withOpacity(0.2),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(

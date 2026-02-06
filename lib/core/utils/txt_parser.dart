@@ -18,9 +18,9 @@ class TXTParser {
       ServiceLocator.log.d('DEBUG: 开始从URL获取TXT播放列表内容: $url');
 
       final dio = Dio();
-      // Reduce timeout to 10 seconds as requested
-      dio.options.connectTimeout = const Duration(seconds: 5);
-      dio.options.receiveTimeout = const Duration(seconds: 5);
+      // Increased timeout for large playlists
+      dio.options.connectTimeout = const Duration(seconds: 15);
+      dio.options.receiveTimeout = const Duration(seconds: 30);
 
       final response = await dio.get(
         url,
@@ -31,12 +31,22 @@ class TXTParser {
       );
 
       ServiceLocator.log.d('DEBUG: 成功获取TXT播放列表内容，状态码: ${response.statusCode}');
-      ServiceLocator.log
-          .d('DEBUG: 内容大小: ${response.data.toString().length} 字符');
+      final contentLength = response.data.toString().length;
+      ServiceLocator.log.d('DEBUG: 内容大小: $contentLength 字符');
 
-      // 使用 compute 在独立 isolate 中解析，避免阻塞主线程
-      final channels = await compute(
-          _parseInIsolate, _ParseParams(response.data.toString(), playlistId));
+      // Only use isolate for large files (>500KB) to avoid overhead
+      final useIsolate = contentLength > 500 * 1024;
+      ServiceLocator.log.d('DEBUG: ${useIsolate ? "使用" : "不使用"} isolate 解析 (大小: ${(contentLength / 1024).toStringAsFixed(1)}KB)');
+
+      final List<Channel> channels;
+      if (useIsolate) {
+        channels = await compute(
+            _parseInIsolate, _ParseParams(response.data.toString(), playlistId));
+      } else {
+        // Parse directly in main thread for small files
+        channels = parse(response.data.toString(), playlistId);
+      }
+
       ServiceLocator.log.d('DEBUG: TXT URL解析完成，共解析出 ${channels.length} 个频道');
 
       return channels;
@@ -58,7 +68,7 @@ class TXTParser {
         throw Exception('Access denied (403)');
       }
 
-      throw e;
+      rethrow;
     }
   }
 
@@ -75,11 +85,21 @@ class TXTParser {
       }
 
       final content = await file.readAsString();
-      ServiceLocator.log.d('DEBUG: 成功读取TXT本地文件，内容大小: ${content.length} 字符');
+      final contentLength = content.length;
+      ServiceLocator.log.d('DEBUG: 成功读取TXT本地文件，内容大小: $contentLength 字符');
 
-      // 使用 compute 在独立 isolate 中解析，避免阻塞主线程
-      final channels =
-          await compute(_parseInIsolate, _ParseParams(content, playlistId));
+      // Only use isolate for large files (>500KB)
+      final useIsolate = contentLength > 500 * 1024;
+      ServiceLocator.log.d('DEBUG: ${useIsolate ? "使用" : "不使用"} isolate 解析 (大小: ${(contentLength / 1024).toStringAsFixed(1)}KB)');
+
+      final List<Channel> channels;
+      if (useIsolate) {
+        channels = await compute(_parseInIsolate, _ParseParams(content, playlistId));
+      } else {
+        // Parse directly in main thread for small files
+        channels = parse(content, playlistId);
+      }
+
       ServiceLocator.log.d('DEBUG: TXT本地文件解析完成，共解析出 ${channels.length} 个频道');
 
       return channels;
@@ -95,21 +115,19 @@ class TXTParser {
   /// Merges channels with same name into single channel with multiple sources
   static List<Channel> parse(String content, int playlistId) {
     // 注意：此方法可能在 isolate 中运行，不能使用 ServiceLocator.log
-    // ServiceLocator.log.d('DEBUG: 开始解析TXT内容，播放列表ID: $playlistId');
+    print('TXT Parser: 开始解析，播放列表ID: $playlistId');
 
     final List<Channel> rawChannels = [];
     final lines = LineSplitter.split(content).toList();
 
-    // ServiceLocator.log.d('DEBUG: TXT内容总行数: ${lines.length}');
+    print('TXT Parser: 内容总行数: ${lines.length}');
 
     if (lines.isEmpty) {
-      // ServiceLocator.log.d('DEBUG: TXT内容为空，返回空频道列表');
+      print('TXT Parser: 内容为空，返回空频道列表');
       return rawChannels;
     }
 
     String currentGroup = 'Uncategorized';
-    int validChannelCount = 0;
-    int invalidLineCount = 0;
 
     for (int i = 0; i < lines.length; i++) {
       final line = lines[i].trim();
@@ -122,7 +140,6 @@ class TXTParser {
         if (currentGroup.isEmpty) {
           currentGroup = 'Uncategorized';
         }
-        // ServiceLocator.log.d('DEBUG: 找到分类: $currentGroup');
         continue;
       }
 
@@ -142,36 +159,26 @@ class TXTParser {
           );
 
           rawChannels.add(channel);
-          validChannelCount++;
-        } else {
-          invalidLineCount++;
-          // if (name.isEmpty) {
-          //   ServiceLocator.log.d('DEBUG: 第${i + 1}行频道名称为空: $line');
-          // } else {
-          //   ServiceLocator.log.d('DEBUG: 第${i + 1}行URL无效: $url');
-          // }
         }
-      } else {
-        invalidLineCount++;
-        // ServiceLocator.log.d('DEBUG: 第${i + 1}行格式不正确: $line');
       }
     }
 
-    // ServiceLocator.log.d('DEBUG: TXT原始解析完成 - 有效频道: $validChannelCount, 无效行: $invalidLineCount');
+    print('TXT Parser: 原始解析完成，有效频道: ${rawChannels.length}');
 
     // Merge channels with same name into single channel with multiple sources
     final List<Channel> mergedChannels = _mergeChannelSources(rawChannels);
 
-    // ServiceLocator.log.d('DEBUG: TXT合并后频道数: ${mergedChannels.length} (原始: ${rawChannels.length})');
+    print('TXT Parser: 合并后频道数: ${mergedChannels.length} (原始: ${rawChannels.length})');
 
     return mergedChannels;
   }
 
   /// Merge channels with same name into single channel with multiple sources
   /// Preserves the order of first occurrence, but prefers non-special groups
+  /// Optimized using Map for better performance
   static List<Channel> _mergeChannelSources(List<Channel> channels) {
+    // Use Map to maintain insertion order while providing O(1) lookup
     final Map<String, Channel> mergedMap = {};
-    final List<String> orderKeys = []; // Preserve order
 
     // Special groups that should not be the primary group
     final specialGroups = {'🕘️更新时间', '更新时间', 'update', 'info'};
@@ -213,12 +220,11 @@ class TXTParser {
       } else {
         // New channel
         mergedMap[mergeKey] = channel.copyWith(sources: [channel.url]);
-        orderKeys.add(mergeKey);
       }
     }
 
-    // Return in original order
-    return orderKeys.map((key) => mergedMap[key]!).toList();
+    // Return in original order (Map maintains insertion order in Dart)
+    return mergedMap.values.toList();
   }
 
   /// Check if a string is a valid URL
