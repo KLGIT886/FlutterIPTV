@@ -18,6 +18,7 @@ import '../../../core/services/background_test_service.dart';
 import '../../../core/services/epg_service.dart';
 import '../../../core/models/channel.dart';
 import '../../../core/utils/card_size_calculator.dart';
+import '../../../core/utils/throttled_state_mixin.dart'; // ✅ 导入节流 mixin
 
 import '../providers/channel_provider.dart';
 import '../widgets/channel_test_dialog.dart';
@@ -41,7 +42,7 @@ class ChannelsScreen extends StatefulWidget {
   State<ChannelsScreen> createState() => _ChannelsScreenState();
 }
 
-class _ChannelsScreenState extends State<ChannelsScreen> {
+class _ChannelsScreenState extends State<ChannelsScreen> with ThrottledStateMixin {
   String? _selectedGroup;
   final ScrollController _scrollController = ScrollController();
   final ScrollController _groupScrollController = ScrollController();
@@ -170,7 +171,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
         ServiceLocator.log.i(
             '[ChannelsScreen] 触发加载更多: delta=${delta.toStringAsFixed(0)}px, loaded=${provider.loadedChannelCount}/${provider.totalChannelCount}');
 
-        setState(() => _isLoadingMore = true);
+        immediateSetState(() => _isLoadingMore = true); // 立即更新加载状态
 
         // 判断是加载所有频道还是特定播放列表
         Future<void> loadFuture;
@@ -186,7 +187,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
             loadFuture = provider.loadChannels(playlistId, loadMore: true);
           } else {
             ServiceLocator.log.w('[ChannelsScreen] 无法加载更多：playlistId 为 null');
-            setState(() => _isLoadingMore = false);
+            immediateSetState(() => _isLoadingMore = false); // 立即更新加载状态
             return;
           }
         }
@@ -195,7 +196,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
         loadFuture.then((_) {
           ServiceLocator.log.i('[ChannelsScreen] 加载更多完成，开始更新缓存');
           if (mounted) {
-            setState(() {
+            throttledSetState(() {
               _cachedChannels = provider.filteredChannels;
               ServiceLocator.log
                   .i('[ChannelsScreen] 缓存更新完成: ${_cachedChannels.length} 个频道');
@@ -204,7 +205,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
             // ✅ 等待UI渲染完成后再解锁“加载更多”，防止快速连续触发
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) {
-                setState(() {
+                immediateSetState(() {
                   _isLoadingMore = false;
                 });
                 ServiceLocator.log.d('[ChannelsScreen] "加载更多"已解锁');
@@ -240,7 +241,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
         }).catchError((e) {
           ServiceLocator.log.e('[ChannelsScreen] 加载更多失败', error: e);
           if (mounted) {
-            setState(() => _isLoadingMore = false);
+            immediateSetState(() => _isLoadingMore = false); // 立即更新加载状态
           }
         });
       }
@@ -407,7 +408,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                     count: provider.totalChannelCount,
                     isSelected: _selectedGroup == null,
                     onTap: () {
-                      setState(() => _selectedGroup = null);
+                      immediateSetState(() => _selectedGroup = null); // 立即更新分类选择
                       provider.clearGroupFilter();
                       Navigator.pop(ctx);
                     },
@@ -417,7 +418,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                         count: group.channelCount,
                         isSelected: _selectedGroup == group.name,
                         onTap: () {
-                          setState(() => _selectedGroup = group.name);
+                          immediateSetState(() => _selectedGroup = group.name); // 立即更新分类选择
                           provider.selectGroup(group.name);
                           Navigator.pop(ctx);
                         },
@@ -543,7 +544,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                         : null,
                     groupIndex: 0,
                     onTap: () {
-                      setState(() {
+                      immediateSetState(() {
                         _selectedGroup = null;
                         _currentGroupIndex = 0;
                       });
@@ -573,7 +574,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                             : null,
                         groupIndex: focusIndex,
                         onTap: () {
-                          setState(() {
+                          immediateSetState(() {
                             _selectedGroup = group.name;
                             _currentGroupIndex = focusIndex;
                           });
@@ -625,7 +626,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                   count: provider.totalChannelCount,
                   isSelected: _selectedGroup == null,
                   onTap: () {
-                    setState(() => _selectedGroup = null);
+                    immediateSetState(() => _selectedGroup = null); // 立即更新分类选择
                     provider.clearGroupFilter();
                     Navigator.pop(context);
                   },
@@ -645,7 +646,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                         count: group.channelCount,
                         isSelected: _selectedGroup == group.name,
                         onTap: () {
-                          setState(() => _selectedGroup = group.name);
+                          immediateSetState(() => _selectedGroup = group.name); // 立即更新分类选择
                           provider.selectGroup(group.name);
                           Navigator.pop(context);
                         },
@@ -861,7 +862,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
               '[ChannelsScreen] 需要更新缓存: empty=${_cachedChannels.isEmpty}, lengthChanged=${provider.filteredChannels.length != _cachedChannels.length}');
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
-              setState(() {
+              throttledSetState(() {
                 _cachedChannels = provider.filteredChannels;
                 ServiceLocator.log
                     .d('[ChannelsScreen] 缓存已更新: ${_cachedChannels.length} 个频道');
@@ -918,7 +919,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                   channels: channels,
                   statusBarHeight: statusBarHeight,
                   onGroupSelected: (groupName) {
-                    setState(() => _selectedGroup = groupName);
+                    immediateSetState(() => _selectedGroup = groupName); // 立即更新分类选择
                     if (groupName == null) {
                       provider.clearGroupFilter();
                     } else {
@@ -1344,7 +1345,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        '加载更多频道... (${channels.length}/${provider.totalChannelCount})',
+                        '加载更多频道... (${channels.length}/${provider.filteredChannels.length})',
                         style: TextStyle(
                           color: AppTheme.getTextSecondary(context),
                           fontSize: 14,
@@ -1362,7 +1363,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                   padding: const EdgeInsets.all(20),
                   alignment: Alignment.center,
                   child: Text(
-                    '已加载全部 ${provider.totalChannelCount} 个频道',
+                    '已加载全部 ${channels.length} 个频道',
                     style: TextStyle(
                       color: AppTheme.getTextSecondary(context),
                       fontSize: 14,
@@ -1413,7 +1414,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
       final deletedCount = await provider.deleteAllUnavailableChannels();
 
       // 切换到全部频道
-      setState(() {
+      immediateSetState(() {
         _selectedGroup = null;
       });
       provider.clearGroupFilter();
@@ -1562,7 +1563,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
             textColor: Colors.white,
             onPressed: () {
               // 跳转到失效分类
-              setState(() {
+              immediateSetState(() {
                 _selectedGroup = ChannelProvider.unavailableGroupName;
               });
               context
@@ -1574,7 +1575,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
       );
 
       // 自动跳转到失效分类
-      setState(() {
+      immediateSetState(() {
         _selectedGroup = ChannelProvider.unavailableGroupName;
       });
       context
@@ -2030,7 +2031,7 @@ class _BackgroundTestIndicator extends StatefulWidget {
       _BackgroundTestIndicatorState();
 }
 
-class _BackgroundTestIndicatorState extends State<_BackgroundTestIndicator> {
+class _BackgroundTestIndicatorState extends State<_BackgroundTestIndicator> with ThrottledStateMixin {
   final BackgroundTestService _service = BackgroundTestService();
   late BackgroundTestProgress _progress;
 
@@ -2049,7 +2050,7 @@ class _BackgroundTestIndicatorState extends State<_BackgroundTestIndicator> {
 
   void _onProgressUpdate(BackgroundTestProgress progress) {
     if (mounted) {
-      setState(() {
+      throttledSetState(() {
         _progress = progress;
       });
     }

@@ -37,15 +37,15 @@ import '../services/service_locator.dart';
 
 /// HTTP 连接池配置
 class _HttpPoolConfig {
-  static const int maxConnectionsPerHost = 50; // 每个主机最多连接数
+  static const int maxConnectionsPerHost = 20; // 每个主机最多连接数
   static const Duration connectionTimeout = Duration(seconds: 5); // 连接超时
-  static const Duration idleTimeout = Duration(seconds: 5); // 空闲连接保持时间
+  static const Duration idleTimeout = Duration(seconds: 30); // 空闲连接保持时间
 }
 
 /// 台标加载并发控制配置
 class _LogoLoadConfig {
-  static const int maxConcurrentLoads = 20; // 最大并发加载数
-  static const int maxQueueSize = 1000; // 最大队列大小
+  static const int maxConcurrentLoads = 10; // 最大并发加载数
+  static const int maxQueueSize = 100; // 最大队列大小
 }
 
 // ========================================
