@@ -53,17 +53,11 @@ Lotus IPTV is a modern, high-performance IPTV player built with Flutter. Feature
 
 To start watching channels, you need to add M3U/M3U8/TXT playlist sources:
 
-#### 🌍 Free Public Playlists
-For testing and demonstration purposes, you can use this free public playlist:
-```
-https://iptv-org.github.io/iptv/index.m3u
-```
-
 **How to add:**
 1. Open Lotus IPTV
 2. Click "Add Playlist" or "+" button
 3. Select "From URL"
-4. Paste the URL above
+4. Paste the URL
 5. Click "Add" and wait for channels to load
 
 #### 📁 Other Playlist Sources
@@ -218,7 +212,6 @@ Pull requests are welcome!
 2. This application does not include any built-in M3U / M3U8 playlists or media sources. All media content and playlists are added by users themselves.
 3. Users are solely responsible for ensuring that the media content and playlists they use are obtained from legal and authorized sources.
 4. The developer does not assume any responsibility for the legality, copyright, or licensing of any content played through this application.
-5. If any copyright holder believes that content accessed through this application infringes their rights, please contact the developer, and we will cooperate within a reasonable scope.
 
 ## 📄 License
 
