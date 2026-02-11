@@ -107,10 +107,16 @@ class _PlayerScreenState extends State<PlayerScreen>
   Future<void> _enableWakelock() async {
     // 手机端使用原生方法确保屏幕常亮
     if (PlatformDetector.isMobile) {
-      await PlatformDetector.setKeepScreenOn(true);
+      try {
+        await PlatformDetector.setKeepScreenOn(true);
+      } catch (e) {
+        ServiceLocator.log.d('PlayerScreen: Failed to set keep screen on: $e');
+      }
     } else {
       // 其他平台使用wakelock_plus
       try {
+        // 添加短暂延迟，确保Flutter引擎完全初始化
+        await Future.delayed(const Duration(milliseconds: 100));
         await WakelockPlus.enable();
         final enabled = await WakelockPlus.enabled;
         ServiceLocator.log.d('PlayerScreen: WakelockPlus enabled: $enabled');
@@ -624,7 +630,11 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (PlatformDetector.isMobile) {
       PlatformDetector.setKeepScreenOn(false);
     } else {
-      WakelockPlus.disable();
+      try {
+        WakelockPlus.disable();
+      } catch (e) {
+        ServiceLocator.log.d('PlayerScreen: Failed to disable wakelock: $e');
+      }
     }
 
     // Restore system UI
@@ -2391,6 +2401,47 @@ class _PlayerScreenState extends State<PlayerScreen>
                       );
                     },
                     child: const Icon(Icons.settings_rounded,
+                        color: Colors.white, size: 18),
+                  ),
+
+                  const SizedBox(width: 16),
+
+                  // Category menu button
+                  TVFocusable(
+                    onSelect: () {
+                      setState(() {
+                        if (_showCategoryPanel) {
+                          // 如果已显示，则隐藏
+                          _showCategoryPanel = false;
+                          _selectedCategory = null;
+                        } else {
+                          // 如果未显示，则显示
+                          _showCategoryPanel = true;
+                          _selectedCategory = null;
+                        }
+                      });
+                    },
+                    focusScale: 1.0,
+                    showFocusBorder: false,
+                    builder: (context, isFocused, child) {
+                      return Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isFocused
+                              ? AppTheme.getPrimaryColor(context)
+                              : const Color(0x33FFFFFF),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isFocused
+                                ? AppTheme.getPrimaryColor(context)
+                                : const Color(0x1AFFFFFF),
+                            width: isFocused ? 2 : 1,
+                          ),
+                        ),
+                        child: child,
+                      );
+                    },
+                    child: const Icon(Icons.menu_rounded,
                         color: Colors.white, size: 18),
                   ),
 

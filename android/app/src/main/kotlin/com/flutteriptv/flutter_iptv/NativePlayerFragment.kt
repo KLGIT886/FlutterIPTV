@@ -132,9 +132,7 @@ class NativePlayerFragment : Fragment() {
     private var categoryPanelVisible = false
     private var showingChannelList = false
     
-    // 重定向URL缓存（避免重复解析）
-    private val redirectCache = mutableMapOf<String, Pair<String, Long>>()
-    private val CACHE_EXPIRY_MS = 5 * 60 * 1000L // 5分钟
+    // 注意：重定向解析已统一到 RedirectResolver 工具类
     
     private val handler = Handler(Looper.getMainLooper())
     private var hideControlsRunnable: Runnable? = null
@@ -1292,10 +1290,10 @@ class NativePlayerFragment : Fragment() {
         
         // 配置 HTTP 数据源，设置合理的超时时间
         val dataSourceFactory = DefaultHttpDataSource.Factory()
-            .setConnectTimeoutMs(5000)  // 5秒连接超时（重定向可能需要更长时间）
-            .setReadTimeoutMs(10000)    // 10秒读取超时
+            .setConnectTimeoutMs(5000)  // 8秒连接超时（考虑网络延迟）
+            .setReadTimeoutMs(5000)    // 15秒读取超时
             .setAllowCrossProtocolRedirects(true)  // 允许跨协议重定向 (HTTP→HTTPS)
-            .setUserAgent("Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
+            .setUserAgent("Wget/1.21.3")  // 使用与302解析相同的User-Agent
         
         // 配置 MediaSourceFactory 支持 HLS/DASH 等流媒体格式
         val mediaSourceFactory = DefaultMediaSourceFactory(requireContext())
@@ -1317,10 +1315,12 @@ class NativePlayerFragment : Fragment() {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     when (playbackState) {
                         Player.STATE_BUFFERING -> {
+                            NativeLogger.d(TAG, "播放器状态: BUFFERING")
                             showLoading()
                             updateStatus("Buffering")
                         }
                         Player.STATE_READY -> {
+                            NativeLogger.i(TAG, "播放器状态: READY")
                             hideLoading()
                             updateStatus("LIVE")
                             // 不立即重置，延迟3秒确保播放真正稳定
@@ -1328,10 +1328,12 @@ class NativePlayerFragment : Fragment() {
                             startFpsCalculation() // 开始计算 FPS
                         }
                         Player.STATE_ENDED -> {
+                            NativeLogger.d(TAG, "播放器状态: ENDED")
                             updateStatus("Ended")
                             stopFpsCalculation()
                         }
                         Player.STATE_IDLE -> {
+                            NativeLogger.d(TAG, "播放器状态: IDLE")
                             updateStatus("Idle")
                             stopFpsCalculation()
                         }
@@ -1340,11 +1342,12 @@ class NativePlayerFragment : Fragment() {
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     if (isPlaying) {
+                        NativeLogger.i(TAG, ">>> 播放成功开始")
                         updateStatus("LIVE")
                         // 延迟3秒后确认播放稳定，然后重置重试计数
                         handler.postDelayed({
                             if (player?.isPlaying == true) {
-                                Log.d(TAG, "播放稳定，重置重试计数")
+                                NativeLogger.d(TAG, "播放稳定，重置重试计数")
                                 retryCount = 0
                                 isAutoSwitching = false
                             }
@@ -1357,21 +1360,20 @@ class NativePlayerFragment : Fragment() {
                 override fun onVideoSizeChanged(videoSize: VideoSize) {
                     videoWidth = videoSize.width
                     videoHeight = videoSize.height
+                    NativeLogger.d(TAG, "视频尺寸: ${videoWidth}x${videoHeight}")
                     updateVideoInfoDisplay()
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
-                    Log.e(TAG, "Player error: ${error.message}", error)
-                    Log.e(TAG, "Error type: ${error.errorCode}")
-                    Log.e(TAG, "Current URL: $currentUrl")
+                    NativeLogger.e(TAG, ">>> 播放器错误: ${error.message}, 错误码: ${error.errorCode}, URL: $currentUrl", error)
                     error.cause?.let { cause ->
-                        Log.e(TAG, "Error cause: ${cause.message}", cause)
+                        NativeLogger.e(TAG, "错误原因: ${cause.message}", cause)
                     }
                     
                     // 自动重试逻辑
                     if (retryCount < MAX_RETRIES) {
                         retryCount++
-                        Log.d(TAG, "播放错误，尝试重试 ($retryCount/$MAX_RETRIES): ${error.message}")
+                        NativeLogger.w(TAG, "播放错误，尝试重试 ($retryCount/$MAX_RETRIES)")
                         updateStatus("Retrying")
                         showLoading()
                         
@@ -1386,6 +1388,7 @@ class NativePlayerFragment : Fragment() {
                         // 重试次数用完，检查是否有其他源可以尝试
                         val sources = getCurrentSources()
                         if (sources.size > 1) {
+                            NativeLogger.i(TAG, "重试次数用完，开始自动检测其他源 (共${sources.size}个源)")
                             // 标记开始自动检测
                             isAutoDetecting = true
                             
@@ -1407,13 +1410,13 @@ class NativePlayerFragment : Fragment() {
                                     }
                                     
                                     // 检测源是否可用
-                                    Log.d(TAG, "当前源 (${currentSourceIndex + 1}/${sources.size}) 重试失败，检测源 ${nextSourceIndex + 1}")
+                                    NativeLogger.d(TAG, "检测源 ${nextSourceIndex + 1}/${sources.size}")
                                     if (testSource(sources[nextSourceIndex])) {
-                                        Log.d(TAG, "源 ${nextSourceIndex + 1} 可用")
+                                        NativeLogger.i(TAG, "✓ 源 ${nextSourceIndex + 1} 可用")
                                         foundAvailableSource = true
                                         break
                                     } else {
-                                        Log.d(TAG, "源 ${nextSourceIndex + 1} 不可用，继续尝试下一个源")
+                                        NativeLogger.d(TAG, "✗ 源 ${nextSourceIndex + 1} 不可用")
                                     }
                                     nextSourceIndex++
                                 }
@@ -1426,7 +1429,7 @@ class NativePlayerFragment : Fragment() {
                                     
                                     if (finalFoundAvailableSource) {
                                         // 找到可用的源，自动切换
-                                        Log.d(TAG, "切换到可用源 ${finalNextSourceIndex + 1}")
+                                        NativeLogger.i(TAG, ">>> 自动切换到源 ${finalNextSourceIndex + 1}")
                                         isAutoSwitching = true
                                         currentSourceIndex = finalNextSourceIndex
                                         retryCount = 0 // 重置重试计数
@@ -1440,7 +1443,7 @@ class NativePlayerFragment : Fragment() {
                                         // 尝试 Fallback 到下一个源（如果有的话）
                                         val fallbackIndex = currentSourceIndex + 1
                                         if (fallbackIndex < sources.size) {
-                                            Log.d(TAG, "自动检测全部失败，Fallback：强制尝试下一个 ${fallbackIndex + 1}")
+                                            NativeLogger.w(TAG, "所有源检测失败，强制尝试源 ${fallbackIndex + 1}")
                                             isAutoSwitching = true
                                             currentSourceIndex = fallbackIndex
                                             retryCount = 0
@@ -1497,57 +1500,15 @@ class NativePlayerFragment : Fragment() {
         }
     }
     
-    // 解析真实播放地址（处理302重定向，带缓存）
+    // 解析真实播放地址（使用统一的RedirectResolver）
     private fun resolveRealPlayUrl(url: String): String {
-        // 检查缓存
-        val cached = redirectCache[url]
-        if (cached != null) {
-            val (cachedUrl, timestamp) = cached
-            if (System.currentTimeMillis() - timestamp < CACHE_EXPIRY_MS) {
-                Log.d(TAG, "使用缓存的重定向: $url -> $cachedUrl")
-                return cachedUrl
-            } else {
-                // 缓存过期，移除
-                redirectCache.remove(url)
-            }
-        }
-        
-        return try {
-            val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            connection.instanceFollowRedirects = false
-            connection.setRequestProperty("User-Agent", "miguvideo_android")
-            connection.connectTimeout = 5000
-            connection.readTimeout = 5000
-            
-            connection.connect()
-            
-            if (connection.responseCode in 300..399) {
-                val location = connection.getHeaderField("Location")
-                connection.disconnect()
-                
-                if (location != null) {
-                    Log.d(TAG, "解析重定向: $url -> $location")
-                    // 缓存结果
-                    redirectCache[url] = Pair(location, System.currentTimeMillis())
-                    location
-                } else {
-                    Log.d(TAG, "无 Location 头，使用原始 URL: $url")
-                    url
-                }
-            } else {
-                connection.disconnect()
-                Log.d(TAG, "无重定向，使用原始 URL: $url")
-                url
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "解析播放地址失败: ${e.message}", e)
-            // 失败时返回原始 URL，让播放器尝试
-            url
-        }
+        return RedirectResolver.resolveRealPlayUrl(url, useCache = true)
     }
     
     private fun playUrl(url: String) {
-        Log.d(TAG, "Playing URL: $url")
+        NativeLogger.i(TAG, ">>> 开始播放URL: $url")
+        val startTime = System.currentTimeMillis()
+        
         videoWidth = 0
         videoHeight = 0
         frameRate = 0f
@@ -1559,13 +1520,27 @@ class NativePlayerFragment : Fragment() {
         
         // 在后台线程解析真实地址
         Thread {
+            NativeLogger.d(TAG, ">>> 开始解析302重定向")
+            val redirectStartTime = System.currentTimeMillis()
+            
             val realUrl = resolveRealPlayUrl(url)
             
+            val redirectTime = System.currentTimeMillis() - redirectStartTime
+            NativeLogger.i(TAG, ">>> 302重定向解析完成，耗时: ${redirectTime}ms")
+            
             activity?.runOnUiThread {
-                Log.d(TAG, "使用播放地址: $realUrl")
+                NativeLogger.d(TAG, ">>> 使用播放地址: $realUrl")
+                NativeLogger.d(TAG, ">>> 开始初始化播放器")
+                val playStartTime = System.currentTimeMillis()
+                
                 val mediaItem = MediaItem.fromUri(realUrl)
                 player?.setMediaItem(mediaItem)
                 player?.prepare()
+                
+                val playTime = System.currentTimeMillis() - playStartTime
+                val totalTime = System.currentTimeMillis() - startTime
+                NativeLogger.i(TAG, ">>> 播放器初始化完成，耗时: ${playTime}ms")
+                NativeLogger.i(TAG, ">>> 播放流程总耗时: ${totalTime}ms")
             }
         }.start()
     }
@@ -2070,21 +2045,16 @@ class NativePlayerFragment : Fragment() {
     }
     
     // 检测源是否可用（在后台线程执行）
+    // 同时解析302重定向并缓存真实地址，避免播放时重复请求
     private fun testSource(url: String): Boolean {
         return try {
-            val urlConnection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            urlConnection.connectTimeout = 1500 // 1.5秒超时
-            urlConnection.readTimeout = 1500
-            urlConnection.requestMethod = "HEAD" // 使用HEAD请求，更快
-            urlConnection.setRequestProperty("User-Agent", "Mozilla/5.0")
-            urlConnection.setRequestProperty("Accept", "*/*")
-            urlConnection.setRequestProperty("Connection", "keep-alive")
+            // 直接调用RedirectResolver解析真实地址
+            // 如果成功解析，说明源可用，同时地址已被缓存
+            val realUrl = RedirectResolver.resolveRealPlayUrl(url, useCache = true)
             
-            val responseCode = urlConnection.responseCode
-            urlConnection.disconnect()
-            
-            val isAvailable = responseCode in 200..399
-            Log.d(TAG, "testSource: $url -> $responseCode (${if (isAvailable) "可用" else "不可用"})")
+            // 如果返回的地址不为空，说明源可用
+            val isAvailable = realUrl.isNotEmpty()
+            Log.d(TAG, "testSource: $url -> ${if (isAvailable) "可用 (真实地址已缓存)" else "不可用"}")
             isAvailable
         } catch (e: Exception) {
             Log.d(TAG, "testSource: $url -> 异常: ${e.message}")
@@ -2532,7 +2502,7 @@ class NativePlayerFragment : Fragment() {
         stopFpsCalculation() // 停止 FPS 计算
         stopClockUpdate() // 停止时钟更新
         stopNetworkSpeedUpdate() // 停止网速更新
-        redirectCache.clear() // 清除重定向缓存
+        
         player?.release()
         player = null
         activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

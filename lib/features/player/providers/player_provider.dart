@@ -260,6 +260,8 @@ class PlayerProvider extends ChangeNotifier {
     if (_currentChannel == null) return;
     
     ServiceLocator.log.d('PlayerProvider: 正在重试播放 ${_currentChannel!.name}, 当前源索引: ${_currentChannel!.currentSourceIndex}, 重试计数: $_retryCount');
+    final startTime = DateTime.now();
+    
     _state = PlayerState.loading;
     _error = null;
     notifyListeners();
@@ -270,14 +272,32 @@ class PlayerProvider extends ChangeNotifier {
     
     try {
       if (!_useNativePlayer) {
-        await _mediaKitPlayer?.open(Media(url));
+        // 解析真实播放地址（处理302重定向）
+        ServiceLocator.log.i('>>> 重试: 开始解析302重定向', tag: 'PlayerProvider');
+        final redirectStartTime = DateTime.now();
+        
+        final realUrl = await ServiceLocator.redirectCache.resolveRealPlayUrl(url);
+        
+        final redirectTime = DateTime.now().difference(redirectStartTime).inMilliseconds;
+        ServiceLocator.log.i('>>> 重试: 302重定向解析完成，耗时: ${redirectTime}ms', tag: 'PlayerProvider');
+        ServiceLocator.log.d('>>> 重试: 使用播放地址: $realUrl', tag: 'PlayerProvider');
+        
+        final playStartTime = DateTime.now();
+        await _mediaKitPlayer?.open(Media(realUrl));
+        
+        final playTime = DateTime.now().difference(playStartTime).inMilliseconds;
+        final totalTime = DateTime.now().difference(startTime).inMilliseconds;
+        ServiceLocator.log.i('>>> 重试: 播放器初始化完成，耗时: ${playTime}ms', tag: 'PlayerProvider');
+        ServiceLocator.log.i('>>> 重试: 总耗时: ${totalTime}ms', tag: 'PlayerProvider');
+        
         _state = PlayerState.playing;
       }
       // 注意：不在这里重置 _retryCount，因为播放器可能还会异步报错
       // 重试计数会在播放真正稳定后（playing 状态持续一段时间）或切换频道时重置
       ServiceLocator.log.d('PlayerProvider: 重试命令已发送');
     } catch (e) {
-      ServiceLocator.log.d('PlayerProvider: 重试失败: $e');
+      final totalTime = DateTime.now().difference(startTime).inMilliseconds;
+      ServiceLocator.log.d('PlayerProvider: 重试失败 (${totalTime}ms): $e');
       // 重试失败，继续尝试或显示错误
       _setError('Failed to play channel: $e');
     }
@@ -556,7 +576,25 @@ class PlayerProvider extends ChangeNotifier {
       // Android TV 使用原生播放器，通过 MethodChannel 处理
       // 其他平台使用 media_kit
       if (!_useNativePlayer) {
-        await _mediaKitPlayer?.open(Media(playUrl));
+        // 解析真实播放地址（处理302重定向）
+        ServiceLocator.log.i('>>> 开始解析302重定向', tag: 'PlayerProvider');
+        final redirectStartTime = DateTime.now();
+        
+        final realUrl = await ServiceLocator.redirectCache.resolveRealPlayUrl(playUrl);
+        
+        final redirectTime = DateTime.now().difference(redirectStartTime).inMilliseconds;
+        ServiceLocator.log.i('>>> 302重定向解析完成，耗时: ${redirectTime}ms', tag: 'PlayerProvider');
+        ServiceLocator.log.d('>>> 使用播放地址: $realUrl', tag: 'PlayerProvider');
+        
+        // 开始播放
+        ServiceLocator.log.i('>>> 开始初始化播放器', tag: 'PlayerProvider');
+        final playStartTime = DateTime.now();
+        
+        await _mediaKitPlayer?.open(Media(realUrl));
+        
+        final playTime = DateTime.now().difference(playStartTime).inMilliseconds;
+        ServiceLocator.log.i('>>> 播放器初始化完成，耗时: ${playTime}ms', tag: 'PlayerProvider');
+        
         _state = PlayerState.playing;
         notifyListeners();
       }
@@ -568,7 +606,7 @@ class PlayerProvider extends ChangeNotifier {
       
       final playerInitTime = DateTime.now().difference(playerInitStartTime).inMilliseconds;
       final totalTime = DateTime.now().difference(playStartTime).inMilliseconds;
-      ServiceLocator.log.i('播放器初始化完成，耗时: ${playerInitTime}ms', tag: 'PlayerProvider');
+      ServiceLocator.log.i('>>> 播放流程总耗时: ${totalTime}ms (播放器初始化: ${playerInitTime}ms)', tag: 'PlayerProvider');
       ServiceLocator.log.i('========== 频道播放总耗时: ${totalTime}ms ==========', tag: 'PlayerProvider');
     } catch (e) {
       ServiceLocator.log.e('播放频道失败', tag: 'PlayerProvider', error: e);
@@ -623,6 +661,7 @@ class PlayerProvider extends ChangeNotifier {
       return;
     }
     
+    final startTime = DateTime.now();
     _state = PlayerState.loading;
     _error = null;
     _lastErrorMessage = null; // 重置错误防抖
@@ -631,9 +670,31 @@ class PlayerProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _mediaKitPlayer?.open(Media(url));
+      // 解析真实播放地址（处理302重定向）
+      ServiceLocator.log.i('>>> 开始解析302重定向', tag: 'PlayerProvider');
+      final redirectStartTime = DateTime.now();
+      
+      final realUrl = await ServiceLocator.redirectCache.resolveRealPlayUrl(url);
+      
+      final redirectTime = DateTime.now().difference(redirectStartTime).inMilliseconds;
+      ServiceLocator.log.i('>>> 302重定向解析完成，耗时: ${redirectTime}ms', tag: 'PlayerProvider');
+      ServiceLocator.log.d('>>> 使用播放地址: $realUrl', tag: 'PlayerProvider');
+      
+      // 开始播放
+      ServiceLocator.log.i('>>> 开始初始化播放器', tag: 'PlayerProvider');
+      final playStartTime = DateTime.now();
+      
+      await _mediaKitPlayer?.open(Media(realUrl));
+      
+      final playTime = DateTime.now().difference(playStartTime).inMilliseconds;
+      final totalTime = DateTime.now().difference(startTime).inMilliseconds;
+      ServiceLocator.log.i('>>> 播放器初始化完成，耗时: ${playTime}ms', tag: 'PlayerProvider');
+      ServiceLocator.log.i('>>> 播放流程总耗时: ${totalTime}ms', tag: 'PlayerProvider');
+      
       _state = PlayerState.playing;
     } catch (e) {
+      final totalTime = DateTime.now().difference(startTime).inMilliseconds;
+      ServiceLocator.log.e('>>> 播放失败 (${totalTime}ms): $e', tag: 'PlayerProvider');
       _setError('Failed to play: $e');
       return;
     }
@@ -867,6 +928,8 @@ class PlayerProvider extends ChangeNotifier {
     ServiceLocator.log.i('源可用，响应时间: ${result.responseTime}ms', tag: 'PlayerProvider');
     
     final url = _currentChannel!.currentUrl;
+    final startTime = DateTime.now();
+    
     _state = PlayerState.loading;
     _error = null;
     _lastErrorMessage = null;
@@ -875,12 +938,30 @@ class PlayerProvider extends ChangeNotifier {
 
     try {
       if (!_useNativePlayer) {
-        await _mediaKitPlayer?.open(Media(url));
+        // 解析真实播放地址（处理302重定向）
+        ServiceLocator.log.i('>>> 切换源: 开始解析302重定向', tag: 'PlayerProvider');
+        final redirectStartTime = DateTime.now();
+        
+        final realUrl = await ServiceLocator.redirectCache.resolveRealPlayUrl(url);
+        
+        final redirectTime = DateTime.now().difference(redirectStartTime).inMilliseconds;
+        ServiceLocator.log.i('>>> 切换源: 302重定向解析完成，耗时: ${redirectTime}ms', tag: 'PlayerProvider');
+        ServiceLocator.log.d('>>> 切换源: 使用播放地址: $realUrl', tag: 'PlayerProvider');
+        
+        final playStartTime = DateTime.now();
+        await _mediaKitPlayer?.open(Media(realUrl));
+        
+        final playTime = DateTime.now().difference(playStartTime).inMilliseconds;
+        final totalTime = DateTime.now().difference(startTime).inMilliseconds;
+        ServiceLocator.log.i('>>> 切换源: 播放器初始化完成，耗时: ${playTime}ms', tag: 'PlayerProvider');
+        ServiceLocator.log.i('>>> 切换源: 总耗时: ${totalTime}ms', tag: 'PlayerProvider');
+        
         _state = PlayerState.playing;
       }
       ServiceLocator.log.i('播放成功', tag: 'PlayerProvider');
     } catch (e) {
-      ServiceLocator.log.e('播放失败', tag: 'PlayerProvider', error: e);
+      final totalTime = DateTime.now().difference(startTime).inMilliseconds;
+      ServiceLocator.log.e('播放失败 (${totalTime}ms)', tag: 'PlayerProvider', error: e);
       _setError('Failed to play source: $e');
       return;
     }

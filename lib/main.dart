@@ -13,6 +13,7 @@ import 'core/theme/app_theme.dart';
 import 'core/navigation/app_router.dart';
 import 'core/services/service_locator.dart';
 import 'core/services/auto_refresh_service.dart';
+import 'core/services/native_log_channel.dart';
 import 'core/platform/native_player_channel.dart';
 import 'core/platform/platform_detector.dart';
 import 'core/widgets/channel_logo_widget.dart';
@@ -56,6 +57,11 @@ void main() async {
 
     // Initialize native player channel for Android TV
     NativePlayerChannel.init();
+    
+    // Initialize native log channel for Android TV only
+    if (Platform.isAndroid) {
+      await NativeLogChannel.init();
+    }
 
     // Initialize Windows/Linux/macOS Database Engine
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {

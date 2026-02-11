@@ -355,10 +355,10 @@ class MultiScreenPlayerFragment : Fragment() {
 
         // 配置 HTTP 数据源和 MediaSourceFactory 支持 HLS/DASH
         val dataSourceFactory = DefaultHttpDataSource.Factory()
-            .setConnectTimeoutMs(3000)
-            .setReadTimeoutMs(5000)
+            .setConnectTimeoutMs(8000)
+            .setReadTimeoutMs(15000)
             .setAllowCrossProtocolRedirects(true)  // 允许跨协议重定向 (HTTP→HTTPS)
-            .setUserAgent("Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
+            .setUserAgent("Wget/1.21.3")
         
         val mediaSourceFactory = DefaultMediaSourceFactory(requireContext())
             .setDataSourceFactory(dataSourceFactory)
@@ -377,16 +377,24 @@ class MultiScreenPlayerFragment : Fragment() {
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         when (playbackState) {
                             Player.STATE_BUFFERING -> {
+                                NativeLogger.d(TAG, "屏幕 $index 播放器状态: BUFFERING")
                                 screenStates[index].isLoading = true
                                 screenStates[index].hasError = false
                                 updateScreenOverlay(index)
                             }
                             Player.STATE_READY -> {
+                                NativeLogger.i(TAG, "屏幕 $index 播放器状态: READY")
                                 screenStates[index].isLoading = false
                                 screenStates[index].hasError = false
                                 updateScreenOverlay(index)
                             }
-                            Player.STATE_ENDED, Player.STATE_IDLE -> {
+                            Player.STATE_ENDED -> {
+                                NativeLogger.d(TAG, "屏幕 $index 播放器状态: ENDED")
+                                screenStates[index].isLoading = false
+                                updateScreenOverlay(index)
+                            }
+                            Player.STATE_IDLE -> {
+                                NativeLogger.d(TAG, "屏幕 $index 播放器状态: IDLE")
                                 screenStates[index].isLoading = false
                                 updateScreenOverlay(index)
                             }
@@ -396,11 +404,15 @@ class MultiScreenPlayerFragment : Fragment() {
                     override fun onVideoSizeChanged(videoSize: VideoSize) {
                         screenStates[index].videoWidth = videoSize.width
                         screenStates[index].videoHeight = videoSize.height
+                        NativeLogger.d(TAG, "屏幕 $index 视频尺寸: ${videoSize.width}x${videoSize.height}")
                         updateScreenOverlay(index)
                     }
 
                     override fun onPlayerError(error: PlaybackException) {
-                        Log.e(TAG, "Player $index error: ${error.message}")
+                        NativeLogger.e(TAG, "屏幕 $index 播放器错误: ${error.message}, 错误码: ${error.errorCode}", error)
+                        error.cause?.let { cause ->
+                            NativeLogger.e(TAG, "屏幕 $index 错误原因: ${cause.message}", cause)
+                        }
                         screenStates[index].isLoading = false
                         
                         // 尝试重试或切换源
@@ -413,7 +425,7 @@ class MultiScreenPlayerFragment : Fragment() {
                         
                         if (state.retryCount < MAX_RETRIES) {
                             // 先重试当前源
-                            Log.d(TAG, "Retrying screen $index (attempt ${state.retryCount + 1}/$MAX_RETRIES)")
+                            NativeLogger.w(TAG, "屏幕 $index 重试播放 (尝试 ${state.retryCount + 1}/$MAX_RETRIES)")
                             state.retryCount++
                             state.isLoading = true
                             updateScreenOverlay(index)
@@ -423,7 +435,7 @@ class MultiScreenPlayerFragment : Fragment() {
                             }, RETRY_DELAY)
                         } else if (state.currentSourceIndex + 1 < sources.size) {
                             // 重试次数用完，检测并切换到下一个源
-                            Log.d(TAG, "Retries exhausted, checking next sources for screen $index")
+                            NativeLogger.w(TAG, "屏幕 $index 重试次数用完，检测下一个源")
                             state.isLoading = true
                             updateScreenOverlay(index)
                             
@@ -440,11 +452,11 @@ class MultiScreenPlayerFragment : Fragment() {
                                     }
                                     
                                     if (testSource(sources[i])) {
-                                        Log.d(TAG, "Source ${i + 1} available for screen $index")
+                                        NativeLogger.i(TAG, "屏幕 $index 找到可用源 ${i + 1}/${sources.size}")
                                         foundIndex = i
                                         break
                                     } else {
-                                        Log.d(TAG, "Source ${i + 1} not available for screen $index")
+                                        NativeLogger.d(TAG, "屏幕 $index 源 ${i + 1}/${sources.size} 不可用")
                                     }
                                 }
                                 
@@ -453,6 +465,7 @@ class MultiScreenPlayerFragment : Fragment() {
                                     
                                     if (foundIndex >= 0) {
                                         // 找到可用源，切换
+                                        NativeLogger.i(TAG, "屏幕 $index 切换到源 ${foundIndex + 1}/${sources.size}")
                                         state.currentSourceIndex = foundIndex
                                         state.retryCount = 0
                                         val nextUrl = sources[foundIndex]
@@ -463,7 +476,7 @@ class MultiScreenPlayerFragment : Fragment() {
                                         playUrlOnScreen(index, nextUrl)
                                     } else {
                                         // 所有源都不可用
-                                        Log.e(TAG, "All sources failed for screen $index")
+                                        NativeLogger.e(TAG, "屏幕 $index 所有源都不可用")
                                         state.hasError = true
                                         state.isLoading = false
                                         updateScreenOverlay(index)
@@ -472,7 +485,7 @@ class MultiScreenPlayerFragment : Fragment() {
                             }.start()
                         } else {
                             // 所有重试都失败了，没有更多源
-                            Log.e(TAG, "All retries failed for screen $index")
+                            NativeLogger.e(TAG, "屏幕 $index 所有重试都失败，没有更多源")
                             state.hasError = true
                             updateScreenOverlay(index)
                         }
@@ -587,71 +600,52 @@ class MultiScreenPlayerFragment : Fragment() {
         }
     }
 
-    // 解析真实播放地址（处理302重定向）
+    // 解析真实播放地址（使用统一的RedirectResolver）
     private fun resolveRealPlayUrl(url: String): String {
-        return try {
-            val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            connection.instanceFollowRedirects = false
-            connection.setRequestProperty("User-Agent", "miguvideo_android")
-            connection.connectTimeout = 5000
-            connection.readTimeout = 5000
-            
-            connection.connect()
-            
-            if (connection.responseCode in 300..399) {
-                val location = connection.getHeaderField("Location")
-                connection.disconnect()
-                
-                if (location != null) {
-                    Log.d(TAG, "解析重定向: $url -> $location")
-                    location
-                } else {
-                    Log.d(TAG, "无 Location 头，使用原始 URL: $url")
-                    url
-                }
-            } else {
-                connection.disconnect()
-                Log.d(TAG, "无重定向，使用原始 URL: $url")
-                url
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "解析播放地址失败: ${e.message}", e)
-            // 失败时返回原始 URL，让播放器尝试
-            url
-        }
+        return RedirectResolver.resolveRealPlayUrl(url, useCache = true) // 使用缓存，避免重复请求
     }
     
     // 播放指定屏幕的URL（在后台线程解析重定向）
     private fun playUrlOnScreen(screenIndex: Int, url: String) {
         Thread {
+            NativeLogger.d(TAG, "屏幕 $screenIndex >>> 开始解析302重定向")
+            val startTime = System.currentTimeMillis()
+            val redirectStartTime = System.currentTimeMillis()
+            
             val realUrl = resolveRealPlayUrl(url)
             
+            val redirectTime = System.currentTimeMillis() - redirectStartTime
+            NativeLogger.d(TAG, "屏幕 $screenIndex >>> 302重定向解析完成，耗时: ${redirectTime}ms")
+            
             activity?.runOnUiThread {
-                Log.d(TAG, "屏幕 $screenIndex 使用播放地址: $realUrl")
+                NativeLogger.d(TAG, "屏幕 $screenIndex >>> 使用播放地址: $realUrl")
+                NativeLogger.d(TAG, "屏幕 $screenIndex >>> 开始初始化播放器")
+                val playStartTime = System.currentTimeMillis()
+                
                 players[screenIndex]?.let { player ->
                     player.setMediaItem(MediaItem.fromUri(realUrl))
                     player.prepare()
                 }
+                
+                val playTime = System.currentTimeMillis() - playStartTime
+                val totalTime = System.currentTimeMillis() - startTime
+                NativeLogger.d(TAG, "屏幕 $screenIndex >>> 播放器初始化完成，耗时: ${playTime}ms")
+                NativeLogger.i(TAG, "屏幕 $screenIndex >>> 播放流程总耗时: ${totalTime}ms")
             }
         }.start()
     }
 
     // 检测源是否可用（在后台线程执行）
+    // 同时解析302重定向并缓存真实地址，避免播放时重复请求
     private fun testSource(url: String): Boolean {
         return try {
-            val urlConnection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            urlConnection.connectTimeout = 1500 // 1.5秒超时
-            urlConnection.readTimeout = 1500
-            urlConnection.requestMethod = "HEAD" // 使用HEAD请求，更快
-            urlConnection.setRequestProperty("User-Agent", "Mozilla/5.0")
-            urlConnection.setRequestProperty("Accept", "*/*")
-            urlConnection.setRequestProperty("Connection", "keep-alive")
+            // 直接调用RedirectResolver解析真实地址
+            // 如果成功解析，说明源可用，同时地址已被缓存
+            val realUrl = RedirectResolver.resolveRealPlayUrl(url, useCache = true)
             
-            val responseCode = urlConnection.responseCode
-            urlConnection.disconnect()
-            
-            val isAvailable = responseCode in 200..399
-            Log.d(TAG, "testSource: $url -> $responseCode (${if (isAvailable) "可用" else "不可用"})")
+            // 如果返回的地址不为空，说明源可用
+            val isAvailable = realUrl.isNotEmpty()
+            Log.d(TAG, "testSource: $url -> ${if (isAvailable) "可用 (真实地址已缓存)" else "不可用"}")
             isAvailable
         } catch (e: Exception) {
             Log.d(TAG, "testSource: $url -> 异常: ${e.message}")

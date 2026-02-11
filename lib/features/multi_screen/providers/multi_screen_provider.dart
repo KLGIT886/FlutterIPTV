@@ -197,9 +197,24 @@ class MultiScreenProvider extends ChangeNotifier {
       // 设置音量（只有活动屏幕有声音，使用有效音量包含音量增强）
       _applyVolumeToScreen(screenIndex);
       
-      // 播放频道（使用 currentUrl 保留源索引）
-      ServiceLocator.log.d('MultiScreenProvider: Opening media for screen $screenIndex: $playUrl');
-      await screen.player!.open(Media(playUrl));
+      // 解析真实播放地址（处理302重定向）
+      ServiceLocator.log.d('MultiScreenProvider: >>> 屏幕$screenIndex 开始解析302重定向');
+      final redirectStartTime = DateTime.now();
+      
+      final realUrl = await ServiceLocator.redirectCache.resolveRealPlayUrl(playUrl);
+      
+      final redirectTime = DateTime.now().difference(redirectStartTime).inMilliseconds;
+      ServiceLocator.log.d('MultiScreenProvider: >>> 屏幕$screenIndex 302重定向解析完成，耗时: ${redirectTime}ms');
+      ServiceLocator.log.d('MultiScreenProvider: >>> 屏幕$screenIndex 使用播放地址: $realUrl');
+      
+      // 播放频道（使用解析后的真实URL）
+      ServiceLocator.log.d('MultiScreenProvider: Opening media for screen $screenIndex: $realUrl');
+      final playStartTime = DateTime.now();
+      
+      await screen.player!.open(Media(realUrl));
+      
+      final playTime = DateTime.now().difference(playStartTime).inMilliseconds;
+      ServiceLocator.log.d('MultiScreenProvider: >>> 屏幕$screenIndex 播放器初始化完成，耗时: ${playTime}ms');
       
       // 播放开始后再次确保音量正确
       _applyVolumeToScreen(screenIndex);

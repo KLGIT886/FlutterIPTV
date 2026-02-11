@@ -22,6 +22,7 @@ class MainActivity: FlutterFragmentActivity() {
     private val CHANNEL = "com.flutteriptv/platform"
     private val PLAYER_CHANNEL = "com.flutteriptv/native_player"
     private val INSTALL_CHANNEL = "com.flutteriptv/install"
+    private val LOG_CHANNEL = "com.flutteriptv/native_log"
     
     private var playerFragment: NativePlayerFragment? = null
     private var multiScreenFragment: MultiScreenPlayerFragment? = null
@@ -57,6 +58,10 @@ class MainActivity: FlutterFragmentActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         Log.d(TAG, "configureFlutterEngine called")
+        
+        // Initialize Native Logger
+        val logChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, LOG_CHANNEL)
+        NativeLogger.init(logChannel)
         
         // Platform detection channel
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->

@@ -701,14 +701,14 @@ extension AppThemeDynamic on AppTheme {
   /// 根据配色方案 ID 生成黑暗主题
   static ThemeData getDarkTheme(String schemeId, [String? fontFamily]) {
     final scheme = ColorSchemeManager.instance.getDarkScheme(schemeId);
-    ServiceLocator.log.d('AppTheme: 生成黑暗主题 - schemeId=$schemeId, primaryColor=${scheme.primaryColor}, secondaryColor=${scheme.secondaryColor}, fontFamily=$fontFamily');
+    // ServiceLocator.log.d('AppTheme: 生成黑暗主题 - schemeId=$schemeId, primaryColor=${scheme.primaryColor}, secondaryColor=${scheme.secondaryColor}, fontFamily=$fontFamily');
     return _buildDarkTheme(scheme, fontFamily);
   }
   
   /// 根据配色方案 ID 生成明亮主题
   static ThemeData getLightTheme(String schemeId, [String? fontFamily]) {
     final scheme = ColorSchemeManager.instance.getLightScheme(schemeId);
-    ServiceLocator.log.d('AppTheme: 生成明亮主题 - schemeId=$schemeId, primaryColor=${scheme.primaryColor}, secondaryColor=${scheme.secondaryColor}, fontFamily=$fontFamily');
+    // ServiceLocator.log.d('AppTheme: 生成明亮主题 - schemeId=$schemeId, primaryColor=${scheme.primaryColor}, secondaryColor=${scheme.secondaryColor}, fontFamily=$fontFamily');
     return _buildLightTheme(scheme, fontFamily);
   }
   
