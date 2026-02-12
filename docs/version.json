@@ -1,23 +1,23 @@
 {
-  "version": "1.5.1",
-  "build": 161,
+  "version": "1.5.2",
+  "build": 162,
   "releaseDate": "2026-02-12",
   "assets": {
-    "windows": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.1/flutteriptv-Windows-x64-Setup.exe",
+    "windows": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.2/flutteriptv-Windows-x64-Setup.exe",
     "android_mobile": {
-      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.1/flutteriptv-Android-Mobile-arm64-v8a.apk",
-      "armeabi-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.1/flutteriptv-Android-Mobile-armeabi-v7a.apk",
-      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.1/flutteriptv-Android-Mobile-x86_64.apk"
+      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.2/flutteriptv-Android-Mobile-arm64-v8a.apk",
+      "armeabi-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.2/flutteriptv-Android-Mobile-armeabi-v7a.apk",
+      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.2/flutteriptv-Android-Mobile-x86_64.apk"
     },
     "android_tv": {
-      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.1/flutteriptv-AndroidTV-arm64-v8a.apk",
-      "armeabi-v7a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.1/flutteriptv-AndroidTV-armeabi-v7a.apk",
-      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.1/flutteriptv-AndroidTV-x86_64.apk"
+      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.2/flutteriptv-AndroidTV-arm64-v8a.apk",
+      "armeabi-v7a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.2/flutteriptv-AndroidTV-armeabi-v7a.apk",
+      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.2/flutteriptv-AndroidTV-x86_64.apk"
     }
   },
   "changelog": {
-    "zh": "- 修复：非HTTP/HTTPS协议（rtsp/rtmp/rtp/udp等）跳过302检测\n- 修复：udpxy代理URL（/rtp/IP:Port格式）跳过302检测\n- 优化：302检测逻辑，避免对不支持HEAD方法的服务器进行检测\n- 优化：播放器已完全兼容udpxy流式传输特性",
-    "en": "- Fixed: Skip 302 detection for non-HTTP/HTTPS protocols (rtsp/rtmp/rtp/udp etc.)\n- Fixed: Skip 302 detection for udpxy proxy URLs (/rtp/IP:Port format)\n- Improved: 302 detection logic, avoid checking servers that don't support HEAD method\n- Improved: Player fully compatible with udpxy streaming characteristics"
+    "zh": "- 文档：README中添加Issue反馈鼓励说明，欢迎用户提交bug和建议\n- 文档：优化中英文README排版和表达",
+    "en": "- Docs: Added Issue feedback encouragement in README, welcoming users to submit bugs and suggestions\n- Docs: Improved Chinese and English README layout and expression"
   },
   "minVersion": "1.0.0"
 }

@@ -512,7 +512,6 @@ class NativePlayerActivity : AppCompatActivity() {
         Log.d(TAG, "onDestroy called")
         
         hideControlsRunnable?.let { handler.removeCallbacks(it) }
-        // RedirectResolver.clearAllCache() // 清除重定向缓存
         player?.release()
         player = null
     }
