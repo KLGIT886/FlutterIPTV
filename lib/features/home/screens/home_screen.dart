@@ -90,11 +90,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    ServiceLocator.log.i('应用生命周期变化: $state', tag: 'HomeScreen');
+    // ServiceLocator.log.i('应用生命周期变化: $state', tag: 'HomeScreen');
 
     // 当应用从后台恢复时，检查并重新加载数据
     if (state == AppLifecycleState.resumed) {
-      ServiceLocator.log.i('应用从后台恢复，检查数据状态', tag: 'HomeScreen');
+      // ServiceLocator.log.i('应用从后台恢复，检查数据状态', tag: 'HomeScreen');
       _checkAndReloadIfNeeded();
       // 刷新观看记录
       _refreshWatchHistory();
@@ -726,10 +726,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
     final bool isMultiScreenMode = settingsProvider.lastPlayMode == 'multi' &&
         settingsProvider.hasMultiScreenState;
 
-    ServiceLocator.log.d(
-        'HomeScreen: lastPlayMode=${settingsProvider.lastPlayMode}, hasMultiScreenState=${settingsProvider.hasMultiScreenState}, isMultiScreenMode=$isMultiScreenMode');
-    ServiceLocator.log.d(
-        'HomeScreen: lastMultiScreenChannels=${settingsProvider.lastMultiScreenChannels}');
+    // ServiceLocator.log.d(
+    //     'HomeScreen: lastPlayMode=${settingsProvider.lastPlayMode}, hasMultiScreenState=${settingsProvider.hasMultiScreenState}, isMultiScreenMode=$isMultiScreenMode');
+    // ServiceLocator.log.d(
+    //     'HomeScreen: lastMultiScreenChannels=${settingsProvider.lastMultiScreenChannels}');
 
     if (settingsProvider.rememberLastChannel &&
         settingsProvider.lastChannelId != null) {

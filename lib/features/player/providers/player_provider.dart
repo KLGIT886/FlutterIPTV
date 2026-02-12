@@ -9,6 +9,7 @@ import '../../../core/models/channel.dart';
 import '../../../core/platform/platform_detector.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/channel_test_service.dart';
+import '../../../core/services/log_service.dart';
 
 enum PlayerState {
   idle,
@@ -308,6 +309,9 @@ class PlayerProvider extends ChangeNotifier {
   String _videoCodec = '';
   double _fps = 0;
   
+  // 保存初始化时的 hwdec 配置
+  String _configuredHwdec = 'unknown';
+  
   // FPS 显示
   double _currentFps = 0;
   
@@ -382,6 +386,11 @@ class PlayerProvider extends ChangeNotifier {
     _mediaKitPlayer?.dispose();
     _debugInfoTimer?.cancel();
 
+    ServiceLocator.log.i('========== 初始化播放器 ==========', tag: 'PlayerProvider');
+    ServiceLocator.log.i('平台: ${Platform.operatingSystem}', tag: 'PlayerProvider');
+    ServiceLocator.log.i('软解码模式: $useSoftwareDecoding', tag: 'PlayerProvider');
+    ServiceLocator.log.i('缓冲强度: $bufferStrength', tag: 'PlayerProvider');
+
     // 根据缓冲强度设置缓冲区大小
     final bufferSize = switch (bufferStrength) {
       'fast' => 32 * 1024 * 1024,      // 32MB - 快速启动
@@ -395,21 +404,89 @@ class PlayerProvider extends ChangeNotifier {
         bufferSize: bufferSize,
         // 设置网络超时（秒）
         // timeout: 3 秒连接超时
+        // 根据日志级别启用 mpv 日志（关闭时使用 error 级别，只记录严重错误）
+        logLevel: ServiceLocator.log.currentLevel != LogLevel.off 
+          ? MPVLogLevel.info 
+          : MPVLogLevel.error,
       ),
     );
 
+    // 确定硬件解码模式
+    String? hwdecMode;
+    if (Platform.isAndroid) {
+      hwdecMode = useSoftwareDecoding ? 'no' : 'mediacodec';
+    } else if (Platform.isWindows) {
+      hwdecMode = useSoftwareDecoding ? 'no' : 'auto-copy';
+    }
+
+    _configuredHwdec = hwdecMode ?? 'default';
+    ServiceLocator.log.i('硬件解码模式: ${hwdecMode ?? "默认"}', tag: 'PlayerProvider');
+    ServiceLocator.log.i('硬件加速: ${!useSoftwareDecoding}', tag: 'PlayerProvider');
+
     VideoControllerConfiguration config = VideoControllerConfiguration(
-      hwdec: Platform.isAndroid ? (useSoftwareDecoding ? 'no' : 'mediacodec') : null,
+      hwdec: hwdecMode,
       enableHardwareAcceleration: !useSoftwareDecoding,
     );
 
     _videoController = VideoController(_mediaKitPlayer!, configuration: config);
     _setupMediaKitListeners();
     _updateDebugInfo();
+    
+    ServiceLocator.log.i('播放器初始化完成', tag: 'PlayerProvider');
   }
 
   void _setupMediaKitListeners() {
+    ServiceLocator.log.d('设置播放器监听器', tag: 'PlayerProvider');
+    
+    // 只在日志开启时监听 mpv 日志
+    if (ServiceLocator.log.currentLevel != LogLevel.off) {
+      _mediaKitPlayer!.stream.log.listen((log) {
+        final message = log.text.toLowerCase();
+        
+        // 检测硬件解码器信息
+        if (message.contains('using hardware decoding') || 
+            message.contains('hwdec') ||
+            message.contains('d3d11va') ||
+            message.contains('nvdec') ||
+            message.contains('dxva2') ||
+            message.contains('qsv')) {
+          ServiceLocator.log.i('🎮 硬件解码: ${log.text}', tag: 'PlayerProvider');
+        }
+        
+        // 检测 GPU 信息
+        if (message.contains('gpu') || 
+            message.contains('nvidia') || 
+            message.contains('intel') || 
+            message.contains('amd') ||
+            message.contains('adapter') ||
+            message.contains('device')) {
+          ServiceLocator.log.i('🖥️ GPU信息: ${log.text}', tag: 'PlayerProvider');
+        }
+        
+        // 检测渲染器信息
+        if (message.contains('vo/gpu') || 
+            message.contains('opengl') || 
+            message.contains('d3d11') ||
+            message.contains('vulkan')) {
+          ServiceLocator.log.i('🎨 渲染器: ${log.text}', tag: 'PlayerProvider');
+        }
+        
+        // 检测解码器选择
+        if (message.contains('decoder') || message.contains('codec')) {
+          ServiceLocator.log.d('📹 解码器: ${log.text}', tag: 'PlayerProvider');
+        }
+        
+        // 记录错误和警告
+        if (log.level == MPVLogLevel.error) {
+          ServiceLocator.log.e('MPV错误: ${log.text}', tag: 'PlayerProvider');
+        } else if (log.level == MPVLogLevel.warn) {
+          ServiceLocator.log.w('MPV警告: ${log.text}', tag: 'PlayerProvider');
+        }
+      });
+    }
+    
     _mediaKitPlayer!.stream.playing.listen((playing) {
+      ServiceLocator.log.d('播放状态变化: playing=$playing', tag: 'PlayerProvider');
       if (playing) {
         _state = PlayerState.playing;
         // 只有在播放稳定后才重置重试计数
@@ -427,6 +504,7 @@ class PlayerProvider extends ChangeNotifier {
     });
 
     _mediaKitPlayer!.stream.buffering.listen((buffering) {
+      ServiceLocator.log.d('缓冲状态: buffering=$buffering', tag: 'PlayerProvider');
       if (buffering && _state != PlayerState.idle && _state != PlayerState.error) {
         _state = PlayerState.buffering;
       } else if (!buffering && _state == PlayerState.buffering) {
@@ -439,32 +517,80 @@ class PlayerProvider extends ChangeNotifier {
       _position = pos;
       notifyListeners();
     });
+    
     _mediaKitPlayer!.stream.duration.listen((dur) {
       _duration = dur;
       notifyListeners();
     });
+    
     _mediaKitPlayer!.stream.tracks.listen((tracks) {
+      ServiceLocator.log.d('轨道信息更新: 视频轨=${tracks.video.length}, 音频轨=${tracks.audio.length}', tag: 'PlayerProvider');
+      
       for (final track in tracks.video) {
-        if (track.codec != null) _videoCodec = track.codec!;
-        if (track.fps != null) _fps = track.fps!;
+        if (track.codec != null) {
+          _videoCodec = track.codec!;
+          ServiceLocator.log.i('视频编码: ${track.codec}', tag: 'PlayerProvider');
+        }
+        if (track.fps != null) {
+          _fps = track.fps!;
+          ServiceLocator.log.i('视频帧率: ${track.fps} fps', tag: 'PlayerProvider');
+        }
+        if (track.w != null && track.h != null) {
+          ServiceLocator.log.i('视频分辨率: ${track.w}x${track.h}', tag: 'PlayerProvider');
+        }
       }
+      
+      for (final track in tracks.audio) {
+        if (track.codec != null) {
+          ServiceLocator.log.i('音频编码: ${track.codec}', tag: 'PlayerProvider');
+        }
+      }
+      
       notifyListeners();
     });
+    
     _mediaKitPlayer!.stream.volume.listen((vol) {
       _volume = vol / 100;
       notifyListeners();
     });
+    
     _mediaKitPlayer!.stream.error.listen((err) {
       if (err.isNotEmpty) {
+        ServiceLocator.log.e('播放器错误: $err', tag: 'PlayerProvider');
+        
+        // 分析错误类型
+        if (err.toLowerCase().contains('decode') || err.toLowerCase().contains('decoder')) {
+          ServiceLocator.log.e('>>> 解码错误: $err', tag: 'PlayerProvider');
+        } else if (err.toLowerCase().contains('render') || err.toLowerCase().contains('display')) {
+          ServiceLocator.log.e('>>> 渲染错误: $err', tag: 'PlayerProvider');
+        } else if (err.toLowerCase().contains('hwdec') || err.toLowerCase().contains('hardware')) {
+          ServiceLocator.log.e('>>> 硬件加速错误: $err', tag: 'PlayerProvider');
+        } else if (err.toLowerCase().contains('codec')) {
+          ServiceLocator.log.e('>>> 编解码器错误: $err', tag: 'PlayerProvider');
+        }
+        
         if (_shouldTrySoftwareFallback(err)) {
+          ServiceLocator.log.w('尝试软解码回退', tag: 'PlayerProvider');
           _attemptSoftwareFallback();
         } else {
           _setError(err);
         }
       }
     });
-    _mediaKitPlayer!.stream.width.listen((_) => notifyListeners());
-    _mediaKitPlayer!.stream.height.listen((_) => notifyListeners());
+    
+    _mediaKitPlayer!.stream.width.listen((width) {
+      if (width != null && width > 0) {
+        ServiceLocator.log.d('视频宽度: $width', tag: 'PlayerProvider');
+      }
+      notifyListeners();
+    });
+    
+    _mediaKitPlayer!.stream.height.listen((height) {
+      if (height != null && height > 0) {
+        ServiceLocator.log.d('视频高度: $height', tag: 'PlayerProvider');
+      }
+      notifyListeners();
+    });
   }
 
   Timer? _debugInfoTimer;
@@ -474,11 +600,25 @@ class PlayerProvider extends ChangeNotifier {
     
     _debugInfoTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_mediaKitPlayer == null) return;
-      _hwdecMode = 'mediacodec';
+      
+      // 使用配置的 hwdec 模式，而不是硬编码
+      _hwdecMode = _configuredHwdec;
       
       // 更新视频尺寸
-      _videoWidth = _mediaKitPlayer!.state.width ?? 0;
-      _videoHeight = _mediaKitPlayer!.state.height ?? 0;
+      final newWidth = _mediaKitPlayer!.state.width ?? 0;
+      final newHeight = _mediaKitPlayer!.state.height ?? 0;
+      
+      // 检测视频尺寸变化（可能表示解码成功）
+      if (newWidth != _videoWidth || newHeight != _videoHeight) {
+        if (newWidth > 0 && newHeight > 0) {
+          ServiceLocator.log.i('✓ 视频解码成功: ${newWidth}x${newHeight}', tag: 'PlayerProvider');
+        } else if (_videoWidth > 0 && newWidth == 0) {
+          ServiceLocator.log.w('✗ 视频解码丢失', tag: 'PlayerProvider');
+        }
+      }
+      
+      _videoWidth = newWidth;
+      _videoHeight = newHeight;
       
       // Windows 端直接使用 track 中的 fps 信息
       // media_kit (mpv) 的渲染帧率基本等于视频源帧率

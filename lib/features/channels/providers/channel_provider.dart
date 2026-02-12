@@ -120,9 +120,9 @@ class ChannelProvider extends ChangeNotifier {
       result[group.name] = channels;
     }
     
-    ServiceLocator.log.d(
-        'getHomeChannelsByGroup: result.length=${result.length}',
-        tag: 'ChannelProvider');
+    // ServiceLocator.log.d(
+    //     'getHomeChannelsByGroup: result.length=${result.length}',
+    //     tag: 'ChannelProvider');
     
     return result;
   }

@@ -79,7 +79,7 @@ class _TVSidebarState extends State<TVSidebar> {
       _NavItem(icon: Icons.search_rounded, label: AppStrings.of(context)?.search ?? 'Search', route: AppRouter.search),
       _NavItem(icon: Icons.settings_rounded, label: AppStrings.of(context)?.settings ?? 'Settings', route: AppRouter.settings),
     ];
-    ServiceLocator.log.d('TVSidebar: _getNavItems returned ${items.length} items');
+    // ServiceLocator.log.d('TVSidebar: _getNavItems returned ${items.length} items');
     return items;
   }
 
