@@ -512,8 +512,8 @@ class _PlayerScreenState extends State<PlayerScreen>
     final settingsProvider = context.read<SettingsProvider>();
 
     try {
-      // Try to find the matching channel to enable playlist navigation
-      final channel = channelProvider.channels.firstWhere(
+      // 使用 allChannels 而不是 channels，确保能找到所有频道（包括不在当前分页中的）
+      final channel = channelProvider.allChannels.firstWhere(
         (c) => c.url == widget.channelUrl,
       );
 
