@@ -1,0 +1,201 @@
+name: Build and Release (Windows Only)
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # 仅在推送tag时触发
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+env:
+  FLUTTER_VERSION: '3.38.5'
+
+jobs:
+  # ============================================
+  # Build Windows Application
+  # ============================================
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+      
+      - name: Get dependencies
+        run: flutter pub get
+      
+      - name: Build Windows Release
+        run: flutter build windows --release
+      
+      - name: Download SQLite3 DLL
+        run: |
+          $urls = @(
+            "https://www.sqlite.org/2025/sqlite-dll-win-x64-3510100.zip",
+            "https://www.sqlite.org/2024/sqlite-dll-win-x64-3470200.zip"
+          )
+          foreach ($url in $urls) {
+            try {
+              Invoke-WebRequest -Uri $url -OutFile "sqlite3.zip" -TimeoutSec 30
+              Expand-Archive -Path "sqlite3.zip" -DestinationPath "sqlite3_temp" -Force
+              if (Test-Path "sqlite3_temp/sqlite3.dll") {
+                Copy-Item "sqlite3_temp/sqlite3.dll" "build/windows/x64/runner/Release/" -Force
+                break
+              }
+            } catch { continue }
+          }
+        shell: pwsh
+      
+      - name: Create Installer
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          if (!$version) { $version = "1.0.0" }
+          @"
+          [Setup]
+          AppName=FlutterIPTV
+          AppVersion=$version
+          AppPublisher=FlutterIPTV
+          DefaultDirName={autopf}\FlutterIPTV
+          DefaultGroupName=FlutterIPTV
+          OutputDir=.
+          OutputBaseFilename=flutteriptv-Windows-x64-Setup
+          Compression=lzma2
+          SolidCompression=yes
+          ArchitecturesInstallIn64BitMode=x64
+          PrivilegesRequired=lowest
+          [Files]
+          Source: "build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
+          [Icons]
+          Name: "{group}\FlutterIPTV"; Filename: "{app}\flutter_iptv.exe"
+          Name: "{autodesktop}\FlutterIPTV"; Filename: "{app}\flutter_iptv.exe"; Tasks: desktopicon
+          [Tasks]
+          Name: "desktopicon"; Description: "Create desktop shortcut"; GroupDescription: "Additional icons:"
+          [Run]
+          Filename: "{app}\flutter_iptv.exe"; Description: "Launch FlutterIPTV"; Flags: nowait postinstall skipifsilent
+          "@ | Out-File "installer.iss" -Encoding UTF8
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+        shell: pwsh
+      
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: flutteriptv-Windows-x64-Setup.exe
+          retention-days: 5
+
+  # ============================================
+  # Create GitHub Release (Windows Only)
+  # ============================================
+  create-release:
+    name: Create Release
+    needs: [build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./release-assets/
+      
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "TAG=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "CREATE_RELEASE=true" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+            echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            echo "CREATE_RELEASE=true" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=dev-build" >> $GITHUB_OUTPUT
+            echo "TAG=dev-build" >> $GITHUB_OUTPUT
+            echo "CREATE_RELEASE=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Generate Release Notes
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          TAG="${{ steps.version.outputs.TAG }}"
+          BASE_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}"
+          
+          # Read changelog from version.json
+          if [ -f "docs/version.json" ]; then
+            CHANGELOG_ZH=$(jq -r '.changelog.zh' docs/version.json | sed 's/\\n/\n/g')
+            CHANGELOG_EN=$(jq -r '.changelog.en' docs/version.json | sed 's/\\n/\n/g')
+          else
+            # Fallback to git commits if version.json not found
+            PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -v "^${TAG}$" | head -1)
+            if [ -n "$PREV_TAG" ]; then
+              CHANGELOG_ZH=$(git log --pretty=format:"- %s" ${PREV_TAG}..${TAG} 2>/dev/null | grep -v "^- Merge" || echo "- Bug fixes and improvements")
+              CHANGELOG_EN="${CHANGELOG_ZH}"
+            else
+              CHANGELOG_ZH="- 初始版本"
+              CHANGELOG_EN="- Initial release"
+            fi
+          fi
+          
+          cat > release_notes.md << EOF
+          ## 📺 FlutterIPTV ${VERSION}
+          
+          ### 📝 更新内容 What's New
+          
+          **中文 Chinese:**
+          ${CHANGELOG_ZH}
+          
+          **English:**
+          ${CHANGELOG_EN}
+          
+          ---
+          
+          ### 📥 下载 Downloads
+          
+          #### 🖥️ Windows
+          - [flutteriptv-Windows-x64-Setup.exe](${BASE_URL}/flutteriptv-Windows-x64-Setup.exe) - Windows 64位安装包
+          
+          **安装说明:**
+          1. 下载上述安装程序
+          2. 双击运行安装
+          3. 按照提示完成安装
+          4. 可在桌面或开始菜单找到应用图标
+          EOF
+      
+      - name: Create Release
+        if: steps.version.outputs.CREATE_RELEASE == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.TAG }}
+          name: flutteriptv ${{ steps.version.outputs.VERSION }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          files: |
+            release-assets/windows-release/flutteriptv-Windows-x64-Setup.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Complete (No Release)
+        if: steps.version.outputs.CREATE_RELEASE == 'false'
+        run: |
+          echo "✅ Build completed successfully!"
+          echo "📦 Windows artifact created but no release published"
+          echo "🏷️ To create a release, push a tag (v1.0.0) or use workflow_dispatch"
