@@ -4,14 +4,25 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../theme/app_theme.dart';
 import '../platform/platform_detector.dart';
 import '../i18n/app_strings.dart';
+import '../models/channel.dart';
+import '../services/service_locator.dart';
 import 'tv_focusable.dart';
+import 'channel_logo_widget.dart';
 
 /// A card widget for displaying channel information
 /// 使用固定宽高比，内部布局自适应
 /// TV端优化：无特效，长按显示菜单
-class ChannelCard extends StatelessWidget {
+/// 
+/// 功能特性：
+/// - 自动滚动：
+///   * Windows端：鼠标悬停时滚动显示完整内容，移开后恢复原样
+///   * TV端：焦点聚焦时滚动显示完整内容，失去焦点后恢复原样
+/// - 响应式布局：根据设备类型（TV/Mobile/Desktop）自适应显示
+/// - EPG信息：显示当前和下一个节目信息
+class ChannelCard extends StatefulWidget {
   final String name;
   final String? logoUrl;
+  final Channel? channel; // 新增：完整的 Channel 对象，用于 ChannelLogoWidget
   final String? groupName;
   final String? currentProgram;
   final String? nextProgram;
@@ -24,6 +35,7 @@ class ChannelCard extends StatelessWidget {
   final VoidCallback? onTest;
   final VoidCallback? onLeft;
   final VoidCallback? onDown;
+  final VoidCallback? onUp; // 添加onUp回调
   final VoidCallback? onFocused; // 获得焦点时的回调
   final VoidCallback? onEpgTap; // EPG信息点击回调
   final bool autofocus;
@@ -33,6 +45,7 @@ class ChannelCard extends StatelessWidget {
     super.key,
     required this.name,
     this.logoUrl,
+    this.channel,
     this.groupName,
     this.currentProgram,
     this.nextProgram,
@@ -45,6 +58,7 @@ class ChannelCard extends StatelessWidget {
     this.onTest,
     this.onLeft,
     this.onDown,
+    this.onUp, // 添加onUp参数
     this.onFocused,
     this.onEpgTap,
     this.autofocus = false,
@@ -52,17 +66,38 @@ class ChannelCard extends StatelessWidget {
   });
 
   @override
+  State<ChannelCard> createState() => _ChannelCardState();
+}
+
+class _ChannelCardState extends State<ChannelCard> {
+  bool _isHovered = false;
+  bool _isFocused = false;
+  static int _buildCount = 0; // 静态计数器，跟踪构建次数
+
+  @override
   Widget build(BuildContext context) {
+    // ✅ 只记录前5个卡片的构建，避免日志过多
+    if (_buildCount < 5) {
+      ServiceLocator.log.d('[ChannelCard] build #${_buildCount++} - ${widget.name}');
+    }
+    
     final isTV = PlatformDetector.isTV;
     final isMobile = PlatformDetector.isMobile;
 
     return TVFocusable(
-      autofocus: autofocus,
-      focusNode: focusNode,
-      onSelect: onTap,
-      onFocus: onFocused,
-      onLeft: onLeft,
-      onDown: onDown,
+      autofocus: widget.autofocus,
+      focusNode: widget.focusNode,
+      onSelect: widget.onTap,
+      onFocus: () {
+        setState(() => _isFocused = true);
+        widget.onFocused?.call();
+      },
+      onBlur: () {
+        setState(() => _isFocused = false);
+      },
+      onLeft: widget.onLeft,
+      onDown: widget.onDown,
+      onUp: widget.onUp, // 添加onUp回调
       focusScale: isTV ? 1.0 : 1.03, // TV端不缩放
       showFocusBorder: false,
       builder: (context, isFocused, child) {
@@ -74,21 +109,21 @@ class ChannelCard extends StatelessWidget {
             border: Border.all(
               color: isFocused
                   ? AppTheme.getPrimaryColor(context)
-                  : isPlaying
+                  : widget.isPlaying
                       ? AppTheme.successColor
                       : AppTheme.getGlassBorderColor(context),
               width: isFocused ? 2 : 1,
             ),
           ),
           child: MouseRegion(
-            onEnter: (_) => _onHoverChanged(true),
-            onExit: (_) => _onHoverChanged(false),
+            onEnter: (_) => setState(() => _isHovered = true),
+            onExit: (_) => setState(() => _isHovered = false),
             child: child,
           ),
         );
       },
       child: GestureDetector(
-        onLongPress: isTV ? () => _showTVMenu(context) : onLongPress,
+        onLongPress: isTV ? () => _showTVMenu(context) : widget.onLongPress,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -127,11 +162,21 @@ class ChannelCard extends StatelessWidget {
                               ),
                             ),
                       child: Center(
-                        child: logoUrl != null && logoUrl!.isNotEmpty ? _buildChannelLogo(logoUrl!) : _buildPlaceholder(),
+                        child: widget.channel != null 
+                            ? Padding(
+                                padding: const EdgeInsets.all(10),
+                                child: ChannelLogoWidget(
+                                  channel: widget.channel!,
+                                  fit: BoxFit.contain,
+                                ),
+                              )
+                            : (widget.logoUrl != null && widget.logoUrl!.isNotEmpty 
+                                ? _buildChannelLogo(widget.logoUrl!) 
+                                : _buildPlaceholder()),
                       ),
                     ),
                     // Playing indicator
-                    if (isPlaying)
+                    if (widget.isPlaying)
                       Positioned(
                         top: 4,
                         left: 4,
@@ -159,21 +204,21 @@ class ChannelCard extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            if (onTest != null) _buildTestButton(isMobile),
+                            if (widget.onTest != null) _buildTestButton(isMobile),
                             SizedBox(width: isMobile ? 2 : 4),
                             _buildFavoriteButton(isMobile),
                           ],
                         ),
                       ),
                     // TV端只显示收藏图标（小）
-                    if (isTV && isFavorite)
+                    if (isTV && widget.isFavorite)
                       Positioned(
                         top: 6,
                         right: 6,
                         child: Icon(Icons.favorite, color: AppTheme.getPrimaryColor(context), size: 16),
                       ),
                     // Unavailable indicator
-                    if (isUnavailable)
+                    if (widget.isUnavailable)
                       Positioned(
                         top: 4,
                         left: 4,
@@ -202,17 +247,16 @@ class ChannelCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.start,
                   children: [
-                    // 频道名称 - 始终显示
-                    Text(
-                      name,
+                    // 频道名称 - 始终显示，支持自动滚动
+                    _AutoScrollText(
+                      text: widget.name,
                       style: TextStyle(
                         color: AppTheme.getTextPrimary(context),
                         fontSize: isMobile ? 9 : 11,
                         fontWeight: FontWeight.w600,
                         height: 1.2,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      shouldScroll: _isHovered || _isFocused,
                     ),
                     // EPG或分类信息 - 自适应显示
                     Expanded(
@@ -228,15 +272,11 @@ class ChannelCard extends StatelessWidget {
     );
   }
 
-  void _onHoverChanged(bool isHovered) {
-    // 预留：未来可用于悬停效果
-  }
-
   /// 构建信息区域（EPG或分类）- 静态显示当前和下一个节目
   Widget _buildInfoSection(BuildContext context, bool isMobile) {
-    final hasCurrentProgram = currentProgram != null && currentProgram!.isNotEmpty;
-    final hasNextProgram = nextProgram != null && nextProgram!.isNotEmpty;
-    final hasGroup = groupName != null && groupName!.isNotEmpty;
+    final hasCurrentProgram = widget.currentProgram != null && widget.currentProgram!.isNotEmpty;
+    final hasNextProgram = widget.nextProgram != null && widget.nextProgram!.isNotEmpty;
+    final hasGroup = widget.groupName != null && widget.groupName!.isNotEmpty;
     final hasEpg = hasCurrentProgram || hasNextProgram;
 
     // 构建EPG信息区域
@@ -253,15 +293,14 @@ class ChannelCard extends StatelessWidget {
                 Icon(Icons.play_circle_filled, color: AppTheme.getPrimaryColor(context), size: isMobile ? 7 : 9),
                 SizedBox(width: isMobile ? 2 : 3),
                 Expanded(
-                  child: Text(
-                    currentProgram!,
+                  child: _AutoScrollText(
+                    text: widget.currentProgram!,
                     style: TextStyle(
                       color: AppTheme.getPrimaryColor(context), 
                       fontSize: isMobile ? 7 : 9,
                       height: 1.1,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    shouldScroll: _isHovered || _isFocused,
                   ),
                 ),
               ],
@@ -274,16 +313,15 @@ class ChannelCard extends StatelessWidget {
                 Icon(Icons.schedule, color: AppTheme.getPrimaryColor(context).withOpacity(0.7), size: isMobile ? 7 : 9),
                 SizedBox(width: isMobile ? 2 : 3),
                 Expanded(
-                  child: Text(
-                    nextProgram!,
+                  child: _AutoScrollText(
+                    text: widget.nextProgram!,
                     style: TextStyle(
                       color: AppTheme.getPrimaryColor(context).withOpacity(0.8), 
                       fontSize: isMobile ? 7 : 9,
                       height: 1.1,
                       fontWeight: FontWeight.w500,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    shouldScroll: _isHovered || _isFocused,
                   ),
                 ),
               ],
@@ -294,16 +332,15 @@ class ChannelCard extends StatelessWidget {
         else ...[
           if (hasGroup) ...[
             SizedBox(height: isMobile ? 1 : 2),
-            Text(
-              groupName!,
+            _AutoScrollText(
+              text: widget.groupName!,
               style: TextStyle(
                 color: AppTheme.getPrimaryColor(context).withOpacity(0.8), 
                 fontSize: isMobile ? 8 : 10,
                 height: 1.1,
                 fontWeight: FontWeight.w500,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+              shouldScroll: _isHovered || _isFocused,
             ),
           ],
           SizedBox(height: isMobile ? 1 : 2),
@@ -322,9 +359,9 @@ class ChannelCard extends StatelessWidget {
     );
 
     // 如果提供了EPG点击回调，包装EPG信息区域为可点击
-    if (onEpgTap != null && hasEpg) {
+    if (widget.onEpgTap != null && hasEpg) {
       return GestureDetector(
-        onTap: onEpgTap,
+        onTap: widget.onEpgTap,
         child: epgInfo,
       );
     } else {
@@ -340,7 +377,7 @@ class ChannelCard extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.getSurfaceColor(ctx),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text(name, style: const TextStyle(color: Colors.white, fontSize: 16)),
+        title: Text(widget.name, style: const TextStyle(color: Colors.white, fontSize: 16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -349,7 +386,7 @@ class ChannelCard extends StatelessWidget {
               autofocus: true,
               onSelect: () {
                 Navigator.pop(ctx);
-                onFavoriteToggle?.call();
+                widget.onFavoriteToggle?.call();
               },
               builder: (context, isFocused, child) {
                 return Container(
@@ -364,19 +401,19 @@ class ChannelCard extends StatelessWidget {
               },
               child: Row(
                 children: [
-                  Icon(isFavorite ? Icons.favorite : Icons.favorite_border, color: Colors.white, size: 20),
+                  Icon(widget.isFavorite ? Icons.favorite : Icons.favorite_border, color: Colors.white, size: 20),
                   const SizedBox(width: 12),
-                  Text(isFavorite ? (strings?.removeFavorites ?? 'Remove from favorites') : (strings?.addFavorites ?? 'Add to favorites'), style: const TextStyle(color: Colors.white, fontSize: 14)),
+                  Text(widget.isFavorite ? (strings?.removeFavorites ?? 'Remove from favorites') : (strings?.addFavorites ?? 'Add to favorites'), style: const TextStyle(color: Colors.white, fontSize: 14)),
                 ],
               ),
             ),
             const SizedBox(height: 8),
             // 测试频道
-            if (onTest != null)
+            if (widget.onTest != null)
               TVFocusable(
                 onSelect: () {
                   Navigator.pop(ctx);
-                  onTest?.call();
+                  widget.onTest?.call();
                 },
                 builder: (context, isFocused, child) {
                   return Container(
@@ -413,12 +450,12 @@ class ChannelCard extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTest,
+        onTap: widget.onTest,
         borderRadius: BorderRadius.circular(16),
         child: Container(
           padding: EdgeInsets.all(isMobile ? 3 : 5),
           decoration: BoxDecoration(
-            color: isUnavailable ? AppTheme.warningColor.withAlpha(200) : const Color(0x80000000),
+            color: widget.isUnavailable ? AppTheme.warningColor.withAlpha(200) : const Color(0x80000000),
             shape: BoxShape.circle,
           ),
           child: Icon(Icons.speed_rounded, color: Colors.white, size: isMobile ? 10 : 12),
@@ -434,7 +471,7 @@ class ChannelCard extends StatelessWidget {
         return Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: onFavoriteToggle,
+            onTap: widget.onFavoriteToggle,
             borderRadius: BorderRadius.circular(16),
             child: Container(
               padding: EdgeInsets.all(isMobile ? 3 : 5),
@@ -452,8 +489,8 @@ class ChannelCard extends StatelessWidget {
                       ],
               ),
               child: Icon(
-                isFavorite ? Icons.favorite : Icons.favorite_border_rounded,
-                color: isFavorite ? AppTheme.getPrimaryColor(context) : (isDark ? Colors.white : Colors.grey[500]),
+                widget.isFavorite ? Icons.favorite : Icons.favorite_border_rounded,
+                color: widget.isFavorite ? AppTheme.getPrimaryColor(context) : (isDark ? Colors.white : Colors.grey[500]),
                 size: isMobile ? 10 : 12,
               ),
             ),
@@ -488,6 +525,152 @@ class ChannelCard extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.all(10),
         child: Image.file(File(url), fit: BoxFit.contain, cacheWidth: 160, cacheHeight: 90, errorBuilder: (context, error, stackTrace) => _buildPlaceholder()),
+      );
+    }
+  }
+}
+
+/// 自动滚动文本组件
+/// 当文本超出容器宽度时，在悬停或聚焦状态下自动滚动显示完整内容
+class _AutoScrollText extends StatefulWidget {
+  final String text;
+  final TextStyle? style;
+  final bool shouldScroll;
+
+  const _AutoScrollText({
+    required this.text,
+    this.style,
+    this.shouldScroll = false,
+  });
+
+  @override
+  State<_AutoScrollText> createState() => _AutoScrollTextState();
+}
+
+class _AutoScrollTextState extends State<_AutoScrollText> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+  // This is no longer a State variable, it's just a flag.
+  // Changes to it won't directly trigger a rebuild of _AutoScrollText.
+  bool _isOverflowing = false; 
+  double _scrollDistance = 0;
+  final GlobalKey _textKey = GlobalKey();
+  
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 4),
+      vsync: this,
+    );
+    
+    _animation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.linear),
+    );
+
+    // Schedule initial overflow check after first layout
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkOverflow());
+  }
+
+  void _checkOverflow() {
+    if (!mounted) return;
+    
+    final RenderBox? renderBox = _textKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox != null) {
+      final textPainter = TextPainter(
+        text: TextSpan(text: widget.text, style: widget.style),
+        maxLines: 1,
+        textDirection: TextDirection.ltr,
+      )..layout();
+      
+      final containerWidth = renderBox.size.width;
+      final textWidth = textPainter.width;
+      
+      final bool newIsOverflowing = textWidth > containerWidth;
+      
+      if (_isOverflowing != newIsOverflowing) {
+        // Only update if the overflow state actually changed
+        _isOverflowing = newIsOverflowing;
+        if (_isOverflowing) {
+          _scrollDistance = textWidth - containerWidth + 20;
+        } else {
+          _scrollDistance = 0;
+        }
+        // If overflow state changed, and the widget is visible,
+        // we might need to trigger a rebuild for the build method to reflect the change.
+        // However, this is controlled by the parent's `shouldScroll` prop.
+        // So, we rely on parent to rebuild when `shouldScroll` changes.
+        // If the text *just became* overflowing while not scrolled, it will not animate until `shouldScroll` becomes true.
+        // If it was already overflowing and not scrolling, it will remain static.
+      }
+      _updateAnimationState(); // Update animation based on new shouldScroll or overflow state
+    }
+  }
+
+  void _updateAnimationState() {
+    if (_isOverflowing && widget.shouldScroll) {
+      if (!_controller.isAnimating) {
+        _controller.repeat(reverse: true);
+      }
+    } else {
+      if (_controller.isAnimating || _controller.status != AnimationStatus.dismissed) {
+        _controller.stop();
+        _controller.reset();
+      }
+    }
+  }
+
+  @override
+  void didUpdateWidget(_AutoScrollText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Recalculate overflow if text or style changes
+    if (oldWidget.text != widget.text || oldWidget.style != widget.style) {
+      // Schedule the check to happen after layout to get correct renderBox size
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkOverflow());
+    }
+    // Always update animation state if shouldScroll changes
+    if (oldWidget.shouldScroll != widget.shouldScroll) {
+      _updateAnimationState();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // If not overflowing OR not in a state where it should scroll (hovered/focused),
+    // display static text with ellipsis.
+    if (!_isOverflowing || !widget.shouldScroll) {
+      return Text(
+        widget.text,
+        key: _textKey,
+        style: widget.style,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
+    } else {
+      // If overflowing AND should scroll, display animated text.
+      return ClipRect(
+        child: AnimatedBuilder(
+          animation: _animation,
+          builder: (context, child) {
+            return Transform.translate(
+              offset: Offset(-_animation.value * _scrollDistance, 0),
+              child: Text(
+                widget.text,
+                key: _textKey,
+                style: widget.style,
+                maxLines: 1, // MaxLines for layout calculation, overflow visible for transform
+                overflow: TextOverflow.visible,
+                softWrap: false,
+              ),
+            );
+          },
+        ),
       );
     }
   }

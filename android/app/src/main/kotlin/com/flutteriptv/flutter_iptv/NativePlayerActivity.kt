@@ -22,6 +22,8 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.ui.PlayerView
 import org.json.JSONArray
 
@@ -46,6 +48,8 @@ class NativePlayerActivity : AppCompatActivity() {
     // Channel list for switching
     private var channelUrls: ArrayList<String> = arrayListOf()
     private var channelNames: ArrayList<String> = arrayListOf()
+    
+    // 注意：重定向解析已统一到 RedirectResolver 工具类
     
     private val handler = Handler(Looper.getMainLooper())
     private var hideControlsRunnable: Runnable? = null
@@ -159,45 +163,69 @@ class NativePlayerActivity : AppCompatActivity() {
         val renderersFactory = DefaultRenderersFactory(this)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
         
-        player = ExoPlayer.Builder(this, renderersFactory).build().also { exoPlayer ->
+        // 配置 HTTP 数据源和 MediaSourceFactory 支持 HLS/DASH
+        val dataSourceFactory = DefaultHttpDataSource.Factory()
+            .setConnectTimeoutMs(8000)
+            .setReadTimeoutMs(15000)
+            .setAllowCrossProtocolRedirects(true)  // 允许跨协议重定向 (HTTP→HTTPS)
+            .setUserAgent("Wget/1.21.3")
+        
+        val mediaSourceFactory = DefaultMediaSourceFactory(this)
+            .setDataSourceFactory(dataSourceFactory)
+        
+        player = ExoPlayer.Builder(this, renderersFactory)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .build().also { exoPlayer ->
             playerView.player = exoPlayer
             exoPlayer.playWhenReady = true
             exoPlayer.repeatMode = Player.REPEAT_MODE_OFF
 
             exoPlayer.addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(playbackState: Int) {
-                    Log.d(TAG, "Playback state changed: $playbackState")
                     when (playbackState) {
                         Player.STATE_BUFFERING -> {
+                            NativeLogger.d(TAG, "播放器状态: BUFFERING")
                             showLoading()
                             updateStatus("Buffering")
                         }
                         Player.STATE_READY -> {
+                            NativeLogger.i(TAG, "播放器状态: READY")
                             hideLoading()
                             updateStatus("LIVE")
                         }
-                        Player.STATE_ENDED -> updateStatus("Ended")
-                        Player.STATE_IDLE -> updateStatus("Idle")
+                        Player.STATE_ENDED -> {
+                            NativeLogger.d(TAG, "播放器状态: ENDED")
+                            updateStatus("Ended")
+                        }
+                        Player.STATE_IDLE -> {
+                            NativeLogger.d(TAG, "播放器状态: IDLE")
+                            updateStatus("Idle")
+                        }
                     }
                 }
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     if (isPlaying) {
+                        NativeLogger.i(TAG, ">>> 播放成功开始")
                         updateStatus("LIVE")
                     } else if (player?.playbackState == Player.STATE_READY) {
+                        NativeLogger.d(TAG, "播放暂停")
                         updateStatus("Paused")
                     }
                 }
 
                 override fun onVideoSizeChanged(videoSize: VideoSize) {
-                    Log.d(TAG, "Video size: ${videoSize.width}x${videoSize.height}")
                     videoWidth = videoSize.width
                     videoHeight = videoSize.height
+                    NativeLogger.d(TAG, "视频尺寸: ${videoWidth}x${videoHeight}")
                     updateVideoInfoDisplay()
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
-                    Log.e(TAG, "Player error: ${error.message}", error)
+                    NativeLogger.e(TAG, ">>> 播放器错误: ${error.message}, 错误码: ${error.errorCode}", error)
+                    error.cause?.let { cause ->
+                        NativeLogger.e(TAG, "错误原因: ${cause.message}", cause)
+                    }
                     showError("Error: ${error.message}")
                     updateStatus("Offline")
                 }
@@ -235,8 +263,16 @@ class NativePlayerActivity : AppCompatActivity() {
         }
     }
     
+    
+    // 解析真实播放地址（使用统一的RedirectResolver）
+    private fun resolveRealPlayUrl(url: String): String {
+        return RedirectResolver.resolveRealPlayUrl(url, useCache = true)
+    }
+    
     private fun playUrl(url: String) {
-        Log.d(TAG, "Playing URL: $url")
+        NativeLogger.i(TAG, ">>> 开始播放流程: $url")
+        val startTime = System.currentTimeMillis()
+        
         // Reset video info
         videoWidth = 0
         videoHeight = 0
@@ -246,14 +282,36 @@ class NativePlayerActivity : AppCompatActivity() {
         showLoading()
         updateStatus("Loading")
         
-        val mediaItem = MediaItem.fromUri(url)
-        player?.setMediaItem(mediaItem)
-        player?.prepare()
+        // 在后台线程解析真实地址
+        Thread {
+            NativeLogger.d(TAG, ">>> 开始解析302重定向")
+            val redirectStartTime = System.currentTimeMillis()
+            
+            val realUrl = resolveRealPlayUrl(url)
+            
+            val redirectTime = System.currentTimeMillis() - redirectStartTime
+            NativeLogger.d(TAG, ">>> 302重定向解析完成，耗时: ${redirectTime}ms")
+            
+            runOnUiThread {
+                NativeLogger.d(TAG, ">>> 使用播放地址: $realUrl")
+                NativeLogger.d(TAG, ">>> 开始初始化播放器")
+                val playStartTime = System.currentTimeMillis()
+                
+                val mediaItem = MediaItem.fromUri(realUrl)
+                player?.setMediaItem(mediaItem)
+                player?.prepare()
+                
+                val playTime = System.currentTimeMillis() - playStartTime
+                val totalTime = System.currentTimeMillis() - startTime
+                NativeLogger.d(TAG, ">>> 播放器初始化完成，耗时: ${playTime}ms")
+                NativeLogger.i(TAG, ">>> 播放流程总耗时: ${totalTime}ms")
+            }
+        }.start()
     }
     
     private fun switchChannel(newIndex: Int) {
         if (channelUrls.isEmpty() || newIndex < 0 || newIndex >= channelUrls.size) {
-            Log.d(TAG, "Cannot switch to index $newIndex (list size: ${channelUrls.size})")
+            NativeLogger.w(TAG, "无法切换到索引 $newIndex (列表大小: ${channelUrls.size})")
             return
         }
         
@@ -261,7 +319,7 @@ class NativePlayerActivity : AppCompatActivity() {
         currentUrl = channelUrls[newIndex]
         currentName = if (newIndex < channelNames.size) channelNames[newIndex] else "Channel ${newIndex + 1}"
         
-        Log.d(TAG, "Switching to channel: $currentName (index $currentIndex)")
+        NativeLogger.i(TAG, "切换频道: $currentName (索引 $currentIndex)")
         channelNameText.text = currentName
         playUrl(currentUrl)
         showControls()
@@ -452,6 +510,7 @@ class NativePlayerActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "onDestroy called")
+        
         hideControlsRunnable?.let { handler.removeCallbacks(it) }
         player?.release()
         player = null

@@ -39,19 +39,19 @@ class DlnaProvider extends ChangeNotifier {
       final prefs = ServiceLocator.prefs;
       // 打印所有 SharedPreferences 的 keys 用于调试
       final allKeys = prefs.getKeys();
-      debugPrint('DLNA: SharedPreferences keys = $allKeys');
+      ServiceLocator.log.d('SharedPreferences keys = $allKeys', tag: 'DLNA');
       
       final wasEnabled = prefs.getBool(_keyDlnaEnabled) ?? false;
-      debugPrint('DLNA: 检查自动启动状态 - key=$_keyDlnaEnabled, wasEnabled=$wasEnabled');
+      ServiceLocator.log.d('检查自动启动状态 - key=$_keyDlnaEnabled, wasEnabled=$wasEnabled', tag: 'DLNA');
       
       if (wasEnabled) {
-        debugPrint('DLNA: 后台自动启动服务...');
+        ServiceLocator.log.d('后台自动启动服务...', tag: 'DLNA');
         final success = await setEnabled(true);
-        debugPrint('DLNA: 自动启动${success ? '成功' : '失败'}');
+        ServiceLocator.log.d('自动启动${success ? '成功' : '失败'}', tag: 'DLNA');
       }
     } catch (e, stack) {
-      debugPrint('DLNA: 自动启动失败 - $e');
-      debugPrint('DLNA: Stack trace - $stack');
+      ServiceLocator.log.e('DLNA: 自动启动失败 - $e');
+      ServiceLocator.log.e('DLNA: Stack trace - $stack');
     }
   }
 
@@ -98,12 +98,12 @@ class DlnaProvider extends ChangeNotifier {
         try {
           final prefs = ServiceLocator.prefs;
           await prefs.setBool(_keyDlnaEnabled, true);
-          debugPrint('DLNA: 已保存启用状态 - key=$_keyDlnaEnabled, value=true');
+          ServiceLocator.log.d('已保存启用状态 - key=$_keyDlnaEnabled, value=true', tag: 'DLNA');
           // 验证保存是否成功
           final saved = prefs.getBool(_keyDlnaEnabled);
-          debugPrint('DLNA: 验证保存结果 - saved=$saved');
+          ServiceLocator.log.d('验证保存结果 - saved=$saved', tag: 'DLNA');
         } catch (e) {
-          debugPrint('DLNA: 保存启用状态失败 - $e');
+          ServiceLocator.log.d('保存启用状态失败 - $e', tag: 'DLNA');
         }
         notifyListeners();
         return true;
@@ -120,9 +120,9 @@ class DlnaProvider extends ChangeNotifier {
       try {
         final prefs = ServiceLocator.prefs;
         await prefs.setBool(_keyDlnaEnabled, false);
-        debugPrint('DLNA: 已保存禁用状态 - key=$_keyDlnaEnabled, value=false');
+        ServiceLocator.log.d('已保存禁用状态 - key=$_keyDlnaEnabled, value=false', tag: 'DLNA');
       } catch (e) {
-        debugPrint('DLNA: 保存禁用状态失败 - $e');
+        ServiceLocator.log.d('保存禁用状态失败 - $e', tag: 'DLNA');
       }
       notifyListeners();
       return true;

@@ -19,7 +19,7 @@ class FavoritesProvider extends ChangeNotifier {
   void setActivePlaylistId(int playlistId) {
     if (_activePlaylistId != playlistId) {
       _activePlaylistId = playlistId;
-      debugPrint('设置激活的播放列表ID: $playlistId');
+      ServiceLocator.log.d('设置激活的播放列表ID: $playlistId');
     }
   }
 
@@ -41,9 +41,9 @@ class FavoritesProvider extends ChangeNotifier {
 
         if (playlistResult.isNotEmpty) {
           _activePlaylistId = playlistResult.first['id'] as int;
-          debugPrint('自动获取激活的播放列表ID: $_activePlaylistId');
+          ServiceLocator.log.d('自动获取激活的播放列表ID: $_activePlaylistId');
         } else {
-          debugPrint('没有找到激活的播放列表');
+          ServiceLocator.log.d('没有找到激活的播放列表');
           _favorites = [];
           _isLoading = false;
           notifyListeners();
@@ -51,7 +51,7 @@ class FavoritesProvider extends ChangeNotifier {
         }
       }
 
-      debugPrint('加载播放列表 $_activePlaylistId 的收藏夹');
+      ServiceLocator.log.d('加载播放列表 $_activePlaylistId 的收藏夹');
 
       // 只加载当前激活播放列表的收藏夹
       final results = await ServiceLocator.database.rawQuery('''
@@ -66,12 +66,12 @@ class FavoritesProvider extends ChangeNotifier {
         return channel.copyWith(isFavorite: true);
       }).toList();
 
-      debugPrint('加载了 ${_favorites.length} 个收藏频道');
+      ServiceLocator.log.d('加载了 ${_favorites.length} 个收藏频道');
       _error = null;
     } catch (e) {
       _error = 'Failed to load favorites: $e';
       _favorites = [];
-      debugPrint('加载收藏夹失败: $e');
+      ServiceLocator.log.d('加载收藏夹失败: $e');
     }
 
     _isLoading = false;
@@ -136,19 +136,19 @@ class FavoritesProvider extends ChangeNotifier {
   // Toggle favorite status
   Future<bool> toggleFavorite(Channel channel) async {
     if (channel.id == null) {
-      debugPrint('收藏切换失败: 频道ID为空 - ${channel.name}');
+      ServiceLocator.log.d('收藏切换失败: 频道ID为空 - ${channel.name}');
       return false;
     }
 
-    debugPrint('收藏切换: 频道=${channel.name}, ID=${channel.id}, 当前状态=${isFavorite(channel.id!)}');
+    ServiceLocator.log.d('收藏切换: 频道=${channel.name}, ID=${channel.id}, 当前状态=${isFavorite(channel.id!)}');
 
     if (isFavorite(channel.id!)) {
       final success = await removeFavorite(channel.id!);
-      debugPrint('移除收藏${success ? "成功" : "失败"}');
+      ServiceLocator.log.d('移除收藏${success ? "成功" : "失败"}');
       return success;
     } else {
       final success = await addFavorite(channel);
-      debugPrint('添加收藏${success ? "成功" : "失败"}');
+      ServiceLocator.log.d('添加收藏${success ? "成功" : "失败"}');
       return success;
     }
   }

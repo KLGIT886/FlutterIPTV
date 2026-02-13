@@ -511,7 +511,8 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
     }
 
     try {
-      final playlist = await provider.addPlaylistFromUrl(name, url);
+      final settings = context.read<SettingsProvider>();
+      final playlist = await provider.addPlaylistFromUrl(name, url, mergeRule: settings.channelMergeRule);
 
       if (playlist != null && mounted) {
         provider.setActivePlaylist(playlist, favoritesProvider: context.read<FavoritesProvider>());
@@ -526,9 +527,9 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
             final fallbackEpgUrl = settingsProvider.epgUrl;
             
             if (playlistEpgUrl != null && playlistEpgUrl.isNotEmpty) {
-              await epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl);
+              await epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl, silent: true);
             } else if (fallbackEpgUrl != null && fallbackEpgUrl.isNotEmpty) {
-              await epgProvider.loadEpg(fallbackEpgUrl);
+              await epgProvider.loadEpg(fallbackEpgUrl, silent: true);
             }
           }
         }
@@ -598,7 +599,8 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
         final fileName = result.files.single.name.replaceAll(RegExp(r'\.(m3u8?|txt)$'), '');
 
         try {
-          final playlist = await provider.addPlaylistFromFile(fileName, filePath);
+          final settings = context.read<SettingsProvider>();
+          final playlist = await provider.addPlaylistFromFile(fileName, filePath, mergeRule: settings.channelMergeRule);
 
           if (mounted) {
             if (playlist != null) {
@@ -614,9 +616,9 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
                   final fallbackEpgUrl = settingsProvider.epgUrl;
                   
                   if (playlistEpgUrl != null && playlistEpgUrl.isNotEmpty) {
-                    await epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl);
+                    await epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl, silent: true);
                   } else if (fallbackEpgUrl != null && fallbackEpgUrl.isNotEmpty) {
-                    await epgProvider.loadEpg(fallbackEpgUrl);
+                    await epgProvider.loadEpg(fallbackEpgUrl, silent: true);
                   }
                 }
               }
@@ -664,3 +666,4 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
     }
   }
 }
+

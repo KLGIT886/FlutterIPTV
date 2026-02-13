@@ -1,7 +1,7 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../platform/platform_detector.dart';
+import '../services/service_locator.dart';
 
 class AppUpdate {
   final String version;
@@ -79,9 +79,9 @@ class AppUpdate {
     try {
       final abi = await _platformChannel.invokeMethod<String>('getCpuAbi');
       _cachedCpuAbi = abi ?? 'armeabi-v7a';
-      debugPrint('UPDATE: 获取到 CPU 架构: $_cachedCpuAbi');
+      ServiceLocator.log.d('UPDATE: 获取到 CPU 架构: $_cachedCpuAbi');
     } catch (e) {
-      debugPrint('UPDATE: 获取 CPU 架构失败: $e，使用默认值');
+      ServiceLocator.log.d('UPDATE: 获取 CPU 架构失败: $e，使用默认值');
       _cachedCpuAbi = 'armeabi-v7a';
     }
     return _cachedCpuAbi!;
@@ -95,7 +95,7 @@ class AppUpdate {
     
     if (Platform.isAndroid) {
       final arch = await _getAndroidArch();
-      debugPrint('UPDATE: Android 架构: $arch, isTV: ${PlatformDetector.isTV}');
+      ServiceLocator.log.d('UPDATE: Android 架构: $arch, isTV: ${PlatformDetector.isTV}');
       
       // 根据是否是 TV 选择对应的包
       final androidAssets = PlatformDetector.isTV 
@@ -123,7 +123,7 @@ class AppUpdate {
     if (Platform.isAndroid) {
       // 使用缓存的架构，如果没有则默认 armeabi-v7a（更安全的默认值）
       final arch = _cachedCpuAbi ?? 'armeabi-v7a';
-      debugPrint('UPDATE: Android 架构(sync): $arch, isTV: ${PlatformDetector.isTV}');
+      ServiceLocator.log.d('UPDATE: Android 架构(sync): $arch, isTV: ${PlatformDetector.isTV}');
       
       // 根据是否是 TV 选择对应的包
       final androidAssets = PlatformDetector.isTV 

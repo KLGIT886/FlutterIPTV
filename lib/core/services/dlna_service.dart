@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import './service_locator.dart';
 
 /// DLNA 渲染器服务 (DMR - Digital Media Renderer)
 /// 让手机 App 可以发现并投屏到本设备
@@ -67,7 +67,7 @@ class DlnaService {
       // 获取本地 IP
       _localIp = await _getLocalIpAddress();
       if (_localIp == null) {
-        debugPrint('DLNA: 无法获取本地 IP');
+        ServiceLocator.log.d('DLNA: 无法获取本地 IP');
         return false;
       }
 
@@ -83,10 +83,10 @@ class DlnaService {
       }
 
       _isRunning = true;
-      debugPrint('DLNA: 服务已启动 - $_deviceName ($_localIp:$_httpPort)');
+      ServiceLocator.log.d('DLNA: 服务已启动 - $_deviceName ($_localIp:$_httpPort)');
       return true;
     } catch (e) {
-      debugPrint('DLNA: 启动失败 - $e');
+      ServiceLocator.log.d('DLNA: 启动失败 - $e');
       return false;
     }
   }
@@ -114,7 +114,7 @@ class DlnaService {
     _ssdpSocket = null;
     await _httpServer?.close(force: true);
     _httpServer = null;
-    debugPrint('DLNA: 服务已停止');
+    ServiceLocator.log.d('DLNA: 服务已停止');
   }
   
   /// 发送 SSDP byebye 通知（设备下线）
@@ -229,7 +229,7 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
       _httpServer!.listen(_handleHttpRequest);
       return true;
     } catch (e) {
-      debugPrint('DLNA: HTTP 服务器启动失败 - $e');
+      ServiceLocator.log.d('DLNA: HTTP 服务器启动失败 - $e');
       return false;
     }
   }
@@ -298,7 +298,7 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
           }
         }
       }, onError: (e) {
-        debugPrint('DLNA: SSDP 错误 - $e');
+        ServiceLocator.log.d('DLNA: SSDP 错误 - $e');
       });
 
       // 立即发送多次 NOTIFY 广播
@@ -314,7 +314,7 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
 
       return true;
     } catch (e) {
-      debugPrint('DLNA: SSDP 启动失败 - $e');
+      ServiceLocator.log.d('DLNA: SSDP 启动失败 - $e');
       return false;
     }
   }
@@ -397,7 +397,7 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
         await request.response.close();
       }
     } catch (e) {
-      debugPrint('DLNA: HTTP 错误 - $e');
+      ServiceLocator.log.d('DLNA: HTTP 错误 - $e');
       request.response.statusCode = 500;
       await request.response.close();
     }
@@ -575,12 +575,12 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
       _currentPosition = Duration.zero;
       _playStartTime = null;
       
-      debugPrint('DLNA: SetURI - $title');
+      ServiceLocator.log.d('DLNA: SetURI - $title');
       _notifyAllSubscribers();
       
       response = _createSoapResponse('SetAVTransportURI', '');
     } else if (body.contains('"Play"') || body.contains(':Play') || body.contains('Play</')) {
-      debugPrint('DLNA: Play');
+      ServiceLocator.log.d('DLNA: Play');
       // 只有在有 URL 时才触发播放
       if (_currentUri.isNotEmpty) {
         _transportState = 'TRANSITIONING';
@@ -593,12 +593,12 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
           _notifyAllSubscribers();
         });
       } else {
-        debugPrint('DLNA: Play 忽略 - 没有 URL');
+        ServiceLocator.log.d('DLNA: Play 忽略 - 没有 URL');
       }
       
       response = _createSoapResponse('Play', '');
     } else if (body.contains('"Pause"') || body.contains(':Pause') || body.contains('Pause</')) {
-      debugPrint('DLNA: Pause');
+      ServiceLocator.log.d('DLNA: Pause');
       if (_playStartTime != null) {
         _currentPosition = DateTime.now().difference(_playStartTime!);
       }
@@ -608,7 +608,7 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
       _notifyAllSubscribers();
       response = _createSoapResponse('Pause', '');
     } else if (body.contains('"Stop"') || body.contains(':Stop') || body.contains('Stop</')) {
-      debugPrint('DLNA: Stop');
+      ServiceLocator.log.d('DLNA: Stop');
       _transportState = 'STOPPED';
       _currentPosition = Duration.zero;
       _playStartTime = null;
@@ -658,7 +658,7 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
           _currentPosition = position;
           _playStartTime = DateTime.now();
           onSeek?.call(position);
-          debugPrint('DLNA: Seek $target');
+          ServiceLocator.log.d('DLNA: Seek $target');
         }
       }
       response = _createSoapResponse('Seek', '');

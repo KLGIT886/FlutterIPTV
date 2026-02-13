@@ -3,6 +3,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/local_server_service.dart';
+import '../../../core/services/service_locator.dart';
 import '../../../core/widgets/tv_focusable.dart';
 import '../../../core/i18n/app_strings.dart';
 
@@ -38,7 +39,7 @@ class _QrSearchDialogState extends State<QrSearchDialog> {
   }
 
   Future<void> _startServer() async {
-    debugPrint('DEBUG: 开始启动搜索服务器...');
+    ServiceLocator.log.d('开始启动搜索服务器...');
 
     setState(() {
       _isLoading = true;
@@ -49,9 +50,9 @@ class _QrSearchDialogState extends State<QrSearchDialog> {
     _serverService.onSearchReceived = _handleSearchReceived;
 
     final success = await _serverService.start();
-    debugPrint('DEBUG: 搜索服务器启动结果: ${success ? "成功" : "失败"}');
+    ServiceLocator.log.d('搜索服务器启动结果: ${success ? "成功" : "失败"}');
     if (success) {
-      debugPrint('DEBUG: 搜索服务器URL: ${_serverService.serverUrl}');
+      ServiceLocator.log.d('搜索服务器URL: ${_serverService.serverUrl}');
     }
 
     setState(() {
@@ -65,7 +66,7 @@ class _QrSearchDialogState extends State<QrSearchDialog> {
   }
 
   void _handleSearchReceived(String query) {
-    debugPrint('DEBUG: 收到搜索请求: $query');
+    ServiceLocator.log.d('收到搜索请求: $query');
     
     if (mounted) {
       // 关闭对话框并执行搜索

@@ -22,6 +22,7 @@ class MainActivity: FlutterFragmentActivity() {
     private val CHANNEL = "com.flutteriptv/platform"
     private val PLAYER_CHANNEL = "com.flutteriptv/native_player"
     private val INSTALL_CHANNEL = "com.flutteriptv/install"
+    private val LOG_CHANNEL = "com.flutteriptv/native_log"
     
     private var playerFragment: NativePlayerFragment? = null
     private var multiScreenFragment: MultiScreenPlayerFragment? = null
@@ -49,6 +50,7 @@ class MainActivity: FlutterFragmentActivity() {
     private var lastChannelLogos: List<String>? = null
     private var lastVolumeBoostDb: Int = 0
     private var lastDefaultScreenPosition: Int = 1
+    private var lastShowChannelName: Boolean = false
     
     // 标记是否是从分屏退出到单频道播放（这种情况下单频道退出时不应覆盖分屏状态）
     private var isFromMultiScreen: Boolean = false
@@ -56,6 +58,10 @@ class MainActivity: FlutterFragmentActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         Log.d(TAG, "configureFlutterEngine called")
+        
+        // Initialize Native Logger
+        val logChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, LOG_CHANNEL)
+        NativeLogger.init(logChannel)
         
         // Platform detection channel
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
@@ -125,17 +131,23 @@ class MainActivity: FlutterFragmentActivity() {
                     val sources = call.argument<List<List<String>>>("sources") // 每个频道的所有源
                     val logos = call.argument<List<String>>("logos") // 每个频道的台标URL
                     val epgIds = call.argument<List<String>>("epgIds") // 每个频道的EPG ID
+                    val isSeekable = call.argument<List<Boolean>>("isSeekable") // 每个频道是否可拖动
                     val isDlnaMode = call.argument<Boolean>("isDlnaMode") ?: false
                     val bufferStrength = call.argument<String>("bufferStrength") ?: "fast"
                     val showFps = call.argument<Boolean>("showFps") ?: true
                     val showClock = call.argument<Boolean>("showClock") ?: true
                     val showNetworkSpeed = call.argument<Boolean>("showNetworkSpeed") ?: true
                     val showVideoInfo = call.argument<Boolean>("showVideoInfo") ?: true
+                    val progressBarMode = call.argument<String>("progressBarMode") ?: "auto" // 进度条显示模式
+                    val showChannelName = call.argument<Boolean>("showChannelName") ?: false // 多屏频道名称显示
+                    
+                    // 保存showChannelName设置，用于从单屏进入分屏时使用
+                    lastShowChannelName = showChannelName
                     
                     if (url != null) {
-                        Log.d(TAG, "Launching native player fragment: $name (index $index of ${urls?.size ?: 0}, isDlna=$isDlnaMode, logos=${logos?.size ?: 0})")
+                        Log.d(TAG, "Launching native player fragment: $name (index $index of ${urls?.size ?: 0}, isDlna=$isDlnaMode, logos=${logos?.size ?: 0}, isSeekable=${isSeekable?.getOrNull(index)}, progressBarMode=$progressBarMode, showChannelName=$showChannelName)")
                         try {
-                            showPlayerFragment(url, name, index, urls, names, groups, sources, logos, isDlnaMode, bufferStrength, showFps, showClock, showNetworkSpeed, showVideoInfo)
+                            showPlayerFragment(url, name, index, urls, names, groups, sources, logos, epgIds, isSeekable, isDlnaMode, bufferStrength, showFps, showClock, showNetworkSpeed, showVideoInfo, progressBarMode)
                             result.success(true)
                         } catch (e: Exception) {
                             Log.e(TAG, "Failed to launch player", e)
@@ -172,6 +184,7 @@ class MainActivity: FlutterFragmentActivity() {
                     result.success(true)
                 }
                 "getPlaybackState" -> {
+                    // 从 NativePlayerFragment 获取状态
                     val state = playerFragment?.getPlaybackState()
                     result.success(state)
                 }
@@ -188,16 +201,19 @@ class MainActivity: FlutterFragmentActivity() {
                     val restoreActiveIndex = call.argument<Int>("restoreActiveIndex") ?: -1
                     @Suppress("UNCHECKED_CAST")
                     val restoreScreenChannels = call.argument<List<Int?>>("restoreScreenChannels")
+                    val showChannelName = call.argument<Boolean>("showChannelName") ?: false
                     
                     if (urls != null && names != null && groups != null) {
-                        Log.d(TAG, "Launching multi-screen player with ${urls.size} channels, initial=$initialChannelIndex, volumeBoost=$volumeBoostDb, defaultScreen=$defaultScreenPosition, restoreActive=$restoreActiveIndex, restoreChannels=$restoreScreenChannels")
+                        Log.d(TAG, "Launching multi-screen player with ${urls.size} channels, initial=$initialChannelIndex, volumeBoost=$volumeBoostDb, defaultScreen=$defaultScreenPosition, restoreActive=$restoreActiveIndex, restoreChannels=$restoreScreenChannels, showChannelName=$showChannelName")
                         try {
                             showMultiScreenFragment(
                                 urls, names, groups, sources, logos,
                                 initialChannelIndex, volumeBoostDb, defaultScreenPosition,
                                 restoreFromLocal = false,  // 不从本地恢复
                                 restoreActiveIndex = restoreActiveIndex,  // 从 Flutter 传递的恢复参数
-                                restoreScreenChannels = restoreScreenChannels
+                                restoreScreenChannels = restoreScreenChannels,
+                                initialSourceIndex = 0,
+                                showChannelName = showChannelName
                             )
                             result.success(true)
                         } catch (e: Exception) {
@@ -282,15 +298,18 @@ class MainActivity: FlutterFragmentActivity() {
         groups: List<String>?,
         sources: List<List<String>>?,
         logos: List<String>?,
+        epgIds: List<String>?,
+        isSeekable: List<Boolean>?,
         isDlnaMode: Boolean = false,
         bufferStrength: String = "fast",
         showFps: Boolean = true,
         showClock: Boolean = true,
         showNetworkSpeed: Boolean = true,
         showVideoInfo: Boolean = true,
+        progressBarMode: String = "auto",  // 进度条显示模式
         initialSourceIndex: Int = 0  // 初始源索引
     ) {
-        Log.d(TAG, "showPlayerFragment isDlnaMode=$isDlnaMode, bufferStrength=$bufferStrength, logos=${logos?.size ?: 0}, sourceIndex=$initialSourceIndex")
+        Log.d(TAG, "showPlayerFragment isDlnaMode=$isDlnaMode, bufferStrength=$bufferStrength, logos=${logos?.size ?: 0}, sourceIndex=$initialSourceIndex, isSeekable=${isSeekable?.getOrNull(index)}, progressBarMode=$progressBarMode")
         
         // 保存频道数据（用于切换到分屏时传递）
         lastChannelUrls = urls
@@ -321,6 +340,8 @@ class MainActivity: FlutterFragmentActivity() {
         // 将 sources 转换为 ArrayList<ArrayList<String>>
         val sourcesArrayList = sources?.map { ArrayList(it) }?.let { ArrayList(it) }
         val logosArrayList = logos?.let { ArrayList(it) }
+        val epgIdsArrayList = epgIds?.let { ArrayList(it) }
+        val isSeekableArrayList = isSeekable?.let { ArrayList(it) }
         
         playerFragment = NativePlayerFragment.newInstance(
             url,
@@ -331,13 +352,15 @@ class MainActivity: FlutterFragmentActivity() {
             groups?.let { ArrayList(it) },
             sourcesArrayList,
             logosArrayList,
-            null,  // channelEpgIds
+            epgIdsArrayList,  // channelEpgIds
+            isSeekableArrayList,  // channelIsSeekable
             isDlnaMode,
             bufferStrength,
             showFps,
             showClock,
             showNetworkSpeed,
             showVideoInfo,
+            progressBarMode,  // 传递进度条显示模式
             initialSourceIndex  // 传递初始源索引
         ).apply {
             onCloseListener = {
@@ -358,7 +381,8 @@ class MainActivity: FlutterFragmentActivity() {
                             lastVolumeBoostDb, 
                             lastDefaultScreenPosition,
                             restoreFromLocal = true,  // 恢复之前的分屏状态（从本地保存）
-                            initialSourceIndex = sourceIndex  // 传递当前源索引
+                            initialSourceIndex = sourceIndex,  // 传递当前源索引
+                            showChannelName = lastShowChannelName  // 使用保存的设置
                         )
                     }
                 }
@@ -415,10 +439,11 @@ class MainActivity: FlutterFragmentActivity() {
         restoreFromLocal: Boolean = false,  // 是否从本地保存的状态恢复（单屏切换到分屏）
         restoreActiveIndex: Int = -1,  // 从 Flutter 传递的恢复活动屏幕索引（首页继续播放）
         restoreScreenChannels: List<Int?>? = null,  // 从 Flutter 传递的恢复频道索引（首页继续播放）
-        initialSourceIndex: Int = 0  // 初始源索引（从单屏进入分屏时传递）
+        initialSourceIndex: Int = 0,  // 初始源索引（从单屏进入分屏时传递）
+        showChannelName: Boolean = false  // 是否显示频道名称
     ) {
         val shouldRestoreFromFlutter = restoreActiveIndex >= 0 && restoreScreenChannels != null
-        Log.d(TAG, "showMultiScreenFragment with ${urls.size} channels, initial=$initialChannelIndex, sourceIndex=$initialSourceIndex, volumeBoost=$volumeBoostDb, defaultScreen=$defaultScreenPosition, restoreFromLocal=$restoreFromLocal, restoreFromFlutter=$shouldRestoreFromFlutter")
+        Log.d(TAG, "showMultiScreenFragment with ${urls.size} channels, initial=$initialChannelIndex, sourceIndex=$initialSourceIndex, volumeBoost=$volumeBoostDb, defaultScreen=$defaultScreenPosition, restoreFromLocal=$restoreFromLocal, restoreFromFlutter=$shouldRestoreFromFlutter, showChannelName=$showChannelName")
         
         // 保存频道数据
         lastChannelUrls = urls
@@ -428,6 +453,7 @@ class MainActivity: FlutterFragmentActivity() {
         lastChannelLogos = logos
         lastVolumeBoostDb = volumeBoostDb
         lastDefaultScreenPosition = defaultScreenPosition
+        lastShowChannelName = showChannelName
         
         // Enable back press callback
         backPressedCallback.isEnabled = true
@@ -492,7 +518,8 @@ class MainActivity: FlutterFragmentActivity() {
             defaultScreenPosition,
             finalRestoreActiveIndex,
             finalRestoreFocusedIndex,
-            savedStatesArrayList
+            savedStatesArrayList,
+            showChannelName  // 传递是否显示频道名称
         ).apply {
             onCloseListener = {
                 runOnUiThread {
@@ -544,6 +571,8 @@ class MainActivity: FlutterFragmentActivity() {
                         showPlayerFragment(
                             url, name, channelIndex,
                             urls, names, groups, sources, logos,
+                            epgIds = null,  // 从分屏切换时没有 EPG IDs
+                            isSeekable = null,  // 从分屏切换时没有 isSeekable 信息
                             isDlnaMode = false,
                             bufferStrength = "fast",
                             showFps = true,
@@ -792,6 +821,30 @@ class MainActivity: FlutterFragmentActivity() {
                 override fun notImplemented() {
                     Log.w(TAG, "isFavorite not implemented")
                     callback(false)
+                }
+            }
+        )
+    }
+    
+    /**
+     * Add watch history for a channel
+     */
+    fun addWatchHistory(channelIndex: Int) {
+        Log.d(TAG, "addWatchHistory: channelIndex=$channelIndex")
+        playerMethodChannel?.invokeMethod(
+            "addWatchHistory",
+            mapOf("channelIndex" to channelIndex),
+            object : MethodChannel.Result {
+                override fun success(result: Any?) {
+                    Log.d(TAG, "addWatchHistory success: $result")
+                }
+                
+                override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
+                    Log.e(TAG, "addWatchHistory error: $errorCode - $errorMessage")
+                }
+                
+                override fun notImplemented() {
+                    Log.w(TAG, "addWatchHistory not implemented")
                 }
             }
         )

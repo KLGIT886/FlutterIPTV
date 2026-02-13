@@ -11,7 +11,8 @@ class AppStrings {
     return Localizations.of<AppStrings>(context, AppStrings);
   }
 
-  static const LocalizationsDelegate<AppStrings> delegate = _AppStringsDelegate();
+  static const LocalizationsDelegate<AppStrings> delegate =
+      _AppStringsDelegate();
 
   String get playlistManager => _localizedValues['playlistManager']!;
   String get playlistList => _localizedValues['playlistList']!;
@@ -60,7 +61,8 @@ class AppStrings {
   String get autoPlay => _localizedValues['autoPlay']!;
   String get autoPlaySubtitle => _localizedValues['autoPlaySubtitle']!;
   String get hardwareDecoding => _localizedValues['hardwareDecoding']!;
-  String get hardwareDecodingSubtitle => _localizedValues['hardwareDecodingSubtitle']!;
+  String get hardwareDecodingSubtitle =>
+      _localizedValues['hardwareDecodingSubtitle']!;
   String get bufferSize => _localizedValues['bufferSize']!;
   String get seconds => _localizedValues['seconds']!;
   String get playlists => _localizedValues['playlists']!;
@@ -71,32 +73,39 @@ class AppStrings {
   String get days => _localizedValues['days']!;
   String get day => _localizedValues['day']!;
   String get rememberLastChannel => _localizedValues['rememberLastChannel']!;
-  String get rememberLastChannelSubtitle => _localizedValues['rememberLastChannelSubtitle']!;
+  String get rememberLastChannelSubtitle =>
+      _localizedValues['rememberLastChannelSubtitle']!;
   String get epg => _localizedValues['epg']!;
   String get enableEpg => _localizedValues['enableEpg']!;
   String get enableEpgSubtitle => _localizedValues['enableEpgSubtitle']!;
   String get epgUrl => _localizedValues['epgUrl']!;
   String get notConfigured => _localizedValues['notConfigured']!;
   String get parentalControl => _localizedValues['parentalControl']!;
-  String get enableParentalControl => _localizedValues['enableParentalControl']!;
-  String get enableParentalControlSubtitle => _localizedValues['enableParentalControlSubtitle']!;
+  String get enableParentalControl =>
+      _localizedValues['enableParentalControl']!;
+  String get enableParentalControlSubtitle =>
+      _localizedValues['enableParentalControlSubtitle']!;
   String get changePin => _localizedValues['changePin']!;
   String get changePinSubtitle => _localizedValues['changePinSubtitle']!;
   String get about => _localizedValues['about']!;
   String get platform => _localizedValues['platform']!;
   String get resetAllSettings => _localizedValues['resetAllSettings']!;
-  String get resetSettingsSubtitle => _localizedValues['resetSettingsSubtitle']!;
+  String get resetSettingsSubtitle =>
+      _localizedValues['resetSettingsSubtitle']!;
   String get enterEpgUrl => _localizedValues['enterEpgUrl']!;
   String get setPin => _localizedValues['setPin']!;
   String get enterPin => _localizedValues['enterPin']!;
   String get resetSettings => _localizedValues['resetSettings']!;
   String get resetConfirm => _localizedValues['resetConfirm']!;
   String get reset => _localizedValues['reset']!;
-  String get pleaseEnterPlaylistName => _localizedValues['pleaseEnterPlaylistName']!;
-  String get pleaseEnterPlaylistUrl => _localizedValues['pleaseEnterPlaylistUrl']!;
+  String get pleaseEnterPlaylistName =>
+      _localizedValues['pleaseEnterPlaylistName']!;
+  String get pleaseEnterPlaylistUrl =>
+      _localizedValues['pleaseEnterPlaylistUrl']!;
   String get playlistAdded => _localizedValues['playlistAdded']!;
   String get playlistRefreshed => _localizedValues['playlistRefreshed']!;
-  String get playlistRefreshFailed => _localizedValues['playlistRefreshFailed']!;
+  String get playlistRefreshFailed =>
+      _localizedValues['playlistRefreshFailed']!;
   String get playlistDeleted => _localizedValues['playlistDeleted']!;
   String get playlistImported => _localizedValues['playlistImported']!;
   String get errorPickingFile => _localizedValues['errorPickingFile']!;
@@ -114,7 +123,8 @@ class AppStrings {
   String get playbackSpeed => _localizedValues['playbackSpeed']!;
   String get shortcutsHint => _localizedValues['shortcutsHint']!;
   String get lotusIptv => _localizedValues['lotusIptv']!;
-  String get professionalIptvPlayer => _localizedValues['professionalIptvPlayer']!;
+  String get professionalIptvPlayer =>
+      _localizedValues['professionalIptvPlayer']!;
   String get searchChannels => _localizedValues['searchChannels']!;
   String get searchHint => _localizedValues['searchHint']!;
   String get typeToSearch => _localizedValues['typeToSearch']!;
@@ -136,7 +146,8 @@ class AppStrings {
   String get removedFromFavorites => _localizedValues['removedFromFavorites']!;
   String get undo => _localizedValues['undo']!;
   String get clearAllFavorites => _localizedValues['clearAllFavorites']!;
-  String get clearFavoritesConfirm => _localizedValues['clearFavoritesConfirm']!;
+  String get clearFavoritesConfirm =>
+      _localizedValues['clearFavoritesConfirm']!;
   String get allFavoritesCleared => _localizedValues['allFavoritesCleared']!;
   String get home => _localizedValues['home']!;
   String get managePlaylists => _localizedValues['managePlaylists']!;
@@ -147,7 +158,8 @@ class AppStrings {
 
   // New translations
   String get volumeNormalization => _localizedValues['volumeNormalization']!;
-  String get volumeNormalizationSubtitle => _localizedValues['volumeNormalizationSubtitle']!;
+  String get volumeNormalizationSubtitle =>
+      _localizedValues['volumeNormalizationSubtitle']!;
   String get volumeBoost => _localizedValues['volumeBoost']!;
   String get noBoost => _localizedValues['noBoost']!;
   String get checkUpdate => _localizedValues['checkUpdate']!;
@@ -157,12 +169,22 @@ class AppStrings {
   String get decodingModeHardware => _localizedValues['decodingModeHardware']!;
   String get decodingModeSoftware => _localizedValues['decodingModeSoftware']!;
   String get decodingModeAutoDesc => _localizedValues['decodingModeAutoDesc']!;
-  String get decodingModeHardwareDesc => _localizedValues['decodingModeHardwareDesc']!;
-  String get decodingModeSoftwareDesc => _localizedValues['decodingModeSoftwareDesc']!;
+  String get decodingModeHardwareDesc =>
+      _localizedValues['decodingModeHardwareDesc']!;
+  String get decodingModeSoftwareDesc =>
+      _localizedValues['decodingModeSoftwareDesc']!;
+  String get channelMergeRule => _localizedValues['channelMergeRule']!;
+  String get channelMergeRuleSubtitle => _localizedValues['channelMergeRuleSubtitle']!;
+  String get channelMergeRuleSet => _localizedValues['channelMergeRuleSet']!;
+  String get mergeByName => _localizedValues['mergeByName']!;
+  String get mergeByNameDesc => _localizedValues['mergeByNameDesc']!;
+  String get mergeByNameGroup => _localizedValues['mergeByNameGroup']!;
+  String get mergeByNameGroupDesc => _localizedValues['mergeByNameGroupDesc']!;
   String get volumeBoostLow => _localizedValues['volumeBoostLow']!;
   String get volumeBoostSlightLow => _localizedValues['volumeBoostSlightLow']!;
   String get volumeBoostNormal => _localizedValues['volumeBoostNormal']!;
-  String get volumeBoostSlightHigh => _localizedValues['volumeBoostSlightHigh']!;
+  String get volumeBoostSlightHigh =>
+      _localizedValues['volumeBoostSlightHigh']!;
   String get volumeBoostHigh => _localizedValues['volumeBoostHigh']!;
   String get chinese => _localizedValues['chinese']!;
   String get english => _localizedValues['english']!;
@@ -178,6 +200,7 @@ class AppStrings {
 
   // Home screen
   String get recommendedChannels => _localizedValues['recommendedChannels']!;
+  String get watchHistory => _localizedValues['watchHistory']!;
   String get myFavorites => _localizedValues['myFavorites']!;
   String get continueWatching => _localizedValues['continueWatching']!;
   String get channelStats => _localizedValues['channelStats']!;
@@ -237,18 +260,30 @@ class AppStrings {
   String get clockEnabled => _localizedValues['clockEnabled']!;
   String get clockDisabled => _localizedValues['clockDisabled']!;
   String get showNetworkSpeed => _localizedValues['showNetworkSpeed']!;
-  String get showNetworkSpeedSubtitle => _localizedValues['showNetworkSpeedSubtitle']!;
+  String get showNetworkSpeedSubtitle =>
+      _localizedValues['showNetworkSpeedSubtitle']!;
   String get networkSpeedEnabled => _localizedValues['networkSpeedEnabled']!;
   String get networkSpeedDisabled => _localizedValues['networkSpeedDisabled']!;
   String get showVideoInfo => _localizedValues['showVideoInfo']!;
-  String get showVideoInfoSubtitle => _localizedValues['showVideoInfoSubtitle']!;
+  String get showVideoInfoSubtitle =>
+      _localizedValues['showVideoInfoSubtitle']!;
   String get videoInfoEnabled => _localizedValues['videoInfoEnabled']!;
   String get videoInfoDisabled => _localizedValues['videoInfoDisabled']!;
   String get enableMultiScreen => _localizedValues['enableMultiScreen']!;
-  String get enableMultiScreenSubtitle => _localizedValues['enableMultiScreenSubtitle']!;
+  String get enableMultiScreenSubtitle =>
+      _localizedValues['enableMultiScreenSubtitle']!;
   String get multiScreenEnabled => _localizedValues['multiScreenEnabled']!;
   String get multiScreenDisabled => _localizedValues['multiScreenDisabled']!;
-  String get defaultScreenPosition => _localizedValues['defaultScreenPosition']!;
+  String get showMultiScreenChannelName =>
+      _localizedValues['showMultiScreenChannelName']!;
+  String get showMultiScreenChannelNameSubtitle =>
+      _localizedValues['showMultiScreenChannelNameSubtitle']!;
+  String get multiScreenChannelNameEnabled =>
+      _localizedValues['multiScreenChannelNameEnabled']!;
+  String get multiScreenChannelNameDisabled =>
+      _localizedValues['multiScreenChannelNameDisabled']!;
+  String get defaultScreenPosition =>
+      _localizedValues['defaultScreenPosition']!;
   String get screenPosition1 => _localizedValues['screenPosition1']!;
   String get screenPosition2 => _localizedValues['screenPosition2']!;
   String get screenPosition3 => _localizedValues['screenPosition3']!;
@@ -257,17 +292,27 @@ class AppStrings {
   String get screenPositionSet => _localizedValues['screenPositionSet']!;
   String get multiScreenMode => _localizedValues['multiScreenMode']!;
   String get notImplemented => _localizedValues['notImplemented']!;
-  String get volumeNormalizationNotImplemented => _localizedValues['volumeNormalizationNotImplemented']!;
-  String get autoRefreshNotImplemented => _localizedValues['autoRefreshNotImplemented']!;
-  String get rememberLastChannelEnabled => _localizedValues['rememberLastChannelEnabled']!;
-  String get rememberLastChannelDisabled => _localizedValues['rememberLastChannelDisabled']!;
+  String get volumeNormalizationNotImplemented =>
+      _localizedValues['volumeNormalizationNotImplemented']!;
+  String get autoRefreshNotImplemented =>
+      _localizedValues['autoRefreshNotImplemented']!;
+  String get rememberLastChannelEnabled =>
+      _localizedValues['rememberLastChannelEnabled']!;
+  String get rememberLastChannelDisabled =>
+      _localizedValues['rememberLastChannelDisabled']!;
   String get epgEnabledAndLoaded => _localizedValues['epgEnabledAndLoaded']!;
   String get epgEnabledButFailed => _localizedValues['epgEnabledButFailed']!;
-  String get epgEnabledPleaseConfigure => _localizedValues['epgEnabledPleaseConfigure']!;
+  String get epgEnabledPleaseConfigure =>
+      _localizedValues['epgEnabledPleaseConfigure']!;
   String get epgDisabled => _localizedValues['epgDisabled']!;
   String get weak => _localizedValues['weak']!;
   String get medium => _localizedValues['medium']!;
   String get strong => _localizedValues['strong']!;
+
+  // Errors
+  String get errorTimeout => _localizedValues['errorTimeout']!;
+  String get errorNetwork => _localizedValues['errorNetwork']!;
+  String get usingCachedSource => _localizedValues['usingCachedSource']!;
 
   // Multi-screen player strings
   String get backToPlayer => _localizedValues['backToPlayer']!;
@@ -299,7 +344,8 @@ class AppStrings {
   String get installNow => _localizedValues['installNow']!;
   String get deletedChannels => _localizedValues['deletedChannels']!;
   String get testing => _localizedValues['testing']!;
-  String get channelAvailableRestored => _localizedValues['channelAvailableRestored']!;
+  String get channelAvailableRestored =>
+      _localizedValues['channelAvailableRestored']!;
   String get testingInBackground => _localizedValues['testingInBackground']!;
   String get restoredToCategory => _localizedValues['restoredToCategory']!;
   String get dlnaCast => _localizedValues['dlnaCast']!;
@@ -308,17 +354,44 @@ class AppStrings {
   String get dlnaCasting => _localizedValues['dlnaCasting']!;
   String get enableDlnaService => _localizedValues['enableDlnaService']!;
   String get dlnaServiceStarted => _localizedValues['dlnaServiceStarted']!;
-  String get allowOtherDevicesToCast => _localizedValues['allowOtherDevicesToCast']!;
-  String get dlnaServiceStartedMsg => _localizedValues['dlnaServiceStartedMsg']!;
-  String get dlnaServiceStoppedMsg => _localizedValues['dlnaServiceStoppedMsg']!;
-  String get dlnaServiceStartFailed => _localizedValues['dlnaServiceStartFailed']!;
-  String get parentalControlNotImplemented => _localizedValues['parentalControlNotImplemented']!;
-  String get changePinNotImplemented => _localizedValues['changePinNotImplemented']!;
+  String get allowOtherDevicesToCast =>
+      _localizedValues['allowOtherDevicesToCast']!;
+  String get dlnaServiceStartedMsg =>
+      _localizedValues['dlnaServiceStartedMsg']!;
+  String get dlnaServiceStoppedMsg =>
+      _localizedValues['dlnaServiceStoppedMsg']!;
+  String get dlnaServiceStartFailed =>
+      _localizedValues['dlnaServiceStartFailed']!;
+  String get parentalControlNotImplemented =>
+      _localizedValues['parentalControlNotImplemented']!;
+  String get changePinNotImplemented =>
+      _localizedValues['changePinNotImplemented']!;
   String get decodingModeSet => _localizedValues['decodingModeSet']!;
   String get fastBuffer => _localizedValues['fastBuffer']!;
   String get balancedBuffer => _localizedValues['balancedBuffer']!;
   String get stableBuffer => _localizedValues['stableBuffer']!;
-  String get bufferSizeNotImplemented => _localizedValues['bufferSizeNotImplemented']!;
+
+  // Developer and debug settings
+  String get developerAndDebug => _localizedValues['developerAndDebug']!;
+  String get logLevel => _localizedValues['logLevel']!;
+  String get logLevelSubtitle => _localizedValues['logLevelSubtitle']!;
+  String get logLevelDebug => _localizedValues['logLevelDebug']!;
+  String get logLevelRelease => _localizedValues['logLevelRelease']!;
+  String get logLevelOff => _localizedValues['logLevelOff']!;
+  String get logLevelDebugDesc => _localizedValues['logLevelDebugDesc']!;
+  String get logLevelReleaseDesc => _localizedValues['logLevelReleaseDesc']!;
+  String get logLevelOffDesc => _localizedValues['logLevelOffDesc']!;
+  String get exportLogs => _localizedValues['exportLogs']!;
+  String get exportLogsSubtitle => _localizedValues['exportLogsSubtitle']!;
+  String get clearLogs => _localizedValues['clearLogs']!;
+  String get clearLogsSubtitle => _localizedValues['clearLogsSubtitle']!;
+  String get logFileLocation => _localizedValues['logFileLocation']!;
+  String get logsCleared => _localizedValues['logsCleared']!;
+  String get clearLogsConfirm => _localizedValues['clearLogsConfirm']!;
+  String get clearLogsConfirmMessage =>
+      _localizedValues['clearLogsConfirmMessage']!;
+  String get bufferSizeNotImplemented =>
+      _localizedValues['bufferSizeNotImplemented']!;
   String get volumeBoostSet => _localizedValues['volumeBoostSet']!;
   String get noBoostValue => _localizedValues['noBoostValue']!;
   String get epgUrlSavedAndLoaded => _localizedValues['epgUrlSavedAndLoaded']!;
@@ -328,11 +401,13 @@ class AppStrings {
   String get pinNotImplemented => _localizedValues['pinNotImplemented']!;
   String get enter4DigitPin => _localizedValues['enter4DigitPin']!;
   String get allSettingsReset => _localizedValues['allSettingsReset']!;
-  String get languageSwitchedToChinese => _localizedValues['languageSwitchedToChinese']!;
-  String get languageSwitchedToEnglish => _localizedValues['languageSwitchedToEnglish']!;
+  String get languageSwitchedToChinese =>
+      _localizedValues['languageSwitchedToChinese']!;
+  String get languageSwitchedToEnglish =>
+      _localizedValues['languageSwitchedToEnglish']!;
   String get themeChangedMessage => _localizedValues['themeChangedMessage']!;
   String get defaultVersion => _localizedValues['defaultVersion']!;
-  
+
   // Color scheme strings
   String get colorScheme => _localizedValues['colorScheme']!;
   String get selectColorScheme => _localizedValues['selectColorScheme']!;
@@ -342,7 +417,8 @@ class AppStrings {
   String get colorSchemeSunset => _localizedValues['colorSchemeSunset']!;
   String get colorSchemeLavender => _localizedValues['colorSchemeLavender']!;
   String get colorSchemeMidnight => _localizedValues['colorSchemeMidnight']!;
-  String get colorSchemeLotusLight => _localizedValues['colorSchemeLotusLight']!;
+  String get colorSchemeLotusLight =>
+      _localizedValues['colorSchemeLotusLight']!;
   String get colorSchemeSky => _localizedValues['colorSchemeSky']!;
   String get colorSchemeSpring => _localizedValues['colorSchemeSpring']!;
   String get colorSchemeCoral => _localizedValues['colorSchemeCoral']!;
@@ -350,16 +426,24 @@ class AppStrings {
   String get colorSchemeClassic => _localizedValues['colorSchemeClassic']!;
   String get colorSchemeDescLotus => _localizedValues['colorSchemeDescLotus']!;
   String get colorSchemeDescOcean => _localizedValues['colorSchemeDescOcean']!;
-  String get colorSchemeDescForest => _localizedValues['colorSchemeDescForest']!;
-  String get colorSchemeDescSunset => _localizedValues['colorSchemeDescSunset']!;
-  String get colorSchemeDescLavender => _localizedValues['colorSchemeDescLavender']!;
-  String get colorSchemeDescMidnight => _localizedValues['colorSchemeDescMidnight']!;
-  String get colorSchemeDescLotusLight => _localizedValues['colorSchemeDescLotusLight']!;
+  String get colorSchemeDescForest =>
+      _localizedValues['colorSchemeDescForest']!;
+  String get colorSchemeDescSunset =>
+      _localizedValues['colorSchemeDescSunset']!;
+  String get colorSchemeDescLavender =>
+      _localizedValues['colorSchemeDescLavender']!;
+  String get colorSchemeDescMidnight =>
+      _localizedValues['colorSchemeDescMidnight']!;
+  String get colorSchemeDescLotusLight =>
+      _localizedValues['colorSchemeDescLotusLight']!;
   String get colorSchemeDescSky => _localizedValues['colorSchemeDescSky']!;
-  String get colorSchemeDescSpring => _localizedValues['colorSchemeDescSpring']!;
+  String get colorSchemeDescSpring =>
+      _localizedValues['colorSchemeDescSpring']!;
   String get colorSchemeDescCoral => _localizedValues['colorSchemeDescCoral']!;
-  String get colorSchemeDescViolet => _localizedValues['colorSchemeDescViolet']!;
-  String get colorSchemeDescClassic => _localizedValues['colorSchemeDescClassic']!;
+  String get colorSchemeDescViolet =>
+      _localizedValues['colorSchemeDescViolet']!;
+  String get colorSchemeDescClassic =>
+      _localizedValues['colorSchemeDescClassic']!;
   String get colorSchemeChanged => _localizedValues['colorSchemeChanged']!;
   String get customColorPicker => _localizedValues['customColorPicker']!;
   String get selectedColor => _localizedValues['selectedColor']!;
@@ -369,7 +453,8 @@ class AppStrings {
 
   // Local server web page strings
   String get importPlaylistTitle => _localizedValues['importPlaylistTitle']!;
-  String get importPlaylistSubtitle => _localizedValues['importPlaylistSubtitle']!;
+  String get importPlaylistSubtitle =>
+      _localizedValues['importPlaylistSubtitle']!;
   String get importFromUrlTitle => _localizedValues['importFromUrlTitle']!;
   String get importFromFileTitle => _localizedValues['importFromFileTitle']!;
   String get playlistNameOptional => _localizedValues['playlistNameOptional']!;
@@ -384,12 +469,38 @@ class AppStrings {
   String get sendFailed => _localizedValues['sendFailed']!;
   String get networkError => _localizedValues['networkError']!;
   String get uploading => _localizedValues['uploading']!;
-  
+
   // Simple menu
   String get simpleMenu => _localizedValues['simpleMenu']!;
   String get simpleMenuSubtitle => _localizedValues['simpleMenuSubtitle']!;
   String get simpleMenuEnabled => _localizedValues['simpleMenuEnabled']!;
   String get simpleMenuDisabled => _localizedValues['simpleMenuDisabled']!;
+
+  // Progress bar mode
+  String get progressBarMode => _localizedValues['progressBarMode']!;
+  String get progressBarModeSubtitle =>
+      _localizedValues['progressBarModeSubtitle']!;
+  String get progressBarModeAuto => _localizedValues['progressBarModeAuto']!;
+  String get progressBarModeAlways =>
+      _localizedValues['progressBarModeAlways']!;
+  String get progressBarModeNever => _localizedValues['progressBarModeNever']!;
+  String get progressBarModeAutoDesc =>
+      _localizedValues['progressBarModeAutoDesc']!;
+  String get progressBarModeAlwaysDesc =>
+      _localizedValues['progressBarModeAlwaysDesc']!;
+  String get progressBarModeNeverDesc =>
+      _localizedValues['progressBarModeNeverDesc']!;
+  String get progressBarModeSet => _localizedValues['progressBarModeSet']!;
+
+  // Home display settings
+  String get showWatchHistoryOnHome => _localizedValues['showWatchHistoryOnHome']!;
+  String get showWatchHistoryOnHomeSubtitle => _localizedValues['showWatchHistoryOnHomeSubtitle']!;
+  String get showFavoritesOnHome => _localizedValues['showFavoritesOnHome']!;
+  String get showFavoritesOnHomeSubtitle => _localizedValues['showFavoritesOnHomeSubtitle']!;
+  String get watchHistoryOnHomeEnabled => _localizedValues['watchHistoryOnHomeEnabled']!;
+  String get watchHistoryOnHomeDisabled => _localizedValues['watchHistoryOnHomeDisabled']!;
+  String get favoritesOnHomeEnabled => _localizedValues['favoritesOnHomeEnabled']!;
+  String get favoritesOnHomeDisabled => _localizedValues['favoritesOnHomeDisabled']!;
 
   // Map access for dynamic keys if needed
   String operator [](String key) => _localizedValues[key] ?? key;
@@ -403,7 +514,8 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
 
   @override
   Future<AppStrings> load(Locale locale) {
-    return SynchronousFuture<AppStrings>(AppStrings(locale, _getValues(locale)));
+    return SynchronousFuture<AppStrings>(
+        AppStrings(locale, _getValues(locale)));
   }
 
   @override
@@ -563,6 +675,13 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'decodingModeAutoDesc': '自动选择最佳方式，推荐',
     'decodingModeHardwareDesc': '强制硬解，部分设备可能报错',
     'decodingModeSoftwareDesc': '使用CPU解码，兼容性好但耗电',
+    'channelMergeRule': '频道合并规则',
+    'channelMergeRuleSubtitle': '控制如何合并重复频道',
+    'channelMergeRuleSet': '频道合并规则已设置为：{rule}',
+    'mergeByName': '按名称合并',
+    'mergeByNameDesc': '合并所有组中同名的频道',
+    'mergeByNameGroup': '按名称+组名合并',
+    'mergeByNameGroupDesc': '仅合并同名且同组的频道',
     'volumeBoostLow': '大幅降低音量',
     'volumeBoostSlightLow': '略微降低音量',
     'volumeBoostNormal': '保持原始音量',
@@ -581,6 +700,7 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'localFile': '本地文件',
     // Home screen
     'recommendedChannels': '推荐频道',
+    'watchHistory': '观看记录',
     'myFavorites': '我的收藏',
     'continueWatching': '继续观看',
     'channelStats': '{channels} 频道 · {categories} 分类 · {favorites} 收藏',
@@ -588,7 +708,7 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'addM3uToStart': '添加 M3U 播放列表开始观看',
     'search': '搜索',
     // Player hints
-    'playerHintTV': '↑↓ 切换频道 · ← 分类列表 · OK 播放/暂停',
+    'playerHintTV': '↑↓ 切换频道 · ←→ 切换源 · 长按← 分类 · OK 播放/暂停 · 长按OK 收藏',
     'playerHintDesktop': '左/右: 快进退 · 上/下: 换台 · 回车: 播放/暂停 · M: 静音',
     // More UI strings
     'more': '更多',
@@ -646,6 +766,10 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'enableMultiScreenSubtitle': '启用2x2分屏同时观看多个频道',
     'multiScreenEnabled': '已启用多屏模式',
     'multiScreenDisabled': '已关闭多屏模式',
+    'showMultiScreenChannelName': '显示频道名称',
+    'showMultiScreenChannelNameSubtitle': '在多屏播放时显示频道名称',
+    'multiScreenChannelNameEnabled': '多屏频道名称显示已启用',
+    'multiScreenChannelNameDisabled': '多屏频道名称显示已关闭',
     'defaultScreenPosition': '默认播放位置',
     'screenPosition1': '左上角 (1)',
     'screenPosition2': '右上角 (2)',
@@ -782,6 +906,48 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'simpleMenuSubtitle': '菜单栏保持收起状态（不自动展开）',
     'simpleMenuEnabled': '已启用简易菜单',
     'simpleMenuDisabled': '已关闭简易菜单',
+    // Progress bar mode
+    'progressBarMode': '进度条显示',
+    'progressBarModeSubtitle': '控制播放进度条的显示方式',
+    'progressBarModeAuto': '自动检测',
+    'progressBarModeAlways': '始终显示',
+    'progressBarModeNever': '不显示',
+    'progressBarModeAutoDesc': '根据内容类型自动显示（点播/回放显示，直播隐藏）',
+    'progressBarModeAlwaysDesc': '所有内容都显示进度条',
+    'progressBarModeNeverDesc': '所有内容都不显示进度条',
+    'progressBarModeSet': '进度条显示已设置为：{mode}',
+
+    // Home display settings
+    'showWatchHistoryOnHome': '首页显示观看记录',
+    'showWatchHistoryOnHomeSubtitle': '在首页显示最近观看的频道',
+    'showFavoritesOnHome': '首页显示收藏夹',
+    'showFavoritesOnHomeSubtitle': '在首页显示收藏的频道',
+    'watchHistoryOnHomeEnabled': '首页观看记录显示已启用',
+    'watchHistoryOnHomeDisabled': '首页观看记录显示已关闭',
+    'favoritesOnHomeEnabled': '首页收藏夹显示已启用',
+    'favoritesOnHomeDisabled': '首页收藏夹显示已关闭',
+
+    // Developer and debug settings
+    'developerAndDebug': '开发者与调试',
+    'logLevel': '日志级别',
+    'logLevelSubtitle': '选择日志记录级别',
+    'logLevelDebug': '调试',
+    'logLevelRelease': '发布',
+    'logLevelOff': '关闭',
+    'logLevelDebugDesc': '记录所有日志，用于开发调试',
+    'logLevelReleaseDesc': '只记录警告和错误，推荐',
+    'logLevelOffDesc': '不记录任何日志',
+    'exportLogs': '导出日志',
+    'exportLogsSubtitle': '扫码查看或导出日志文件',
+    'clearLogs': '清空日志',
+    'clearLogsSubtitle': '删除所有日志文件',
+    'logFileLocation': '日志文件位置',
+    'logsCleared': '日志已清空',
+    'clearLogsConfirm': '清空日志',
+    'clearLogsConfirmMessage': '确定要删除所有日志文件吗？',
+    'errorTimeout': '连接超时，请检查网络或链接',
+    'errorNetwork': '网络连接失败，请检查网络',
+    'usingCachedSource': '远程源不可用，使用缓存源',
   };
 
   static const Map<String, String> _enValues = {
@@ -797,7 +963,8 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'noPlaylists': 'No Playlists',
     'addFirstPlaylist': 'Add your first playlist above',
     'deletePlaylist': 'Delete Playlist',
-    'deleteConfirmation': 'Are you sure you want to delete "{name}"? This will also remove all channels from this playlist.',
+    'deleteConfirmation':
+        'Are you sure you want to delete "{name}"? This will also remove all channels from this playlist.',
     'cancel': 'Cancel',
     'delete': 'Delete',
     'settings': 'Settings',
@@ -830,7 +997,8 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'channelInfo': 'Channel Info',
     'playback': 'Playback',
     'autoPlay': 'Auto-play on Startup',
-    'autoPlaySubtitle': 'Automatically continue playing last watched content when app starts',
+    'autoPlaySubtitle':
+        'Automatically continue playing last watched content when app starts',
     'hardwareDecoding': 'Hardware Decoding',
     'hardwareDecodingSubtitle': 'Use hardware acceleration for video playback',
     'bufferSize': 'Buffer Size',
@@ -862,7 +1030,8 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'setPin': 'Set PIN',
     'enterPin': 'Enter 4-digit PIN',
     'resetSettings': 'Reset Settings',
-    'resetConfirm': 'Are you sure you want to reset all settings to their default values?',
+    'resetConfirm':
+        'Are you sure you want to reset all settings to their default values?',
     'reset': 'Reset',
     'pleaseEnterPlaylistName': 'Please enter a playlist name',
     'pleaseEnterPlaylistUrl': 'Please enter a playlist URL',
@@ -884,7 +1053,8 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'goBack': 'Go Back',
     'playbackSettings': 'Playback Settings',
     'playbackSpeed': 'Playback Speed',
-    'shortcutsHint': 'Left/Right: Seek • Up/Down: Change Channel • Enter: Play/Pause • M: Mute',
+    'shortcutsHint':
+        'Left/Right: Seek • Up/Down: Change Channel • Enter: Play/Pause • M: Mute',
     'lotusIptv': 'Lotus IPTV',
     'professionalIptvPlayer': 'Professional IPTV Player',
     'searchChannels': 'Search Channels',
@@ -908,7 +1078,8 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'removedFromFavorites': 'Removed "{name}" from favorites',
     'undo': 'Undo',
     'clearAllFavorites': 'Clear All Favorites',
-    'clearFavoritesConfirm': 'Are you sure you want to remove all channels from your favorites?',
+    'clearFavoritesConfirm':
+        'Are you sure you want to remove all channels from your favorites?',
     'allFavoritesCleared': 'All favorites cleared',
     'home': 'Home',
     'managePlaylists': 'Manage Playlists',
@@ -918,7 +1089,8 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'totalChannels': 'Total Channels',
     // New translations
     'volumeNormalization': 'Volume Normalization',
-    'volumeNormalizationSubtitle': 'Auto-adjust volume differences between channels',
+    'volumeNormalizationSubtitle':
+        'Auto-adjust volume differences between channels',
     'volumeBoost': 'Volume Boost',
     'noBoost': 'No boost',
     'checkUpdate': 'Check for Updates',
@@ -928,8 +1100,17 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'decodingModeHardware': 'Hardware',
     'decodingModeSoftware': 'Software',
     'decodingModeAutoDesc': 'Automatically choose best option. Recommended.',
-    'decodingModeHardwareDesc': 'Force MediaCodec. May cause errors on some devices.',
-    'decodingModeSoftwareDesc': 'Use CPU decoding. More compatible but uses more power.',
+    'decodingModeHardwareDesc':
+        'Force MediaCodec. May cause errors on some devices.',
+    'decodingModeSoftwareDesc':
+        'Use CPU decoding. More compatible but uses more power.',
+    'channelMergeRule': 'Channel Merge Rule',
+    'channelMergeRuleSubtitle': 'Control how duplicate channels are merged',
+    'channelMergeRuleSet': 'Channel merge rule set to: {rule}',
+    'mergeByName': 'Merge by Name',
+    'mergeByNameDesc': 'Merge channels with same name across all groups',
+    'mergeByNameGroup': 'Merge by Name + Group',
+    'mergeByNameGroupDesc': 'Only merge channels with same name AND group',
     'volumeBoostLow': 'Significantly lower volume',
     'volumeBoostSlightLow': 'Slightly lower volume',
     'volumeBoostNormal': 'Keep original volume',
@@ -941,28 +1122,34 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'importingPlaylist': 'Importing',
     'importSuccess': 'Import successful',
     'importFailed': 'Import failed',
-    'serverStartFailed': 'Failed to start local server. Please check network connection.',
+    'serverStartFailed':
+        'Failed to start local server. Please check network connection.',
     'processing': 'Processing, please wait...',
     'testChannel': 'Test Channel',
     'unavailable': 'Unavailable',
     'localFile': 'Local File',
     // Home screen
     'recommendedChannels': 'Recommended',
+    'watchHistory': 'Watch History',
     'myFavorites': 'My Favorites',
     'continueWatching': 'Continue Watching',
-    'channelStats': '{channels} channels · {categories} categories · {favorites} favorites',
+    'channelStats':
+        '{channels} channels · {categories} categories · {favorites} favorites',
     'noPlaylistYet': 'No Playlists Yet',
     'addM3uToStart': 'Add M3U playlist to start watching',
     'search': 'Search',
     // Player hints
-    'playerHintTV': '↑↓ Switch Channel · ← Categories · OK Play/Pause',
-    'playerHintDesktop': 'Left/Right: Seek · Up/Down: Switch · Enter: Play/Pause · M: Mute',
+    'playerHintTV':
+        '↑↓ Switch Channel · ←→ Switch Source · Hold← Categories · OK Play/Pause · Hold OK Favorite',
+    'playerHintDesktop':
+        'Left/Right: Seek · Up/Down: Switch · Enter: Play/Pause · M: Mute',
     // More UI strings
     'more': 'More',
     'close': 'Close',
     'startingServer': 'Starting server...',
     'selectM3uFile': 'Please select a playlist file (M3U/M3U8/TXT)',
-    'noFileSelected': 'No file selected. Please ensure your device has USB storage or network storage configured.',
+    'noFileSelected':
+        'No file selected. Please ensure your device has USB storage or network storage configured.',
     'epgAutoApplied': 'EPG source auto-applied',
     'addFirstPlaylistTV': 'Import via USB or scan QR code',
     'addPlaylistSubtitle': 'Import M3U/M3U8 playlist from URL or file',
@@ -1002,23 +1189,34 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'clockEnabled': 'Clock display enabled',
     'clockDisabled': 'Clock display disabled',
     'showNetworkSpeed': 'Show Network Speed',
-    'showNetworkSpeedSubtitle': 'Show download speed in top-right corner of player',
+    'showNetworkSpeedSubtitle':
+        'Show download speed in top-right corner of player',
     'networkSpeedEnabled': 'Network speed display enabled',
     'networkSpeedDisabled': 'Network speed display disabled',
     'showVideoInfo': 'Show Resolution',
-    'showVideoInfoSubtitle': 'Show video resolution and bitrate in top-right corner',
+    'showVideoInfoSubtitle':
+        'Show video resolution and bitrate in top-right corner',
     'videoInfoEnabled': 'Resolution display enabled',
     'videoInfoDisabled': 'Resolution display disabled',
     'enableMultiScreen': 'Multi-Screen Mode',
-    'enableMultiScreenSubtitle': 'Enable 2x2 split screen for simultaneous viewing',
+    'enableMultiScreenSubtitle':
+        'Enable 2x2 split screen for simultaneous viewing',
     'multiScreenEnabled': 'Multi-screen mode enabled',
     'multiScreenDisabled': 'Multi-screen mode disabled',
+    'showMultiScreenChannelName': 'Show Channel Names',
+    'showMultiScreenChannelNameSubtitle':
+        'Display channel names in multi-screen playback',
+    'multiScreenChannelNameEnabled':
+        'Multi-screen channel name display enabled',
+    'multiScreenChannelNameDisabled':
+        'Multi-screen channel name display disabled',
     'defaultScreenPosition': 'Default Screen Position',
     'screenPosition1': 'Top Left (1)',
     'screenPosition2': 'Top Right (2)',
     'screenPosition3': 'Bottom Left (3)',
     'screenPosition4': 'Bottom Right (4)',
-    'screenPositionDesc': 'Choose which screen position to use by default when clicking a channel:',
+    'screenPositionDesc':
+        'Choose which screen position to use by default when clicking a channel:',
     'screenPositionSet': 'Default screen position set to: {position}',
     'multiScreenMode': 'Multi-Screen Mode',
     // Multi-screen player strings
@@ -1037,7 +1235,8 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'startTest': 'Start Test',
     'complete': 'Complete',
     'runInBackground': 'Run in Background',
-    'movedToUnavailable': 'Moved {count} unavailable channels to Unavailable category',
+    'movedToUnavailable':
+        'Moved {count} unavailable channels to Unavailable category',
     'checkingUpdate': 'Checking for updates...',
     'alreadyLatestVersion': 'Already up to date',
     'checkUpdateFailed': 'Check update failed: {error}',
@@ -1050,13 +1249,16 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'installNow': 'Install Now',
     'deletedChannels': 'Deleted {count} unavailable channels',
     'testing': 'Testing: {name}',
-    'channelAvailableRestored': '{name} available, restored to "{group}" category',
+    'channelAvailableRestored':
+        '{name} available, restored to "{group}" category',
     'testingInBackground': 'Testing in background, {count} channels remaining',
     'restoredToCategory': 'Restored {name} to original category',
     'dlnaCast': 'DLNA Cast',
     'notImplemented': '(Not implemented)',
-    'volumeNormalizationNotImplemented': 'Volume normalization not implemented, setting will not take effect',
-    'autoRefreshNotImplemented': 'Auto-refresh not implemented, setting will not take effect',
+    'volumeNormalizationNotImplemented':
+        'Volume normalization not implemented, setting will not take effect',
+    'autoRefreshNotImplemented':
+        'Auto-refresh not implemented, setting will not take effect',
     'rememberLastChannelEnabled': 'Remember last channel enabled',
     'rememberLastChannelDisabled': 'Remember last channel disabled',
     'epgEnabledAndLoaded': 'EPG enabled and loaded successfully',
@@ -1073,21 +1275,25 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'allowOtherDevicesToCast': 'Allow other devices to cast to this device',
     'dlnaServiceStartedMsg': 'DLNA service started',
     'dlnaServiceStoppedMsg': 'DLNA service stopped',
-    'dlnaServiceStartFailed': 'Failed to start DLNA service, please check network connection',
-    'parentalControlNotImplemented': 'Parental control not implemented, setting will not take effect',
+    'dlnaServiceStartFailed':
+        'Failed to start DLNA service, please check network connection',
+    'parentalControlNotImplemented':
+        'Parental control not implemented, setting will not take effect',
     'changePinNotImplemented': '(Not implemented)',
     'decodingModeSet': 'Decoding mode set to: {mode}',
     'fastBuffer': 'Fast (Quick switching, may stutter)',
     'balancedBuffer': 'Balanced',
     'stableBuffer': 'Stable (Slow switching, less stuttering)',
-    'bufferSizeNotImplemented': 'Buffer size setting not implemented, setting will not take effect',
+    'bufferSizeNotImplemented':
+        'Buffer size setting not implemented, setting will not take effect',
     'volumeBoostSet': 'Volume boost set to {value}',
     'noBoostValue': 'No boost',
     'epgUrlSavedAndLoaded': 'EPG URL saved and loaded successfully',
     'epgUrlSavedButFailed': 'EPG URL saved but failed to load',
     'epgUrlCleared': 'EPG URL cleared',
     'epgUrlSaved': 'EPG URL saved',
-    'pinNotImplemented': 'Parental control not implemented, PIN setting will not take effect',
+    'pinNotImplemented':
+        'Parental control not implemented, PIN setting will not take effect',
     'enter4DigitPin': 'Please enter 4-digit PIN',
     'allSettingsReset': 'All settings have been reset to default values',
     'languageSwitchedToChinese': 'Language switched to Chinese',
@@ -1142,12 +1348,57 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'pleaseEnterUrl': 'Please enter URL',
     'sentToTV': 'Sent to TV, please check on your TV',
     'sendFailed': 'Send failed',
-    'networkError': 'Network error, please ensure devices are on the same network',
+    'networkError':
+        'Network error, please ensure devices are on the same network',
     'uploading': 'Uploading...',
     // Simple menu
     'simpleMenu': 'Simple Menu',
     'simpleMenuSubtitle': 'Keep menu collapsed (no auto-expand)',
     'simpleMenuEnabled': 'Simple menu enabled',
     'simpleMenuDisabled': 'Simple menu disabled',
+    // Progress bar mode
+    'progressBarMode': 'Progress Bar Display',
+    'progressBarModeSubtitle':
+        'Control how the playback progress bar is displayed',
+    'progressBarModeAuto': 'Auto Detect',
+    'progressBarModeAlways': 'Always Show',
+    'progressBarModeNever': 'Never Show',
+    'progressBarModeAutoDesc':
+        'Auto show based on content type (VOD/replay show, live hide)',
+    'progressBarModeAlwaysDesc': 'Show progress bar for all content',
+    'progressBarModeNeverDesc': 'Never show progress bar',
+    'progressBarModeSet': 'Progress bar display set to: {mode}',
+
+    // Home display settings
+    'showWatchHistoryOnHome': 'Show Watch History on Home',
+    'showWatchHistoryOnHomeSubtitle': 'Display recently watched channels on home screen',
+    'showFavoritesOnHome': 'Show Favorites on Home',
+    'showFavoritesOnHomeSubtitle': 'Display favorite channels on home screen',
+    'watchHistoryOnHomeEnabled': 'Watch history on home enabled',
+    'watchHistoryOnHomeDisabled': 'Watch history on home disabled',
+    'favoritesOnHomeEnabled': 'Favorites on home enabled',
+    'favoritesOnHomeDisabled': 'Favorites on home disabled',
+
+    // Developer and debug settings
+    'developerAndDebug': 'Developer & Debug',
+    'logLevel': 'Log Level',
+    'logLevelSubtitle': 'Select logging level',
+    'logLevelDebug': 'Debug',
+    'logLevelRelease': 'Release',
+    'logLevelOff': 'Off',
+    'logLevelDebugDesc': 'Log everything for development and debugging',
+    'logLevelReleaseDesc': 'Only log warnings and errors (recommended)',
+    'logLevelOffDesc': 'Do not log anything',
+    'exportLogs': 'Export Logs',
+    'exportLogsSubtitle': 'Scan QR to view or export log files',
+    'clearLogs': 'Clear Logs',
+    'clearLogsSubtitle': 'Delete all log files',
+    'logFileLocation': 'Log File Location',
+    'logsCleared': 'Logs cleared',
+    'clearLogsConfirm': 'Clear Logs',
+    'clearLogsConfirmMessage': 'Are you sure you want to delete all log files?',
+    'errorTimeout': 'Connection timeout, please check network or URL',
+    'errorNetwork': 'Network connection failed, please check network',
+    'usingCachedSource': 'Remote source unavailable, using cached source',
   };
 }

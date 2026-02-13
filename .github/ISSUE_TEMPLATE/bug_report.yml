@@ -1,0 +1,96 @@
+name: 🐛 Bug 报告
+description: 报告应用中的问题或错误
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## ⚠️ 重要提醒
+        - 本项目仅为播放器，不提供任何播放源
+        - 请勿在 Issue 中索要或分享播放源
+        - 请勿分享受版权保护的内容
+        
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 清楚简洁地描述遇到的问题
+      placeholder: 描述你遇到的问题...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 如何复现这个问题？
+      placeholder: |
+        1. 打开 '...'
+        2. 点击 '...'
+        3. 滚动到 '...'
+        4. 看到错误
+    validations:
+      required: false
+    
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+      description: 你期望发生什么？
+      placeholder: 描述期望的正常行为...
+    validations:
+      required: false
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      description: 实际发生了什么？
+      placeholder: 描述实际发生的情况...
+    validations:
+      required: false
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 平台
+      description: 在哪个平台上遇到的问题？
+      multiple: true
+      options:
+        - Android 手机
+        - Android TV
+        - Windows
+        - 其他
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 应用版本
+      description: 在设置 -> 关于中查看版本号
+      placeholder: 例如：v1.4.37
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志（可选）
+      description: 如果有相关日志，请粘贴在这里
+      placeholder: 粘贴日志内容...
+      render: shell
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图（可选）
+      description: 如果适用，添加截图帮助说明问题
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 其他信息
+      description: 其他任何有助于解决问题的信息

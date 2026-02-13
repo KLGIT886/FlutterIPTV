@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/local_server_service.dart';
+import '../../../core/services/service_locator.dart';
 import '../../../core/widgets/tv_focusable.dart';
 import '../../../core/i18n/app_strings.dart';
 import '../../channels/providers/channel_provider.dart';
@@ -41,7 +42,7 @@ class _QrImportDialogState extends State<QrImportDialog> {
   }
 
   Future<void> _startServer() async {
-    debugPrint('DEBUG: 开始启动本地服务器...');
+    ServiceLocator.log.d('开始启动本地服务器...');
 
     setState(() {
       _isLoading = true;
@@ -53,9 +54,9 @@ class _QrImportDialogState extends State<QrImportDialog> {
     _serverService.onContentReceived = _handleContentReceived;
 
     final success = await _serverService.start();
-    debugPrint('DEBUG: 服务器启动结果: ${success ? "成功" : "失败"}');
+    ServiceLocator.log.d('服务器启动结果: ${success ? "成功" : "失败"}');
     if (success) {
-      debugPrint('DEBUG: 服务器URL: ${_serverService.serverUrl}');
+      ServiceLocator.log.d('服务器URL: ${_serverService.serverUrl}');
     }
 
     setState(() {
@@ -72,7 +73,7 @@ class _QrImportDialogState extends State<QrImportDialog> {
   void _handleUrlReceived(String url, String name) async {
     if (_isImporting) return;
 
-    debugPrint('DEBUG: 收到URL导入请求 - 名称: $name, URL: $url');
+    ServiceLocator.log.d('收到URL导入请求 - 名称: $name, URL: $url');
 
     setState(() {
       _isImporting = true;
@@ -81,11 +82,12 @@ class _QrImportDialogState extends State<QrImportDialog> {
 
     try {
       final provider = context.read<PlaylistProvider>();
-      debugPrint('DEBUG: 开始通过URL添加播放列表...');
-      final playlist = await provider.addPlaylistFromUrl(name, url);
+      final settings = context.read<SettingsProvider>();
+      ServiceLocator.log.d('开始通过URL添加播放列表...');
+      final playlist = await provider.addPlaylistFromUrl(name, url, mergeRule: settings.channelMergeRule);
 
       if (playlist != null && mounted) {
-        debugPrint('DEBUG: 播放列表添加成功: ${playlist.name} (ID: ${playlist.id})');
+        ServiceLocator.log.d('播放列表添加成功: ${playlist.name} (ID: ${playlist.id})');
 
         // 设置新导入的播放列表为激活状态
         final playlistProvider = context.read<PlaylistProvider>();
@@ -95,7 +97,7 @@ class _QrImportDialogState extends State<QrImportDialog> {
         // 加载新播放列表的频道
         final channelProvider = context.read<ChannelProvider>();
         if (playlist.id != null) {
-          debugPrint('DEBUG: 加载新导入播放列表的频道...');
+          ServiceLocator.log.d('加载新导入播放列表的频道...');
           await channelProvider.loadChannels(playlist.id!);
         }
 
@@ -109,11 +111,11 @@ class _QrImportDialogState extends State<QrImportDialog> {
             final fallbackEpgUrl = settingsProvider.epgUrl;
             
             if (playlistEpgUrl != null && playlistEpgUrl.isNotEmpty) {
-              debugPrint('DEBUG: 加载播放列表EPG: $playlistEpgUrl (兜底: $fallbackEpgUrl)');
-              await epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl);
+              ServiceLocator.log.d('加载播放列表EPG: $playlistEpgUrl (兜底: $fallbackEpgUrl)');
+              await epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl, silent: true);
             } else if (fallbackEpgUrl != null && fallbackEpgUrl.isNotEmpty) {
-              debugPrint('DEBUG: 使用兜底EPG URL: $fallbackEpgUrl');
-              await epgProvider.loadEpg(fallbackEpgUrl);
+              ServiceLocator.log.d('使用兜底EPG URL: $fallbackEpgUrl');
+              await epgProvider.loadEpg(fallbackEpgUrl, silent: true);
             }
           }
         }
@@ -129,15 +131,15 @@ class _QrImportDialogState extends State<QrImportDialog> {
           Navigator.of(context).pop(true);
         }
       } else {
-        debugPrint('DEBUG: 播放列表添加失败');
+        ServiceLocator.log.d('播放列表添加失败');
         setState(() {
           _receivedMessage = '✗ ${AppStrings.of(context)?.importFailed ?? "Import failed"}';
           _isImporting = false;
         });
       }
     } catch (e) {
-      debugPrint('DEBUG: URL导入过程中发生错误: $e');
-      debugPrint('DEBUG: 错误堆栈: ${StackTrace.current}');
+      ServiceLocator.log.d('URL导入过程中发生错误: $e');
+      ServiceLocator.log.d('错误堆栈: ${StackTrace.current}');
       setState(() {
         _receivedMessage = '✗ ${AppStrings.of(context)?.importFailed ?? "Import failed"}: $e';
         _isImporting = false;
@@ -148,7 +150,7 @@ class _QrImportDialogState extends State<QrImportDialog> {
   void _handleContentReceived(String content, String name) async {
     if (_isImporting) return;
 
-    debugPrint('DEBUG: 收到内容导入请求 - 名称: $name, 内容长度: ${content.length}');
+    ServiceLocator.log.d('收到内容导入请求 - 名称: $name, 内容长度: ${content.length}');
 
     setState(() {
       _isImporting = true;
@@ -157,11 +159,12 @@ class _QrImportDialogState extends State<QrImportDialog> {
 
     try {
       final provider = context.read<PlaylistProvider>();
-      debugPrint('DEBUG: 开始通过内容添加播放列表...');
-      final playlist = await provider.addPlaylistFromContent(name, content);
+      final settings = context.read<SettingsProvider>();
+      ServiceLocator.log.d('开始通过内容添加播放列表...');
+      final playlist = await provider.addPlaylistFromContent(name, content, mergeRule: settings.channelMergeRule);
 
       if (playlist != null && mounted) {
-        debugPrint('DEBUG: 播放列表添加成功: ${playlist.name} (ID: ${playlist.id})');
+        ServiceLocator.log.d('播放列表添加成功: ${playlist.name} (ID: ${playlist.id})');
 
         // 设置新导入的播放列表为激活状态
         final playlistProvider = context.read<PlaylistProvider>();
@@ -171,7 +174,7 @@ class _QrImportDialogState extends State<QrImportDialog> {
         // 加载新播放列表的频道
         final channelProvider = context.read<ChannelProvider>();
         if (playlist.id != null) {
-          debugPrint('DEBUG: 加载新导入播放列表的频道...');
+          ServiceLocator.log.d('加载新导入播放列表的频道...');
           await channelProvider.loadChannels(playlist.id!);
         }
 
@@ -185,11 +188,11 @@ class _QrImportDialogState extends State<QrImportDialog> {
             final fallbackEpgUrl = settingsProvider.epgUrl;
             
             if (playlistEpgUrl != null && playlistEpgUrl.isNotEmpty) {
-              debugPrint('DEBUG: 加载播放列表EPG: $playlistEpgUrl (兜底: $fallbackEpgUrl)');
-              await epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl);
+              ServiceLocator.log.d('加载播放列表EPG: $playlistEpgUrl (兜底: $fallbackEpgUrl)');
+              await epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl, silent: true);
             } else if (fallbackEpgUrl != null && fallbackEpgUrl.isNotEmpty) {
-              debugPrint('DEBUG: 使用兜底EPG URL: $fallbackEpgUrl');
-              await epgProvider.loadEpg(fallbackEpgUrl);
+              ServiceLocator.log.d('使用兜底EPG URL: $fallbackEpgUrl');
+              await epgProvider.loadEpg(fallbackEpgUrl, silent: true);
             }
           }
         }
@@ -205,15 +208,15 @@ class _QrImportDialogState extends State<QrImportDialog> {
           Navigator.of(context).pop(true);
         }
       } else {
-        debugPrint('DEBUG: 播放列表添加失败');
+        ServiceLocator.log.d('播放列表添加失败');
         setState(() {
           _receivedMessage = '✗ ${AppStrings.of(context)?.importFailed ?? "Import failed"}';
           _isImporting = false;
         });
       }
     } catch (e) {
-      debugPrint('DEBUG: 内容导入过程中发生错误: $e');
-      debugPrint('DEBUG: 错误堆栈: ${StackTrace.current}');
+      ServiceLocator.log.d('内容导入过程中发生错误: $e');
+      ServiceLocator.log.d('错误堆栈: ${StackTrace.current}');
       setState(() {
         _receivedMessage = '✗ ${AppStrings.of(context)?.importFailed ?? "Import failed"}: $e';
         _isImporting = false;
@@ -223,77 +226,85 @@ class _QrImportDialogState extends State<QrImportDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    // 手机横屏：宽度600-900，高度小于宽度
+    final isLandscape = screenWidth > 600 && screenWidth < 900 && screenHeight < screenWidth;
+    final isMobile = screenWidth < 600;
     
     return Dialog(
       backgroundColor: AppTheme.getSurfaceColor(context),
       insetPadding: EdgeInsets.zero,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(isLandscape ? 12 : 20),  // 横屏时圆角更小
         child: Container(
-          width: isMobile ? null : 520,
-          constraints: isMobile ? const BoxConstraints(maxWidth: 400) : null,
+          width: isLandscape ? 420 : (isMobile ? null : 520),  // 横屏时宽度更小：480→420
+          constraints: isLandscape 
+              ? const BoxConstraints(maxHeight: 320)  // 横屏时限制高度：350→320
+              : (isMobile ? const BoxConstraints(maxWidth: 400) : null),
           decoration: BoxDecoration(
             color: AppTheme.getSurfaceColor(context),
           ),
-          padding: EdgeInsets.all(isMobile ? 16 : 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          padding: EdgeInsets.all(isLandscape ? 10 : 20),  // 横屏10，竖屏恢复到20
+          child: Stack(
             children: [
-              // Title
-              Row(
+              Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withAlpha(51),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.qr_code_scanner_rounded,
-                      color: AppTheme.primaryColor,
-                      size: 22,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      AppStrings.of(context)?.scanToImport ?? 'Scan to Import Playlist',
-                      style: TextStyle(
-                        color: AppTheme.getTextPrimary(context),
-                        fontSize: isMobile ? 16 : 18,
-                        fontWeight: FontWeight.bold,
+                  // Title
+                  Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(isLandscape ? 6 : 8),  // 横屏时padding更小
+                        decoration: BoxDecoration(
+                          gradient: AppTheme.getGradient(context),
+                          borderRadius: BorderRadius.circular(isLandscape ? 8 : 10),
+                        ),
+                        child: Icon(
+                          Icons.qr_code_scanner_rounded,
+                          color: Colors.white,
+                          size: isLandscape ? 18 : 22,  // 横屏时图标更小
+                        ),
                       ),
-                    ),
+                      SizedBox(width: isLandscape ? 10 : 12),  // 横屏时间距更小
+                      Expanded(
+                        child: Text(
+                          AppStrings.of(context)?.scanToImport ?? 'Scan to Import Playlist',
+                          style: TextStyle(
+                            color: AppTheme.getTextPrimary(context),
+                            fontSize: isLandscape ? 13 : (isMobile ? 16 : 18),  // 横屏时字体更小：14→13
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 40), // 为关闭按钮留出空间
+                    ],
                   ),
+
+                  SizedBox(height: isLandscape ? 6 : 12),  // 减小间距：横屏8→6
+
+                  // Content
+                  if (_isLoading) 
+                    _buildLoadingState(isLandscape) 
+                  else if (_error != null) 
+                    _buildErrorState(isLandscape) 
+                  else if (_isServerRunning) 
+                    _buildQrCodeState(isMobile, isLandscape),
                 ],
               ),
-
-              const SizedBox(height: 20),
-
-              // Content
-              if (_isLoading) _buildLoadingState() else if (_error != null) _buildErrorState() else if (_isServerRunning) _buildQrCodeState(isMobile),
-
-              const SizedBox(height: 20),
-
-              // Close button
-              TVFocusable(
-                autofocus: true,
-                onSelect: () => Navigator.of(context).pop(false),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(false),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.getTextSecondary(context),
-                      side: BorderSide(color: AppTheme.getCardColor(context)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: Text(AppStrings.of(context)?.close ?? 'Close'),
-                  ),
+              
+              // 右上角关闭按钮
+              Positioned(
+                top: 0,
+                right: 0,
+                child: IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  iconSize: isLandscape ? 16 : 24,  // 横屏图标更小：20→16
+                  onPressed: () => Navigator.of(context).pop(false),
+                  color: AppTheme.getTextMuted(context),
+                  padding: EdgeInsets.all(isLandscape ? 2 : 8),  // 横屏padding更小：4→2
+                  constraints: const BoxConstraints(),
+                  tooltip: AppStrings.of(context)?.close ?? 'Close',
                 ),
               ),
             ],
@@ -303,41 +314,47 @@ class _QrImportDialogState extends State<QrImportDialog> {
     );
   }
 
-  Widget _buildLoadingState() {
+  Widget _buildLoadingState(bool isLandscape) {
     return Column(
       children: [
-        const SizedBox(
-          width: 48,
-          height: 48,
-          child: CircularProgressIndicator(
+        SizedBox(
+          width: isLandscape ? 28 : 48,  // 横屏时进度条更小：32→28
+          height: isLandscape ? 28 : 48,
+          child: const CircularProgressIndicator(
             strokeWidth: 3,
             color: AppTheme.primaryColor,
           ),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: isLandscape ? 8 : 16),  // 横屏时间距更小：10→8
         Text(
           AppStrings.of(context)?.startingServer ?? 'Starting server...',
-          style: TextStyle(color: AppTheme.getTextSecondary(context)),
+          style: TextStyle(
+            color: AppTheme.getTextSecondary(context),
+            fontSize: isLandscape ? 10 : 14,  // 横屏时字体更小：11→10
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildErrorState() {
+  Widget _buildErrorState(bool isLandscape) {
     return Column(
       children: [
-        const Icon(
+        Icon(
           Icons.error_outline_rounded,
           color: AppTheme.errorColor,
-          size: 48,
+          size: isLandscape ? 28 : 48,  // 横屏时图标更小：32→28
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: isLandscape ? 8 : 16),  // 横屏时间距更小：10→8
         Text(
           _error!,
-          style: const TextStyle(color: AppTheme.errorColor),
+          style: TextStyle(
+            color: AppTheme.errorColor,
+            fontSize: isLandscape ? 10 : 14,  // 横屏时字体更小：11→10
+          ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: isLandscape ? 8 : 16),  // 横屏时间距更小：10→8
         TVFocusable(
           onSelect: _startServer,
           child: ElevatedButton(
@@ -345,78 +362,92 @@ class _QrImportDialogState extends State<QrImportDialog> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.primaryColor,
               foregroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(
+                horizontal: isLandscape ? 12 : 24,  // 横屏padding更小：16→12
+                vertical: isLandscape ? 6 : 12,  // 横屏padding更小：8→6
+              ),
             ),
-            child: Text(AppStrings.of(context)?.retry ?? 'Retry'),
+            child: Text(
+              AppStrings.of(context)?.retry ?? 'Retry',
+              style: TextStyle(fontSize: isLandscape ? 10 : 14),  // 横屏时字体更小：11→10
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildQrCodeState(bool isMobile) {
-    if (isMobile) {
-      // 手机端：纵向布局
+  Widget _buildQrCodeState(bool isMobile, bool isLandscape) {
+    if (isMobile || isLandscape) {
+      // 手机端（竖屏或横屏）：纵向布局
       return Column(
         children: [
           // QR Code
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(isLandscape ? 6 : 6),  // 减小padding
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(isLandscape ? 6 : 6),  // 减小圆角
             ),
             child: QrImageView(
               data: _serverService.importUrl,
               version: QrVersions.auto,
-              size: 200,
+              size: isLandscape ? 90 : 160,  // 横屏90，竖屏恢复到160
               backgroundColor: Colors.white,
               errorCorrectionLevel: QrErrorCorrectLevel.M,
             ),
           ),
 
-          const SizedBox(height: 16),
+          SizedBox(height: isLandscape ? 5 : 12),  // 横屏5，竖屏恢复到12
 
           // Instructions
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(isLandscape ? 5 : 8),  // 横屏5，竖屏恢复到8
             decoration: BoxDecoration(
               color: AppTheme.getCardColor(context),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(isLandscape ? 6 : 6),  // 减小圆角
+              border: Border.all(
+                color: AppTheme.getPrimaryColor(context).withOpacity(0.3),
+                width: 1,
+              ),
             ),
             child: Column(
               children: [
-                _buildStep('1', AppStrings.of(context)?.qrStep1 ?? 'Scan the QR code with your phone'),
-                const SizedBox(height: 8),
-                _buildStep('2', AppStrings.of(context)?.qrStep2 ?? 'Enter URL or upload file on the webpage'),
-                const SizedBox(height: 8),
-                _buildStep('3', AppStrings.of(context)?.qrStep3 ?? 'Click import, TV receives automatically'),
+                _buildStep('1', AppStrings.of(context)?.qrStep1 ?? 'Scan the QR code with your phone', isLandscape),
+                SizedBox(height: isLandscape ? 2 : 6),  // 横屏2，竖屏恢复到6
+                _buildStep('2', AppStrings.of(context)?.qrStep2 ?? 'Enter URL or upload file on the webpage', isLandscape),
+                SizedBox(height: isLandscape ? 2 : 6),  // 横屏2，竖屏恢复到6
+                _buildStep('3', AppStrings.of(context)?.qrStep3 ?? 'Click import, TV receives automatically', isLandscape),
               ],
             ),
           ),
 
-          const SizedBox(height: 12),
+          SizedBox(height: isLandscape ? 5 : 10),  // 横屏5，竖屏恢复到10
 
           // Server URL
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: EdgeInsets.symmetric(
+              horizontal: isLandscape ? 5 : 8,  // 横屏5，竖屏恢复到8
+              vertical: isLandscape ? 2 : 6,  // 横屏2，竖屏恢复到6
+            ),
             decoration: BoxDecoration(
               color: AppTheme.getCardColor(context).withAlpha(128),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(isLandscape ? 4 : 4),
             ),
             child: Row(
               children: [
                 Icon(
                   Icons.wifi_rounded,
                   color: AppTheme.getTextMuted(context),
-                  size: 16,
+                  size: isLandscape ? 10 : 12,  // 横屏10，竖屏恢复到12
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: isLandscape ? 4 : 6),  // 横屏4，竖屏恢复到6
                 Expanded(
                   child: Text(
                     _serverService.importUrl,
                     style: TextStyle(
                       color: AppTheme.getTextMuted(context),
-                      fontSize: 11,
+                      fontSize: isLandscape ? 8 : 10,  // 横屏8，竖屏恢复到10
                       fontFamily: 'monospace',
                     ),
                     maxLines: 2,
@@ -429,29 +460,29 @@ class _QrImportDialogState extends State<QrImportDialog> {
 
           // Status message
           if (_receivedMessage != null) ...[
-            const SizedBox(height: 12),
+            SizedBox(height: isLandscape ? 5 : 10),  // 横屏5，竖屏恢复到10
             Container(
-              padding: const EdgeInsets.all(10),
+              padding: EdgeInsets.all(isLandscape ? 3 : 6),  // 横屏3，竖屏恢复到6
               decoration: BoxDecoration(
                 color: _receivedMessage!.contains('✓')
                     ? Colors.green.withAlpha(51)
                     : _receivedMessage!.contains('✗')
                         ? Colors.red.withAlpha(51)
                         : AppTheme.primaryColor.withAlpha(51),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(isLandscape ? 4 : 4),
               ),
               child: Row(
                 children: [
                   if (_isImporting)
-                    const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
+                    SizedBox(
+                      width: isLandscape ? 10 : 12,  // 横屏10，竖屏恢复到12
+                      height: isLandscape ? 10 : 12,
+                      child: const CircularProgressIndicator(
                         strokeWidth: 2,
                         color: AppTheme.primaryColor,
                       ),
                     ),
-                  if (_isImporting) const SizedBox(width: 10),
+                  if (_isImporting) SizedBox(width: isLandscape ? 4 : 6),  // 横屏4，竖屏恢复到6
                   Expanded(
                     child: Text(
                       _receivedMessage!,
@@ -462,7 +493,7 @@ class _QrImportDialogState extends State<QrImportDialog> {
                                 ? Colors.red
                                 : AppTheme.getTextPrimary(context),
                         fontWeight: FontWeight.w500,
-                        fontSize: 12,
+                        fontSize: isLandscape ? 9 : 11,  // 横屏9，竖屏恢复到11
                       ),
                     ),
                   ),
@@ -507,14 +538,18 @@ class _QrImportDialogState extends State<QrImportDialog> {
                 decoration: BoxDecoration(
                   color: AppTheme.getCardColor(context),
                   borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: AppTheme.getPrimaryColor(context).withOpacity(0.3),
+                    width: 1,
+                  ),
                 ),
                 child: Column(
                   children: [
-                    _buildStep('1', AppStrings.of(context)?.qrStep1 ?? 'Scan the QR code with your phone'),
+                    _buildStep('1', AppStrings.of(context)?.qrStep1 ?? 'Scan the QR code with your phone', false),
                     const SizedBox(height: 8),
-                    _buildStep('2', AppStrings.of(context)?.qrStep2 ?? 'Enter URL or upload file on the webpage'),
+                    _buildStep('2', AppStrings.of(context)?.qrStep2 ?? 'Enter URL or upload file on the webpage', false),
                     const SizedBox(height: 8),
-                    _buildStep('3', AppStrings.of(context)?.qrStep3 ?? 'Click import, TV receives automatically'),
+                    _buildStep('3', AppStrings.of(context)?.qrStep3 ?? 'Click import, TV receives automatically', false),
                   ],
                 ),
               ),
@@ -600,34 +635,34 @@ class _QrImportDialogState extends State<QrImportDialog> {
     );
   }
 
-  Widget _buildStep(String number, String text) {
+  Widget _buildStep(String number, String text, bool isLandscape) {
     return Row(
       children: [
         Container(
-          width: 22,
-          height: 22,
+          width: isLandscape ? 14 : 18,  // 横屏14，竖屏恢复到18
+          height: isLandscape ? 14 : 18,
           decoration: BoxDecoration(
-            color: AppTheme.primaryColor.withAlpha(51),
+            gradient: AppTheme.getGradient(context),
             shape: BoxShape.circle,
           ),
           child: Center(
             child: Text(
               number,
-              style: const TextStyle(
-                color: AppTheme.primaryColor,
-                fontSize: 12,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: isLandscape ? 7 : 10,  // 横屏7，竖屏恢复到10
                 fontWeight: FontWeight.bold,
               ),
             ),
           ),
         ),
-        const SizedBox(width: 10),
+        SizedBox(width: isLandscape ? 4 : 6),  // 横屏4，竖屏恢复到6
         Expanded(
           child: Text(
             text,
             style: TextStyle(
               color: AppTheme.getTextSecondary(context),
-              fontSize: 13,
+              fontSize: isLandscape ? 8 : 11,  // 横屏8，竖屏恢复到11
             ),
           ),
         ),

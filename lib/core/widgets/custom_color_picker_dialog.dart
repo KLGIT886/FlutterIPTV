@@ -4,6 +4,7 @@ import '../theme/app_theme.dart';
 import '../i18n/app_strings.dart';
 import '../../features/settings/providers/settings_provider.dart';
 import 'tv_focusable.dart';
+import '../services/service_locator.dart';
 
 /// 自定义颜色选择器对话框
 /// 允许用户通过调色板选择自定义主题颜色
@@ -52,7 +53,7 @@ class _CustomColorPickerDialogState extends State<CustomColorPickerDialog> {
         _selectedColor = Color(colorValue);
       } catch (e) {
         // 解析失败时保持默认颜色
-        debugPrint('Failed to parse custom color: $e');
+        ServiceLocator.log.d('Failed to parse custom color: $e');
       }
     }
   }

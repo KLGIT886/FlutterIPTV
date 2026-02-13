@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_theme.dart';
@@ -11,6 +14,7 @@ import '../../../core/i18n/app_strings.dart';
 import '../../../core/services/service_locator.dart';
 import '../providers/settings_provider.dart';
 import '../providers/dlna_provider.dart';
+import '../widgets/qr_log_export_dialog.dart';
 import '../../epg/providers/epg_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -55,6 +59,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
         duration: const Duration(seconds: 3),
       ),
     );
+  }
+
+  // 获取对话框样式（横屏适配）
+  Map<String, dynamic> _getDialogStyle(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isLandscape = screenWidth > 600 && screenWidth < 900 && screenHeight < screenWidth;
+    
+    return {
+      'isLandscape': isLandscape,
+      'shape': RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(isLandscape ? 12 : 16),
+      ),
+      'contentPadding': EdgeInsets.all(isLandscape ? 12 : 20),
+      'titlePadding': EdgeInsets.fromLTRB(
+        isLandscape ? 16 : 24,
+        isLandscape ? 12 : 20,
+        isLandscape ? 16 : 24,
+        isLandscape ? 8 : 16,
+      ),
+      'titleFontSize': isLandscape ? 14.0 : 18.0,
+      'itemFontSize': isLandscape ? 12.0 : 14.0,
+      'subtitleFontSize': isLandscape ? 9.0 : 11.0,
+      'itemPadding': EdgeInsets.symmetric(
+        horizontal: isLandscape ? 8.0 : 16.0,
+        vertical: isLandscape ? 0.0 : 4.0,
+      ),
+      'visualDensity': isLandscape ? VisualDensity.compact : null,
+    };
   }
 
   @override
@@ -114,6 +147,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _showSuccess(context, value ? (strings?.simpleMenuEnabled ?? 'Simple menu enabled') : (strings?.simpleMenuDisabled ?? 'Simple menu disabled'));
                 },
               ),
+              _buildDivider(),
+              _buildSwitchTile(
+                context,
+                title: AppStrings.of(context)?.showWatchHistoryOnHome ?? 'Show Watch History on Home',
+                subtitle: AppStrings.of(context)?.showWatchHistoryOnHomeSubtitle ?? 'Display recently watched channels on home screen',
+                icon: Icons.history_rounded,
+                value: settings.showWatchHistoryOnHome,
+                onChanged: (value) {
+                  settings.setShowWatchHistoryOnHome(value);
+                  final strings = AppStrings.of(context);
+                  _showSuccess(context, value ? (strings?.watchHistoryOnHomeEnabled ?? 'Watch history on home enabled') : (strings?.watchHistoryOnHomeDisabled ?? 'Watch history on home disabled'));
+                },
+              ),
+              _buildDivider(),
+              _buildSwitchTile(
+                context,
+                title: AppStrings.of(context)?.showFavoritesOnHome ?? 'Show Favorites on Home',
+                subtitle: AppStrings.of(context)?.showFavoritesOnHomeSubtitle ?? 'Display favorite channels on home screen',
+                icon: Icons.favorite_rounded,
+                value: settings.showFavoritesOnHome,
+                onChanged: (value) {
+                  settings.setShowFavoritesOnHome(value);
+                  final strings = AppStrings.of(context);
+                  _showSuccess(context, value ? (strings?.favoritesOnHomeEnabled ?? 'Favorites on home enabled') : (strings?.favoritesOnHomeDisabled ?? 'Favorites on home disabled'));
+                },
+              ),
             ]),
 
             const SizedBox(height: 24),
@@ -144,11 +203,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildDivider(),
               _buildSelectTile(
                 context,
-                title: AppStrings.of(context)?.bufferSize ?? 'Buffer Size',
-                subtitle: '${settings.bufferSize} ${AppStrings.of(context)?.seconds ?? 'seconds'} ${AppStrings.of(context)?.notImplemented ?? '(Not implemented)'}',
-                icon: Icons.storage_rounded,
-                onTap: () => _showBufferSizeDialog(context, settings),
+                title: AppStrings.of(context)?.channelMergeRule ?? 'Channel Merge Rule',
+                subtitle: _getChannelMergeRuleLabel(context, settings.channelMergeRule),
+                icon: Icons.merge_rounded,
+                onTap: () => _showChannelMergeRuleDialog(context, settings),
               ),
+              // 缓冲大小 - 暂时隐藏（未实现）
+              // _buildDivider(),
+              // _buildSelectTile(
+              //   context,
+              //   title: AppStrings.of(context)?.bufferSize ?? 'Buffer Size',
+              //   subtitle: '${settings.bufferSize} ${AppStrings.of(context)?.seconds ?? 'seconds'} ${AppStrings.of(context)?.notImplemented ?? '(Not implemented)'}',
+              //   icon: Icons.storage_rounded,
+              //   onTap: () => _showBufferSizeDialog(context, settings),
+              // ),
               _buildDivider(),
               _buildSelectTile(
                 context,
@@ -209,6 +277,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _showSuccess(context, value ? (strings?.videoInfoEnabled ?? 'Resolution display enabled') : (strings?.videoInfoDisabled ?? 'Resolution display disabled'));
                 },
               ),
+              _buildDivider(),
+              _buildSelectTile(
+                context,
+                title: AppStrings.of(context)?.progressBarMode ?? '进度条显示',
+                subtitle: _getProgressBarModeLabel(context, settings.progressBarMode),
+                icon: Icons.linear_scale_rounded,
+                onTap: () => _showProgressBarModeDialog(context, settings),
+              ),
               if (PlatformDetector.isDesktop || PlatformDetector.isTV) ...[
                 _buildDivider(),
                 _buildSwitchTile(
@@ -233,30 +309,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: () => _showScreenPositionDialog(context, settings),
                   ),
                 ],
+                _buildDivider(),
+                _buildSwitchTile(
+                  context,
+                  title: AppStrings.of(context)?.showMultiScreenChannelName ?? 'Show Channel Names',
+                  subtitle: AppStrings.of(context)?.showMultiScreenChannelNameSubtitle ?? 'Display channel names in multi-screen playback',
+                  icon: Icons.text_fields_rounded,
+                  value: settings.showMultiScreenChannelName,
+                  onChanged: (value) {
+                    settings.setShowMultiScreenChannelName(value);
+                    final strings = AppStrings.of(context);
+                    _showSuccess(context, value ? (strings?.multiScreenChannelNameEnabled ?? 'Multi-screen channel name display enabled') : (strings?.multiScreenChannelNameDisabled ?? 'Multi-screen channel name display disabled'));
+                  },
+                ),
               ],
-              _buildDivider(),
-              _buildSwitchTile(
-                context,
-                title: AppStrings.of(context)?.volumeNormalization ?? 'Volume Normalization',
-                subtitle: '${AppStrings.of(context)?.volumeNormalizationSubtitle ?? 'Auto-adjust volume differences between channels'} ${AppStrings.of(context)?.notImplemented ?? '(Not implemented)'}',
-                icon: Icons.volume_up_rounded,
-                value: settings.volumeNormalization,
-                onChanged: (value) {
-                  settings.setVolumeNormalization(value);
-                  final strings = AppStrings.of(context);
-                  _showError(context, strings?.volumeNormalizationNotImplemented ?? 'Volume normalization not implemented, setting will not take effect');
-                },
-              ),
-              if (settings.volumeNormalization) ...[
+              // 手机端屏幕方向设置
+              if (PlatformDetector.isMobile) ...[
                 _buildDivider(),
                 _buildSelectTile(
                   context,
-                  title: AppStrings.of(context)?.volumeBoost ?? 'Volume Boost',
-                  subtitle: settings.volumeBoost == 0 ? (AppStrings.of(context)?.noBoost ?? 'No boost') : '${settings.volumeBoost > 0 ? '+' : ''}${settings.volumeBoost} dB',
-                  icon: Icons.equalizer_rounded,
-                  onTap: () => _showVolumeBoostDialog(context, settings),
+                  title: '屏幕方向',
+                  subtitle: _getOrientationLabel(context, settings.mobileOrientation),
+                  icon: Icons.screen_rotation_rounded,
+                  onTap: () => _showOrientationDialog(context, settings),
                 ),
               ],
+              // 音量标准化 - 暂时隐藏（未实现）
+              // _buildDivider(),
+              // _buildSwitchTile(
+              //   context,
+              //   title: AppStrings.of(context)?.volumeNormalization ?? 'Volume Normalization',
+              //   subtitle: '${AppStrings.of(context)?.volumeNormalizationSubtitle ?? 'Auto-adjust volume differences between channels'} ${AppStrings.of(context)?.notImplemented ?? '(Not implemented)'}',
+              //   icon: Icons.volume_up_rounded,
+              //   value: settings.volumeNormalization,
+              //   onChanged: (value) {
+              //     settings.setVolumeNormalization(value);
+              //     final strings = AppStrings.of(context);
+              //     _showError(context, strings?.volumeNormalizationNotImplemented ?? 'Volume normalization not implemented, setting will not take effect');
+              //   },
+              // ),
+              // 音量增强 - 始终显示（已实现）
+              _buildDivider(),
+              _buildSelectTile(
+                context,
+                title: AppStrings.of(context)?.volumeBoost ?? 'Volume Boost',
+                subtitle: settings.volumeBoost == 0 ? (AppStrings.of(context)?.noBoost ?? 'No boost') : '${settings.volumeBoost > 0 ? '+' : ''}${settings.volumeBoost} dB',
+                icon: Icons.equalizer_rounded,
+                onTap: () => _showVolumeBoostDialog(context, settings),
+              ),
             ]),
 
             const SizedBox(height: 24),
@@ -317,7 +417,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   await settings.setEnableEpg(value);
                   final strings = AppStrings.of(context);
                   if (value) {
-                    // 启用 EPG 时，如果有配�?URL 则加�?
+                    // 启用 EPG 时，如果有配置 URL 则加载
                     if (settings.epgUrl != null && settings.epgUrl!.isNotEmpty) {
                       final success = await context.read<EpgProvider>().loadEpg(settings.epgUrl!);
                       if (success) {
@@ -329,7 +429,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _showSuccess(context, strings?.epgEnabledPleaseConfigure ?? 'EPG enabled, please configure EPG URL');
                     }
                   } else {
-                    // 关闭 EPG 时清除已加载的数�?
+                    // 关闭 EPG 时清除已加载的数据
                     context.read<EpgProvider>().clear();
                     _showSuccess(context, strings?.epgDisabled ?? 'EPG disabled');
                   }
@@ -376,31 +476,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
 
+            // 家长控制 - 暂时隐藏（未实现）
+            // const SizedBox(height: 24),
+            // _buildSectionHeader(AppStrings.of(context)?.parentalControl ?? 'Parental Control'),
+            // _buildSettingsCard([
+            //   _buildSwitchTile(
+            //     context,
+            //     title: AppStrings.of(context)?.enableParentalControl ?? 'Enable Parental Control',
+            //     subtitle: '${AppStrings.of(context)?.enableParentalControlSubtitle ?? 'Require PIN to access certain content'} ${AppStrings.of(context)?.notImplemented ?? '(Not implemented)'}',
+            //     icon: Icons.lock_outline_rounded,
+            //     value: settings.parentalControl,
+            //     onChanged: (value) {
+            //       settings.setParentalControl(value);
+            //       final strings = AppStrings.of(context);
+            //       _showError(context, strings?.parentalControlNotImplemented ?? 'Parental control not implemented, setting will not take effect');
+            //     },
+            //   ),
+            //   if (settings.parentalControl) ...[
+            //     _buildDivider(),
+            //     _buildActionTile(
+            //       context,
+            //       title: AppStrings.of(context)?.changePin ?? 'Change PIN',
+            //       subtitle: '${AppStrings.of(context)?.changePinSubtitle ?? 'Update your parental control PIN'} ${AppStrings.of(context)?.notImplemented ?? '(Not implemented)'}',
+            //       icon: Icons.pin_rounded,
+            //       onTap: () => _showChangePinDialog(context, settings),
+            //     ),
+            //   ],
+            // ]),
+
             const SizedBox(height: 24),
 
-            // Parental Control
-            _buildSectionHeader(AppStrings.of(context)?.parentalControl ?? 'Parental Control'),
+            // Developer & Debug Settings
+            _buildSectionHeader(AppStrings.of(context)?.developerAndDebug ?? 'Developer & Debug'),
             _buildSettingsCard([
-              _buildSwitchTile(
+              _buildSelectTile(
                 context,
-                title: AppStrings.of(context)?.enableParentalControl ?? 'Enable Parental Control',
-                subtitle: '${AppStrings.of(context)?.enableParentalControlSubtitle ?? 'Require PIN to access certain content'} ${AppStrings.of(context)?.notImplemented ?? '(Not implemented)'}',
-                icon: Icons.lock_outline_rounded,
-                value: settings.parentalControl,
-                onChanged: (value) {
-                  settings.setParentalControl(value);
-                  final strings = AppStrings.of(context);
-                  _showError(context, strings?.parentalControlNotImplemented ?? 'Parental control not implemented, setting will not take effect');
-                },
+                title: AppStrings.of(context)?.logLevel ?? 'Log Level',
+                subtitle: _getLogLevelLabel(context, settings.logLevel),
+                icon: Icons.bug_report_rounded,
+                onTap: () => _showLogLevelDialog(context, settings),
               ),
-              if (settings.parentalControl) ...[
+              _buildDivider(),
+              _buildActionTile(
+                context,
+                title: AppStrings.of(context)?.exportLogs ?? 'Export Logs',
+                subtitle: AppStrings.of(context)?.exportLogsSubtitle ?? 'Export log files for diagnostics',
+                icon: Icons.file_download_rounded,
+                onTap: () => _exportLogs(context),
+              ),
+              _buildDivider(),
+              _buildActionTile(
+                context,
+                title: AppStrings.of(context)?.clearLogs ?? 'Clear Logs',
+                subtitle: AppStrings.of(context)?.clearLogsSubtitle ?? 'Delete all log files',
+                icon: Icons.delete_sweep_rounded,
+                onTap: () => _clearLogs(context),
+              ),
+              if (settings.logLevel != 'off') ...[
                 _buildDivider(),
                 _buildActionTile(
                   context,
-                  title: AppStrings.of(context)?.changePin ?? 'Change PIN',
-                  subtitle: '${AppStrings.of(context)?.changePinSubtitle ?? 'Update your parental control PIN'} ${AppStrings.of(context)?.notImplemented ?? '(Not implemented)'}',
-                  icon: Icons.pin_rounded,
-                  onTap: () => _showChangePinDialog(context, settings),
+                  title: AppStrings.of(context)?.logFileLocation ?? 'Log File Location',
+                  subtitle: ServiceLocator.log.logFilePath ?? 'Unknown',
+                  icon: Icons.folder_rounded,
+                  onTap: () => _openLogFolder(context),
                 ),
               ],
             ]),
@@ -488,25 +627,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     // 嵌入模式不使用Scaffold
     if (widget.embedded) {
+      final isMobile = PlatformDetector.isMobile;
+      final isLandscape = isMobile && MediaQuery.of(context).size.width > 700;
+      final statusBarHeight = isMobile ? MediaQuery.of(context).padding.top : 0.0;
+      final topPadding = isMobile ? (statusBarHeight > 0 ? statusBarHeight - 15.0 : 0.0) : 0.0;
+      
       return Column(
         children: [
-          // 简化的标题�?
-          SafeArea(
-            bottom: false,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                children: [
-                  Text(
-                    AppStrings.of(context)?.settings ?? 'Settings',
-                    style: TextStyle(
-                      color: AppTheme.getTextPrimary(context),
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+          // 简化的标题栏
+          Container(
+            padding: EdgeInsets.fromLTRB(
+              12,
+              topPadding + (isLandscape ? 4 : 8),  // 使用和首页相同的topPadding
+              12,
+              isLandscape ? 4 : 8,
+            ),
+            child: Row(
+              children: [
+                Text(
+                  AppStrings.of(context)?.settings ?? 'Settings',
+                  style: TextStyle(
+                    color: AppTheme.getTextPrimary(context),
+                    fontSize: isLandscape ? 14 : 18,  // 横屏时字体更小
+                    fontWeight: FontWeight.bold,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
           Expanded(child: content),
@@ -529,15 +675,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         child: Column(
           children: [
+            // 手机端添加状态栏高度
+            if (PlatformDetector.isMobile)
+              SizedBox(height: MediaQuery.of(context).padding.top),
             AppBar(
               backgroundColor: Colors.transparent,
+              primary: false,  // 禁用自动SafeArea padding
+              toolbarHeight: PlatformDetector.isMobile && MediaQuery.of(context).size.width > 600 ? 24.0 : 56.0,  // 横屏时减小到24px
+              automaticallyImplyLeading: false,  // 不显示返回按钮
               title: Text(
                 AppStrings.of(context)?.settings ?? 'Settings',
-                style: TextStyle(color: AppTheme.getTextPrimary(context), fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back_rounded),
-                onPressed: () => Navigator.pop(context),
+                style: TextStyle(
+                  color: AppTheme.getTextPrimary(context), 
+                  fontSize: PlatformDetector.isMobile && MediaQuery.of(context).size.width > 600 ? 14 : 20,  // 横屏时字体14px
+                  fontWeight: FontWeight.bold
+                ),
               ),
             ),
             Expanded(child: content),
@@ -551,12 +703,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final locale = settings.locale;
     final strings = AppStrings.of(context);
     if (locale == null) {
-      // 没有设置，显�?跟随系统"
+      // 没有设置，显示"跟随系统"
       final systemLocale = Localizations.localeOf(context);
       final systemLang = systemLocale.languageCode == 'zh' ? (strings?.chinese ?? '中文') : 'English';
       return '${strings?.followSystem ?? "Follow system"} ($systemLang)';
     }
-    // 根据保存的设置显�?
+    // 根据保存的设置显示
     if (locale.languageCode == 'zh') {
       return strings?.chinese ?? '中文';
     }
@@ -567,7 +719,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final strings = AppStrings.of(context);
     final manager = ColorSchemeManager.instance;
     
-    // 判断当前是黑暗还是明亮模�?
+    // 判断当前是黑暗还是明亮模式
     final isDarkMode = _isDarkMode(context, settings);
     final schemeId = isDarkMode ? settings.darkColorScheme : settings.lightColorScheme;
     final scheme = isDarkMode 
@@ -645,42 +797,71 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showDecodingModeDialog(BuildContext context, SettingsProvider settings) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isLandscape = screenWidth > 600 && screenWidth < 900 && screenHeight < screenWidth;
     final options = ['auto', 'hardware', 'software'];
 
     showDialog(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(isLandscape ? 12 : 16),
+          ),
+          contentPadding: EdgeInsets.all(isLandscape ? 12 : 20),
+          titlePadding: EdgeInsets.fromLTRB(
+            isLandscape ? 16 : 24,
+            isLandscape ? 12 : 20,
+            isLandscape ? 16 : 24,
+            isLandscape ? 8 : 16,
+          ),
           title: Text(
             AppStrings.of(context)?.decodingMode ?? 'Decoding Mode',
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(
+              color: AppTheme.getTextPrimary(context),
+              fontSize: isLandscape ? 14 : 18,
+            ),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: options.map((mode) {
-              return RadioListTile<String>(
-                title: Text(
-                  _getDecodingModeLabel(context, mode),
-                  style: const TextStyle(color: AppTheme.textPrimary),
-                ),
-                subtitle: Text(
-                  _getDecodingModeDescription(context, mode),
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
-                ),
-                value: mode,
-                groupValue: settings.decodingMode,
-                onChanged: (value) {
-                  if (value != null) {
-                    settings.setDecodingMode(value);
-                    Navigator.pop(dialogContext);
-                    final strings = AppStrings.of(context);
-                    _showSuccess(context, (strings?.decodingModeSet ?? 'Decoding mode set to: {mode}').replaceFirst('{mode}', _getDecodingModeLabel(context, value)));
-                  }
-                },
-                activeColor: AppTheme.getPrimaryColor(dialogContext),
-              );
-            }).toList(),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: options.map((mode) {
+                return RadioListTile<String>(
+                  title: Text(
+                    _getDecodingModeLabel(context, mode),
+                    style: TextStyle(
+                      color: AppTheme.getTextPrimary(context),
+                      fontSize: isLandscape ? 12 : 14,
+                    ),
+                  ),
+                  subtitle: Text(
+                    _getDecodingModeDescription(context, mode),
+                    style: TextStyle(
+                      color: AppTheme.getTextMuted(context),
+                      fontSize: isLandscape ? 9 : 11,
+                    ),
+                  ),
+                  value: mode,
+                  groupValue: settings.decodingMode,
+                  onChanged: (value) {
+                    if (value != null) {
+                      settings.setDecodingMode(value);
+                      Navigator.pop(dialogContext);
+                      final strings = AppStrings.of(context);
+                      _showSuccess(context, (strings?.decodingModeSet ?? 'Decoding mode set to: {mode}').replaceFirst('{mode}', _getDecodingModeLabel(context, value)));
+                    }
+                  },
+                  activeColor: AppTheme.getPrimaryColor(dialogContext),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: isLandscape ? 8 : 16,
+                    vertical: isLandscape ? 0 : 4,
+                  ),
+                  visualDensity: isLandscape ? VisualDensity.compact : null,
+                );
+              }).toList(),
+            ),
           ),
         );
       },
@@ -697,6 +878,100 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case 'auto':
       default:
         return strings?.decodingModeAutoDesc ?? 'Automatically choose best option. Recommended.';
+    }
+  }
+
+  String _getChannelMergeRuleLabel(BuildContext context, String rule) {
+    final strings = AppStrings.of(context);
+    switch (rule) {
+      case 'name':
+        return strings?.mergeByName ?? 'Merge by Name';
+      case 'name_group':
+      default:
+        return strings?.mergeByNameGroup ?? 'Merge by Name + Group';
+    }
+  }
+
+  void _showChannelMergeRuleDialog(BuildContext context, SettingsProvider settings) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isLandscape = screenWidth > 600 && screenWidth < 900 && screenHeight < screenWidth;
+    final options = ['name_group', 'name'];
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppTheme.getSurfaceColor(context),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(isLandscape ? 12 : 16),
+          ),
+          contentPadding: EdgeInsets.all(isLandscape ? 12 : 20),
+          titlePadding: EdgeInsets.fromLTRB(
+            isLandscape ? 16 : 24,
+            isLandscape ? 12 : 20,
+            isLandscape ? 16 : 24,
+            isLandscape ? 8 : 16,
+          ),
+          title: Text(
+            AppStrings.of(context)?.channelMergeRule ?? 'Channel Merge Rule',
+            style: TextStyle(
+              color: AppTheme.getTextPrimary(context),
+              fontSize: isLandscape ? 14 : 18,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: options.map((rule) {
+                return RadioListTile<String>(
+                  title: Text(
+                    _getChannelMergeRuleLabel(context, rule),
+                    style: TextStyle(
+                      color: AppTheme.getTextPrimary(context),
+                      fontSize: isLandscape ? 12 : 14,
+                    ),
+                  ),
+                  subtitle: Text(
+                    _getChannelMergeRuleDescription(context, rule),
+                    style: TextStyle(
+                      color: AppTheme.getTextMuted(context),
+                      fontSize: isLandscape ? 9 : 11,
+                    ),
+                  ),
+                  value: rule,
+                  groupValue: settings.channelMergeRule,
+                  onChanged: (value) {
+                    if (value != null) {
+                      settings.setChannelMergeRule(value);
+                      Navigator.pop(dialogContext);
+                      final strings = AppStrings.of(context);
+                      _showSuccess(context, (strings?.channelMergeRuleSet ?? 'Channel merge rule set to: {rule}').replaceFirst('{rule}', _getChannelMergeRuleLabel(context, value)));
+                    }
+                  },
+                  activeColor: AppTheme.getPrimaryColor(dialogContext),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: isLandscape ? 8 : 16,
+                    vertical: isLandscape ? 0 : 4,
+                  ),
+                  visualDensity: isLandscape ? VisualDensity.compact : null,
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _getChannelMergeRuleDescription(BuildContext context, String rule) {
+    final strings = AppStrings.of(context);
+    switch (rule) {
+      case 'name':
+        return strings?.mergeByNameDesc ?? 'Merge channels with same name across all groups';
+      case 'name_group':
+      default:
+        return strings?.mergeByNameGroupDesc ?? 'Only merge channels with same name AND group';
     }
   }
 
@@ -749,6 +1024,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required bool value,
     required ValueChanged<bool> onChanged,
   }) {
+    final isMobile = PlatformDetector.isMobile;
+    final isLandscape = isMobile && MediaQuery.of(context).size.width > 600;
+    
     return TVFocusable(
       onSelect: () => onChanged(!value),
       focusScale: 1.0,
@@ -763,18 +1041,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       },
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: EdgeInsets.symmetric(
+          horizontal: isLandscape ? 12 : 16,
+          vertical: isLandscape ? 8 : 14,
+        ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: EdgeInsets.all(isLandscape ? 6 : 8),
               decoration: BoxDecoration(
                 color: AppTheme.getPrimaryColor(context).withOpacity(0.15),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(isLandscape ? 6 : 8),
               ),
-              child: Icon(icon, color: AppTheme.getPrimaryColor(context), size: 20),
+              child: Icon(
+                icon,
+                color: AppTheme.getPrimaryColor(context),
+                size: isLandscape ? 16 : 20,
+              ),
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: isLandscape ? 12 : 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -783,7 +1068,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title,
                     style: TextStyle(
                       color: AppTheme.getTextPrimary(context),
-                      fontSize: 15,
+                      fontSize: isLandscape ? 13 : 15,  // 横屏时字体更小
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -792,16 +1077,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     subtitle,
                     style: TextStyle(
                       color: AppTheme.getTextMuted(context),
-                      fontSize: 12,
+                      fontSize: isLandscape ? 10 : 12,  // 横屏时字体更小
                     ),
                   ),
                 ],
               ),
             ),
-            Switch(
-              value: value,
-              onChanged: onChanged,
-              activeColor: AppTheme.getPrimaryColor(context),
+            Transform.scale(
+              scale: isLandscape ? 0.8 : 1.0,  // 横屏时开关更小
+              child: Switch(
+                value: value,
+                onChanged: onChanged,
+                activeColor: AppTheme.getPrimaryColor(context),
+              ),
             ),
           ],
         ),
@@ -816,6 +1104,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required IconData icon,
     required VoidCallback onTap,
   }) {
+    final isMobile = PlatformDetector.isMobile;
+    final isLandscape = isMobile && MediaQuery.of(context).size.width > 600;
+    
     return TVFocusable(
       onSelect: onTap,
       focusScale: 1.0,
@@ -832,18 +1123,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: EdgeInsets.symmetric(
+            horizontal: isLandscape ? 12 : 16,
+            vertical: isLandscape ? 8 : 14,
+          ),
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: EdgeInsets.all(isLandscape ? 6 : 8),
                 decoration: BoxDecoration(
                   color: AppTheme.getPrimaryColor(context).withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(isLandscape ? 6 : 8),
                 ),
-                child: Icon(icon, color: AppTheme.getPrimaryColor(context), size: 20),
+                child: Icon(
+                  icon,
+                  color: AppTheme.getPrimaryColor(context),
+                  size: isLandscape ? 16 : 20,
+                ),
               ),
-              const SizedBox(width: 16),
+              SizedBox(width: isLandscape ? 12 : 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -852,7 +1150,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       title,
                       style: TextStyle(
                         color: AppTheme.getTextPrimary(context),
-                        fontSize: 15,
+                        fontSize: isLandscape ? 13 : 15,  // 横屏时字体更小
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -861,7 +1159,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       subtitle,
                       style: TextStyle(
                         color: AppTheme.getTextMuted(context),
-                        fontSize: 12,
+                        fontSize: isLandscape ? 10 : 12,  // 横屏时字体更小
                       ),
                     ),
                   ],
@@ -870,6 +1168,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Icon(
                 Icons.chevron_right_rounded,
                 color: AppTheme.getTextMuted(context),
+                size: isLandscape ? 18 : 24,  // 横屏时图标更小
               ),
             ],
           ),
@@ -1019,6 +1318,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showBufferStrengthDialog(BuildContext context, SettingsProvider settings) {
+    final style = _getDialogStyle(context);
     final options = ['fast', 'balanced', 'stable'];
     final strings = AppStrings.of(context);
     final labels = {
@@ -1031,34 +1331,133 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
+          shape: style['shape'],
+          contentPadding: style['contentPadding'],
+          titlePadding: style['titlePadding'],
           title: Text(
             strings?.bufferStrength ?? 'Buffer Strength',
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(
+              color: AppTheme.getTextPrimary(context),
+              fontSize: style['titleFontSize'],
+            ),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: options.map((strength) {
-              return RadioListTile<String>(
-                title: Text(
-                  labels[strength] ?? strength,
-                  style: const TextStyle(color: AppTheme.textPrimary),
-                ),
-                value: strength,
-                groupValue: settings.bufferStrength,
-                onChanged: (value) {
-                  if (value != null) {
-                    settings.setBufferStrength(value);
-                    Navigator.pop(dialogContext);
-                  }
-                },
-                activeColor: AppTheme.getPrimaryColor(dialogContext),
-              );
-            }).toList(),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: options.map((strength) {
+                return RadioListTile<String>(
+                  title: Text(
+                    labels[strength] ?? strength,
+                    style: TextStyle(
+                      color: AppTheme.getTextPrimary(context),
+                      fontSize: style['itemFontSize'],
+                    ),
+                  ),
+                  value: strength,
+                  groupValue: settings.bufferStrength,
+                  onChanged: (value) {
+                    if (value != null) {
+                      settings.setBufferStrength(value);
+                      Navigator.pop(dialogContext);
+                    }
+                  },
+                  activeColor: AppTheme.getPrimaryColor(dialogContext),
+                  contentPadding: style['itemPadding'],
+                  visualDensity: style['visualDensity'],
+                );
+              }).toList(),
+            ),
           ),
         );
       },
     );
+  }
+
+  void _showProgressBarModeDialog(BuildContext context, SettingsProvider settings) {
+    final style = _getDialogStyle(context);
+    final options = ['auto', 'always', 'never'];
+    final strings = AppStrings.of(context);
+    final labels = {
+      'auto': strings?.progressBarModeAuto ?? '自动检测',
+      'always': strings?.progressBarModeAlways ?? '始终显示',
+      'never': strings?.progressBarModeNever ?? '不显示',
+    };
+    final descriptions = {
+      'auto': strings?.progressBarModeAutoDesc ?? '根据内容类型自动显示（点播/回放显示，直播隐藏）',
+      'always': strings?.progressBarModeAlwaysDesc ?? '所有内容都显示进度条',
+      'never': strings?.progressBarModeNeverDesc ?? '所有内容都不显示进度条',
+    };
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppTheme.getSurfaceColor(context),
+          shape: style['shape'],
+          contentPadding: style['contentPadding'],
+          titlePadding: style['titlePadding'],
+          title: Text(
+            strings?.progressBarMode ?? '进度条显示',
+            style: TextStyle(
+              color: AppTheme.getTextPrimary(context),
+              fontSize: style['titleFontSize'],
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: options.map((mode) {
+                return RadioListTile<String>(
+                  title: Text(
+                    labels[mode] ?? mode,
+                    style: TextStyle(
+                      color: AppTheme.getTextPrimary(context),
+                      fontSize: style['itemFontSize'],
+                    ),
+                  ),
+                  subtitle: Text(
+                    descriptions[mode] ?? '',
+                    style: TextStyle(
+                      color: AppTheme.getTextMuted(context),
+                      fontSize: style['subtitleFontSize'],
+                    ),
+                  ),
+                  value: mode,
+                  groupValue: settings.progressBarMode,
+                  onChanged: (value) {
+                    if (value != null) {
+                      settings.setProgressBarMode(value);
+                      Navigator.pop(dialogContext);
+                      final message = (strings?.progressBarModeSet ?? '进度条显示已设置为：{mode}')
+                          .replaceFirst('{mode}', labels[value] ?? value);
+                      _showSuccess(context, message);
+                    }
+                  },
+                  activeColor: AppTheme.getPrimaryColor(dialogContext),
+                  contentPadding: style['itemPadding'],
+                  visualDensity: style['visualDensity'],
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _getProgressBarModeLabel(BuildContext context, String mode) {
+    final strings = AppStrings.of(context);
+    switch (mode) {
+      case 'auto':
+        return strings?.progressBarModeAuto ?? '自动检测';
+      case 'always':
+        return strings?.progressBarModeAlways ?? '始终显示';
+      case 'never':
+        return strings?.progressBarModeNever ?? '不显示';
+      default:
+        return strings?.progressBarModeAuto ?? '自动检测';
+    }
   }
 
   void _showBufferSizeDialog(BuildContext context, SettingsProvider settings) {
@@ -1068,10 +1467,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           title: Text(
             AppStrings.of(context)?.bufferSize ?? 'Buffer Size',
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.getTextPrimary(context)),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1079,7 +1478,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               return RadioListTile<int>(
                 title: Text(
                   '$seconds ${AppStrings.of(context)?.seconds ?? 'seconds'}',
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: AppTheme.getTextPrimary(context)),
                 ),
                 value: seconds,
                 groupValue: settings.bufferSize,
@@ -1101,6 +1500,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showVolumeBoostDialog(BuildContext context, SettingsProvider settings) {
+    final style = _getDialogStyle(context);
     final options = [-10, -5, 0, 5, 10, 15, 20];
 
     showDialog(
@@ -1108,37 +1508,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (dialogContext) {
         final strings = AppStrings.of(context);
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
+          shape: style['shape'],
+          contentPadding: style['contentPadding'],
+          titlePadding: style['titlePadding'],
           title: Text(
             strings?.volumeBoost ?? 'Volume Boost',
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(
+              color: AppTheme.getTextPrimary(context),
+              fontSize: style['titleFontSize'],
+            ),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: options.map((db) {
-              return RadioListTile<int>(
-                title: Text(
-                  db == 0 ? '${strings?.noBoost ?? "No boost"} (0 dB)' : '${db > 0 ? '+' : ''}$db dB',
-                  style: const TextStyle(color: AppTheme.textPrimary),
-                ),
-                subtitle: Text(
-                  _getVolumeBoostDescription(context, db),
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
-                ),
-                value: db,
-                groupValue: settings.volumeBoost,
-                onChanged: (value) {
-                  if (value != null) {
-                    settings.setVolumeBoost(value);
-                    Navigator.pop(dialogContext);
-                    final strings = AppStrings.of(context);
-                    final boostValue = value == 0 ? (strings?.noBoostValue ?? 'No boost') : '${value > 0 ? '+' : ''}$value dB';
-                    _showSuccess(context, (strings?.volumeBoostSet ?? 'Volume boost set to {value}').replaceFirst('{value}', boostValue));
-                  }
-                },
-                activeColor: AppTheme.getPrimaryColor(dialogContext),
-              );
-            }).toList(),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: options.map((db) {
+                  return RadioListTile<int>(
+                    title: Text(
+                      db == 0 ? '${strings?.noBoost ?? "No boost"} (0 dB)' : '${db > 0 ? '+' : ''}$db dB',
+                      style: TextStyle(
+                        color: AppTheme.getTextPrimary(context),
+                        fontSize: style['itemFontSize'],
+                      ),
+                    ),
+                    subtitle: Text(
+                      _getVolumeBoostDescription(context, db),
+                      style: TextStyle(
+                        color: AppTheme.getTextMuted(context),
+                        fontSize: style['subtitleFontSize'],
+                      ),
+                    ),
+                    value: db,
+                    groupValue: settings.volumeBoost,
+                    onChanged: (value) {
+                      if (value != null) {
+                        settings.setVolumeBoost(value);
+                        Navigator.pop(dialogContext);
+                        final strings = AppStrings.of(context);
+                        final boostValue = value == 0 ? (strings?.noBoostValue ?? 'No boost') : '${value > 0 ? '+' : ''}$value dB';
+                        _showSuccess(context, (strings?.volumeBoostSet ?? 'Volume boost set to {value}').replaceFirst('{value}', boostValue));
+                      }
+                    },
+                    activeColor: AppTheme.getPrimaryColor(dialogContext),
+                    contentPadding: style['itemPadding'],
+                    visualDensity: style['visualDensity'],
+                  );
+                }).toList(),
+              ),
+            ),
           ),
         );
       },
@@ -1155,40 +1574,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showRefreshIntervalDialog(BuildContext context, SettingsProvider settings) {
+    final style = _getDialogStyle(context);
     final options = [6, 12, 24, 48, 72];
 
     showDialog(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
+          shape: style['shape'],
+          contentPadding: style['contentPadding'],
+          titlePadding: style['titlePadding'],
           title: Text(
             AppStrings.of(context)?.refreshInterval ?? 'Refresh Interval',
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(
+              color: AppTheme.getTextPrimary(context),
+              fontSize: style['titleFontSize'],
+            ),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: options.map((hours) {
-              return RadioListTile<int>(
-                title: Text(
-                  hours < 24
-                      ? '$hours ${AppStrings.of(context)?.hours ?? 'hours'}'
-                      : '${hours ~/ 24} ${hours ~/ 24 > 1 ? (AppStrings.of(context)?.days ?? 'days') : (AppStrings.of(context)?.day ?? 'day')}',
-                  style: const TextStyle(color: AppTheme.textPrimary),
-                ),
-                value: hours,
-                groupValue: settings.refreshInterval,
-                onChanged: (value) {
-                  if (value != null) {
-                    settings.setRefreshInterval(value);
-                    Navigator.pop(dialogContext);
-                    final strings = AppStrings.of(context);
-                    _showSuccess(context, 'Refresh interval: $value ${strings?.hours ?? 'hours'}');
-                  }
-                },
-                activeColor: AppTheme.getPrimaryColor(dialogContext),
-              );
-            }).toList(),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: options.map((hours) {
+                return RadioListTile<int>(
+                  title: Text(
+                    hours < 24
+                        ? '$hours ${AppStrings.of(context)?.hours ?? 'hours'}'
+                        : '${hours ~/ 24} ${hours ~/ 24 > 1 ? (AppStrings.of(context)?.days ?? 'days') : (AppStrings.of(context)?.day ?? 'day')}',
+                    style: TextStyle(
+                      color: AppTheme.getTextPrimary(context),
+                      fontSize: style['itemFontSize'],
+                    ),
+                  ),
+                  value: hours,
+                  groupValue: settings.refreshInterval,
+                  onChanged: (value) {
+                    if (value != null) {
+                      settings.setRefreshInterval(value);
+                      Navigator.pop(dialogContext);
+                      final strings = AppStrings.of(context);
+                      _showSuccess(context, 'Refresh interval: $value ${strings?.hours ?? 'hours'}');
+                    }
+                  },
+                  activeColor: AppTheme.getPrimaryColor(dialogContext),
+                  contentPadding: style['itemPadding'],
+                  visualDensity: style['visualDensity'],
+                );
+              }).toList(),
+            ),
           ),
         );
       },
@@ -1202,17 +1635,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           title: Text(
             AppStrings.of(context)?.epgUrl ?? 'EPG URL',
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.getTextPrimary(context)),
           ),
           content: TextField(
             controller: controller,
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.getTextPrimary(context)),
             decoration: InputDecoration(
               hintText: AppStrings.of(context)?.enterEpgUrl ?? 'Enter EPG XMLTV URL',
-              hintStyle: const TextStyle(color: AppTheme.textMuted),
+              hintStyle: TextStyle(color: AppTheme.getTextMuted(context)),
             ),
           ),
           actions: [
@@ -1225,18 +1658,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 final newUrl = controller.text.trim().isEmpty ? null : controller.text.trim();
                 final oldUrl = settings.epgUrl;
 
-                // 保存�?URL
+                // 保存新 URL
                 await settings.setEpgUrl(newUrl);
                 Navigator.pop(dialogContext);
 
-                // 如果 URL 变化了，清除旧数据并加载新数�?
+                // 如果 URL 变化了，清除旧数据并加载新数据
                 if (newUrl != oldUrl) {
                   final epgProvider = context.read<EpgProvider>();
                   epgProvider.clear();
                   final strings = AppStrings.of(context);
 
                   if (newUrl != null && newUrl.isNotEmpty && settings.enableEpg) {
-                    final success = await epgProvider.loadEpg(newUrl);
+                    // User-initiated action, show loading state
+                    final success = await epgProvider.loadEpg(newUrl, silent: false);
                     if (success) {
                       _showSuccess(context, strings?.epgUrlSavedAndLoaded ?? 'EPG URL saved and loaded successfully');
                     } else {
@@ -1264,20 +1698,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           title: Text(
             AppStrings.of(context)?.setPin ?? 'Set PIN',
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.getTextPrimary(context)),
           ),
           content: TextField(
             controller: controller,
             keyboardType: TextInputType.number,
             maxLength: 4,
             obscureText: true,
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.getTextPrimary(context)),
             decoration: InputDecoration(
               hintText: AppStrings.of(context)?.enterPin ?? 'Enter 4-digit PIN',
-              hintStyle: const TextStyle(color: AppTheme.textMuted),
+              hintStyle: TextStyle(color: AppTheme.getTextMuted(context)),
             ),
           ),
           actions: [
@@ -1309,14 +1743,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           title: Text(
             AppStrings.of(context)?.resetSettings ?? 'Reset Settings',
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.getTextPrimary(context)),
           ),
           content: Text(
             AppStrings.of(context)?.resetConfirm ?? 'Are you sure you want to reset all settings to their default values?',
-            style: const TextStyle(color: AppTheme.textSecondary),
+            style: TextStyle(color: AppTheme.getTextSecondary(context)),
           ),
           actions: [
             TextButton(
@@ -1350,10 +1784,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           title: Text(
             AppStrings.of(context)?.language ?? 'Language',
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.getTextPrimary(context)),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1361,7 +1795,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               RadioListTile<String?>(
                 title: Text(
                   AppStrings.of(context)?.followSystem ?? '跟随系统',
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: AppTheme.getTextPrimary(context)),
                 ),
                 value: null,
                 groupValue: currentLang,
@@ -1373,9 +1807,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 activeColor: AppTheme.getPrimaryColor(dialogContext),
               ),
               RadioListTile<String?>(
-                title: const Text(
+                title: Text(
                   'English',
-                  style: TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: AppTheme.getTextPrimary(context)),
                 ),
                 value: 'en',
                 groupValue: currentLang,
@@ -1389,7 +1823,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               RadioListTile<String?>(
                 title: Text(
                   AppStrings.of(context)?.chinese ?? '中文',
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  style: TextStyle(color: AppTheme.getTextPrimary(context)),
                 ),
                 value: 'zh',
                 groupValue: currentLang,
@@ -1422,33 +1856,91 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showThemeModeDialog(BuildContext context, SettingsProvider settings) {
+    final style = _getDialogStyle(context);
     final options = ['system', 'light', 'dark'];
 
     showDialog(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
+          shape: style['shape'],
+          contentPadding: style['contentPadding'],
+          titlePadding: style['titlePadding'],
           title: Text(
             AppStrings.of(context)?.theme ?? 'Theme',
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(
+              color: AppTheme.getTextPrimary(context),
+              fontSize: style['titleFontSize'],
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: options.map((mode) {
+                return RadioListTile<String>(
+                  title: Text(
+                    _getThemeModeLabel(context, mode),
+                    style: TextStyle(
+                      color: AppTheme.getTextPrimary(context),
+                      fontSize: style['itemFontSize'],
+                    ),
+                  ),
+                  value: mode,
+                  groupValue: settings.themeMode,
+                  onChanged: (value) {
+                    if (value != null) {
+                      settings.setThemeMode(value);
+                      Navigator.pop(dialogContext);
+                      final strings = AppStrings.of(context);
+                      _showSuccess(context, (strings?.themeChangedMessage ?? 'Theme changed: {theme}').replaceFirst('{theme}', _getThemeModeLabel(context, value)));
+                    }
+                  },
+                  activeColor: AppTheme.getPrimaryColor(dialogContext),
+                  contentPadding: style['itemPadding'],
+                  visualDensity: style['visualDensity'],
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showLogLevelDialog(BuildContext context, SettingsProvider settings) {
+    final options = ['debug', 'release', 'off'];
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppTheme.getSurfaceColor(context),
+          title: Text(
+            AppStrings.of(context)?.logLevel ?? 'Log Level',
+            style: TextStyle(color: AppTheme.getTextPrimary(context)),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
-            children: options.map((mode) {
+            children: options.map((level) {
               return RadioListTile<String>(
                 title: Text(
-                  _getThemeModeLabel(context, mode),
-                  style: const TextStyle(color: AppTheme.textPrimary),
+                  _getLogLevelLabel(context, level),
+                  style: TextStyle(color: AppTheme.getTextPrimary(context)),
                 ),
-                value: mode,
-                groupValue: settings.themeMode,
-                onChanged: (value) {
+                subtitle: Text(
+                  _getLogLevelDescription(context, level),
+                  style: TextStyle(color: AppTheme.getTextSecondary(context), fontSize: 12),
+                ),
+                value: level,
+                groupValue: settings.logLevel,
+                onChanged: (value) async {
                   if (value != null) {
-                    settings.setThemeMode(value);
-                    Navigator.pop(dialogContext);
-                    final strings = AppStrings.of(context);
-                    _showSuccess(context, (strings?.themeChangedMessage ?? 'Theme changed: {theme}').replaceFirst('{theme}', _getThemeModeLabel(context, value)));
+                    await settings.setLogLevel(value);
+                    if (dialogContext.mounted) {
+                      Navigator.pop(dialogContext);
+                      _showSuccess(context, '${AppStrings.of(context)?.logLevel ?? "Log level"}: ${_getLogLevelLabel(context, value)}');
+                    }
                   }
                 },
                 activeColor: AppTheme.getPrimaryColor(dialogContext),
@@ -1460,6 +1952,116 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Future<void> _exportLogs(BuildContext context) async {
+    // 显示二维码对话框
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const QrLogExportDialog(),
+    );
+  }
+
+  Future<void> _clearLogs(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.getSurfaceColor(context),
+        title: Text(
+          AppStrings.of(context)?.clearLogsConfirm ?? 'Clear Logs',
+          style: TextStyle(color: AppTheme.getTextPrimary(context)),
+        ),
+        content: Text(
+          AppStrings.of(context)?.clearLogsConfirmMessage ?? 'Are you sure you want to delete all log files? This action cannot be undone.',
+          style: TextStyle(color: AppTheme.getTextSecondary(context)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(AppStrings.of(context)?.cancel ?? 'Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              AppStrings.of(context)?.delete ?? 'Delete',
+              style: const TextStyle(color: AppTheme.errorColor),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await ServiceLocator.log.clearLogs();
+        if (context.mounted) {
+          _showSuccess(context, AppStrings.of(context)?.logsCleared ?? 'Logs cleared');
+        }
+      } catch (e) {
+        if (context.mounted) {
+          _showError(context, '${AppStrings.of(context)?.error ?? "Error"}: $e');
+        }
+      }
+    }
+  }
+
+  Future<void> _openLogFolder(BuildContext context) async {
+    try {
+      final logPath = ServiceLocator.log.logFilePath;
+      if (logPath == null) {
+        _showError(context, 'Log file path not available');
+        return;
+      }
+
+      // 获取日志文件所在的目录
+      final logDir = logPath.substring(0, logPath.lastIndexOf(Platform.pathSeparator));
+      
+      if (Platform.isWindows) {
+        // Windows: 使用 explorer 打开文件夹
+        await Process.run('explorer', [logDir]);
+      } else if (Platform.isMacOS) {
+        // macOS: 使用 open 命令
+        await Process.run('open', [logDir]);
+      } else if (Platform.isLinux) {
+        // Linux: 使用 xdg-open 命令
+        await Process.run('xdg-open', [logDir]);
+      } else {
+        _showError(context, 'Opening folders is not supported on this platform');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        _showError(context, 'Failed to open folder: $e');
+      }
+    }
+  }
+
+  String _getLogLevelLabel(BuildContext context, String level) {
+    final strings = AppStrings.of(context);
+    switch (level) {
+      case 'debug':
+        return strings?.logLevelDebug ?? 'Debug';
+      case 'release':
+        return strings?.logLevelRelease ?? 'Release';
+      case 'off':
+        return strings?.logLevelOff ?? 'Off';
+      default:
+        return level;
+    }
+  }
+
+  String _getLogLevelDescription(BuildContext context, String level) {
+    final strings = AppStrings.of(context);
+    switch (level) {
+      case 'debug':
+        return strings?.logLevelDebugDesc ?? 'Log everything for development and debugging';
+      case 'release':
+        return strings?.logLevelReleaseDesc ?? 'Only log warnings and errors (recommended)';
+      case 'off':
+        return strings?.logLevelOffDesc ?? 'Do not log anything';
+      default:
+        return '';
+    }
+  }
+
   // 获取当前应用版本
   Future<String> _getCurrentVersion() async {
     try {
@@ -1469,7 +2071,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // 检查更�?
+  // 检查更新
   void _checkForUpdates(BuildContext context) {
     ServiceLocator.updateManager.manualCheckForUpdate(context);
   }
@@ -1497,25 +2099,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
           title: Text(
             strings?.defaultScreenPosition ?? 'Default Screen Position',
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: AppTheme.getTextPrimary(context)),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 strings?.screenPositionDesc ?? 'Choose which screen position to use by default when clicking a channel:',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                style: TextStyle(color: AppTheme.getTextSecondary(context), fontSize: 12),
               ),
               const SizedBox(height: 16),
-              // 显示2x2网格示意�?
+              // 显示2x2网格示意图
               Container(
                 width: 120,
                 height: 90,
                 decoration: BoxDecoration(
-                  border: Border.all(color: AppTheme.textMuted),
+                  border: Border.all(color: AppTheme.getTextMuted(context)),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Column(
@@ -1526,19 +2128,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           Expanded(
                             child: Container(
                               decoration: BoxDecoration(
-                                border: Border.all(color: AppTheme.textMuted.withOpacity(0.3)),
+                                border: Border.all(color: AppTheme.getTextMuted(context).withOpacity(0.3)),
                                 color: settings.defaultScreenPosition == 1 ? AppTheme.getPrimaryColor(context).withOpacity(0.3) : null,
                               ),
-                              child: const Center(child: Text('1', style: TextStyle(color: AppTheme.textPrimary, fontSize: 12))),
+                              child: Center(child: Text('1', style: TextStyle(color: AppTheme.getTextPrimary(context), fontSize: 12))),
                             ),
                           ),
                           Expanded(
                             child: Container(
                               decoration: BoxDecoration(
-                                border: Border.all(color: AppTheme.textMuted.withOpacity(0.3)),
+                                border: Border.all(color: AppTheme.getTextMuted(context).withOpacity(0.3)),
                                 color: settings.defaultScreenPosition == 2 ? AppTheme.getPrimaryColor(context).withOpacity(0.3) : null,
                               ),
-                              child: const Center(child: Text('2', style: TextStyle(color: AppTheme.textPrimary, fontSize: 12))),
+                              child: Center(child: Text('2', style: TextStyle(color: AppTheme.getTextPrimary(context), fontSize: 12))),
                             ),
                           ),
                         ],
@@ -1550,19 +2152,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           Expanded(
                             child: Container(
                               decoration: BoxDecoration(
-                                border: Border.all(color: AppTheme.textMuted.withOpacity(0.3)),
+                                border: Border.all(color: AppTheme.getTextMuted(context).withOpacity(0.3)),
                                 color: settings.defaultScreenPosition == 3 ? AppTheme.getPrimaryColor(context).withOpacity(0.3) : null,
                               ),
-                              child: const Center(child: Text('3', style: TextStyle(color: AppTheme.textPrimary, fontSize: 12))),
+                              child: Center(child: Text('3', style: TextStyle(color: AppTheme.getTextPrimary(context), fontSize: 12))),
                             ),
                           ),
                           Expanded(
                             child: Container(
                               decoration: BoxDecoration(
-                                border: Border.all(color: AppTheme.textMuted.withOpacity(0.3)),
+                                border: Border.all(color: AppTheme.getTextMuted(context).withOpacity(0.3)),
                                 color: settings.defaultScreenPosition == 4 ? AppTheme.getPrimaryColor(context).withOpacity(0.3) : null,
                               ),
-                              child: const Center(child: Text('4', style: TextStyle(color: AppTheme.textPrimary, fontSize: 12))),
+                              child: Center(child: Text('4', style: TextStyle(color: AppTheme.getTextPrimary(context), fontSize: 12))),
                             ),
                           ),
                         ],
@@ -1576,7 +2178,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 return RadioListTile<int>(
                   title: Text(
                     _getScreenPositionLabel(context, position),
-                    style: const TextStyle(color: AppTheme.textPrimary),
+                    style: TextStyle(color: AppTheme.getTextPrimary(context)),
                   ),
                   value: position,
                   groupValue: settings.defaultScreenPosition,
@@ -1640,6 +2242,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showFontFamilyDialog(BuildContext context, SettingsProvider settings) {
+    final style = _getDialogStyle(context);
     final languageCode = settings.locale?.languageCode ?? WidgetsBinding.instance.platformDispatcher.locale.languageCode;
     final fonts = AppTheme.getAvailableFonts(languageCode);
     final strings = AppStrings.of(context);
@@ -1648,10 +2251,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.getSurfaceColor(context),
+          shape: style['shape'],
+          contentPadding: style['contentPadding'],
+          titlePadding: style['titlePadding'],
           title: Text(
             strings?.fontFamily ?? '字体',
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(
+              color: AppTheme.getTextPrimary(context),
+              fontSize: style['titleFontSize'],
+            ),
           ),
           content: SizedBox(
             width: double.maxFinite,
@@ -1665,8 +2274,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: Text(
                     _getFontFamilyLabel(context, font, settings),
                     style: TextStyle(
-                      color: AppTheme.textPrimary,
+                      color: AppTheme.getTextPrimary(context),
                       fontFamily: resolvedFont,
+                      fontSize: style['itemFontSize'],
                     ),
                   ),
                   value: font,
@@ -1681,6 +2291,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     }
                   },
                   activeColor: AppTheme.getPrimaryColor(dialogContext),
+                  contentPadding: style['itemPadding'],
+                  visualDensity: style['visualDensity'],
                 );
               },
             ),
@@ -1688,7 +2300,150 @@ class _SettingsScreenState extends State<SettingsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: Text(AppStrings.of(context)?.cancel ?? 'Cancel'),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.symmetric(
+                  horizontal: style['isLandscape'] ? 12.0 : 16.0,
+                  vertical: style['isLandscape'] ? 6.0 : 8.0,
+                ),
+              ),
+              child: Text(
+                AppStrings.of(context)?.cancel ?? 'Cancel',
+                style: TextStyle(fontSize: style['itemFontSize']),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 获取屏幕方向标签
+  String _getOrientationLabel(BuildContext context, String orientation) {
+    switch (orientation) {
+      case 'portrait':
+        return '竖屏';
+      case 'landscape':
+        return '横屏';
+      case 'auto':
+      default:
+        return '自动旋转';
+    }
+  }
+
+  /// 显示屏幕方向选择对话框
+  void _showOrientationDialog(BuildContext context, SettingsProvider settings) {
+    final style = _getDialogStyle(context);
+    final options = ['portrait', 'landscape', 'auto'];
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppTheme.getSurfaceColor(context),
+          shape: style['shape'],
+          contentPadding: style['contentPadding'],
+          titlePadding: style['titlePadding'],
+          title: Text(
+            '屏幕方向',
+            style: TextStyle(
+              color: AppTheme.getTextPrimary(context),
+              fontSize: style['titleFontSize'],
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: options.map((orientation) {
+                IconData icon;
+                switch (orientation) {
+                  case 'landscape':
+                    icon = Icons.screen_rotation_rounded;
+                    break;
+                  case 'portrait':
+                    icon = Icons.stay_current_portrait_rounded;
+                    break;
+                  case 'auto':
+                  default:
+                    icon = Icons.screen_rotation_alt_rounded;
+                    break;
+                }
+                
+                return RadioListTile<String>(
+                  title: Row(
+                    children: [
+                      Icon(
+                        icon,
+                        color: AppTheme.getTextPrimary(context),
+                        size: style['isLandscape'] ? 16.0 : 20.0,
+                      ),
+                      SizedBox(width: style['isLandscape'] ? 8.0 : 12.0),
+                      Text(
+                        _getOrientationLabel(context, orientation),
+                        style: TextStyle(
+                          color: AppTheme.getTextPrimary(context),
+                          fontSize: style['itemFontSize'],
+                        ),
+                      ),
+                    ],
+                  ),
+                  value: orientation,
+                  groupValue: settings.mobileOrientation,
+                  onChanged: (value) async {
+                    if (value != null) {
+                      await settings.setMobileOrientation(value);
+                      
+                      // 应用屏幕方向
+                      List<DeviceOrientation> orientations;
+                      switch (value) {
+                        case 'landscape':
+                          orientations = [
+                            DeviceOrientation.landscapeLeft,
+                            DeviceOrientation.landscapeRight,
+                          ];
+                          break;
+                        case 'portrait':
+                          orientations = [
+                            DeviceOrientation.portraitUp,
+                          ];
+                        break;
+                      case 'auto':
+                      default:
+                        orientations = [
+                          DeviceOrientation.portraitUp,
+                          DeviceOrientation.landscapeLeft,
+                          DeviceOrientation.landscapeRight,
+                        ];
+                        break;
+                    }
+                    
+                    await SystemChrome.setPreferredOrientations(orientations);
+                    
+                    if (dialogContext.mounted) {
+                      Navigator.pop(dialogContext);
+                      _showSuccess(context, '屏幕方向已设置为: ${_getOrientationLabel(context, value)}');
+                    }
+                  }
+                },
+                activeColor: AppTheme.getPrimaryColor(dialogContext),
+                contentPadding: style['itemPadding'],
+                visualDensity: style['visualDensity'],
+              );
+            }).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.symmetric(
+                  horizontal: style['isLandscape'] ? 12.0 : 16.0,
+                  vertical: style['isLandscape'] ? 6.0 : 8.0,
+                ),
+              ),
+              child: Text(
+                AppStrings.of(context)?.cancel ?? 'Cancel',
+                style: TextStyle(fontSize: style['itemFontSize']),
+              ),
             ),
           ],
         );

@@ -6,8 +6,10 @@ import '../../../core/navigation/app_router.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/auto_refresh_service.dart';
 import '../../../core/platform/tv_detection_channel.dart';
+import '../../../core/platform/platform_detector.dart';
 import '../../../core/i18n/app_strings.dart';
 import '../../playlist/providers/playlist_provider.dart';
+import '../../player/providers/player_provider.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -46,21 +48,42 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   }
 
   Future<void> _initializeApp() async {
+    ServiceLocator.log.i('开始初始化应用服务', tag: 'SplashScreen');
+    final startTime = DateTime.now();
+    
     try {
       // Initialize core services
+      ServiceLocator.log.d('初始化核心服务...', tag: 'SplashScreen');
       await ServiceLocator.init();
+      ServiceLocator.log.d('初始化 TV 检测...', tag: 'SplashScreen');
       await TVDetectionChannel.initialize();
 
       // Load data
       if (mounted) {
+        ServiceLocator.log.d('加载播放列表数据...', tag: 'SplashScreen');
         final playlistProvider = context.read<PlaylistProvider>();
         await playlistProvider.loadPlaylists();
         
+        ServiceLocator.log.d('播放列表加载完成: ${playlistProvider.playlists.length} 个', tag: 'SplashScreen');
+        
         // 播放列表加载完成后，通知自动刷新服务进行检查
         AutoRefreshService().checkOnStartup();
+        
+        // 预热播放器 - Windows 桌面端提前初始化播放器,避免首次进入播放页面卡顿
+        if (PlatformDetector.isDesktop) {
+          ServiceLocator.log.d('预热播放器...', tag: 'SplashScreen');
+          final playerProvider = context.read<PlayerProvider>();
+          // 异步预热,不阻塞启动流程
+          playerProvider.warmup().catchError((e) {
+            ServiceLocator.log.d('播放器预热失败 (不影响使用): $e', tag: 'SplashScreen');
+          });
+        }
       }
+      
+      final initTime = DateTime.now().difference(startTime).inMilliseconds;
+      ServiceLocator.log.i('应用初始化完成，耗时: ${initTime}ms', tag: 'SplashScreen');
     } catch (e) {
-      debugPrint('Initialization failed: $e');
+      ServiceLocator.log.e('应用初始化失败', tag: 'SplashScreen', error: e);
     }
 
     // Ensure minimum splash display time

@@ -72,19 +72,27 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
         ),
         child: Column(
           children: [
+            // 手机端添加状态栏高度
+            if (PlatformDetector.isMobile)
+              SizedBox(height: MediaQuery.of(context).padding.top),
             AppBar(
               backgroundColor: Colors.transparent,
+              primary: false, // 禁用自动SafeArea padding
+              toolbarHeight: PlatformDetector.isMobile &&
+                      MediaQuery.of(context).size.width > 600
+                  ? 24.0
+                  : 56.0, // 横屏时进一步减小到24px
+              automaticallyImplyLeading: false, // 不显示返回按钮
               title: Text(
                 AppStrings.of(context)?.playlistList ?? 'Playlist List',
                 style: TextStyle(
                   color: AppTheme.getTextPrimary(context),
-                  fontSize: 20,
+                  fontSize: PlatformDetector.isMobile &&
+                          MediaQuery.of(context).size.width > 600
+                      ? 14
+                      : 20, // 横屏时字体14px
                   fontWeight: FontWeight.bold,
                 ),
-              ),
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back_rounded),
-                onPressed: () => Navigator.pop(context),
               ),
             ),
             Expanded(child: content),
@@ -114,7 +122,8 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  AppStrings.of(context)?.processing ?? 'Processing, please wait...',
+                  AppStrings.of(context)?.processing ??
+                      'Processing, please wait...',
                   style: TextStyle(
                     color: AppTheme.getTextSecondary(context),
                     fontSize: 14,
@@ -163,7 +172,8 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            AppStrings.of(context)?.goToHomeToAdd ?? 'Go to Home to add playlists',
+            AppStrings.of(context)?.goToHomeToAdd ??
+                'Go to Home to add playlists',
             style: TextStyle(
               color: AppTheme.getTextSecondary(context),
               fontSize: 14,
@@ -179,7 +189,7 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
     // 按照 ID 降序排序（最新的在前面）
     final sortedPlaylists = List.from(provider.playlists)
       ..sort((a, b) => (b.id ?? 0).compareTo(a.id ?? 0));
-    
+
     return ListView.builder(
       padding: const EdgeInsets.all(20),
       itemCount: sortedPlaylists.length,
@@ -193,8 +203,11 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
     );
   }
 
-  Widget _buildPlaylistCard(PlaylistProvider provider, dynamic playlist, int index) {
+  Widget _buildPlaylistCard(
+      PlaylistProvider provider, dynamic playlist, int index) {
     final isActive = provider.activePlaylist?.id == playlist.id;
+    final isMobile = PlatformDetector.isMobile;
+    final isLandscape = isMobile && MediaQuery.of(context).size.width > 600;
 
     return TVFocusable(
       autofocus: index == 0,
@@ -224,7 +237,8 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
                   )
                 : null,
             color: isActive ? null : AppTheme.getSurfaceColor(context),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius:
+                BorderRadius.circular(isLandscape ? 12 : 16), // 横屏时圆角更小
             border: Border.all(
               color: isFocused
                   ? AppTheme.getPrimaryColor(context)
@@ -246,25 +260,28 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
         );
       },
       child: Padding(
-        padding: const EdgeInsets.all(10),
+        padding: EdgeInsets.all(isLandscape ? 6 : 10), // 横屏时减少padding
         child: Row(
           children: [
             // Icon
             Container(
-              width: 48,
-              height: 48,
+              width: isLandscape ? 36 : 48, // 横屏时图标容器更小
+              height: isLandscape ? 36 : 48, // 横屏时图标容器更小
               decoration: BoxDecoration(
                 color: AppTheme.getPrimaryColor(context).withOpacity(0.2),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius:
+                    BorderRadius.circular(isLandscape ? 8 : 10), // 横屏时圆角更小
               ),
               child: Icon(
-                playlist.isRemote ? Icons.cloud_outlined : Icons.folder_outlined,
+                playlist.isRemote
+                    ? Icons.cloud_outlined
+                    : Icons.folder_outlined,
                 color: AppTheme.getPrimaryColor(context),
-                size: 24,
+                size: isLandscape ? 18 : 24, // 横屏时图标更小
               ),
             ),
 
-            const SizedBox(width: 16),
+            SizedBox(width: isLandscape ? 10 : 16), // 横屏时减少间距
 
             // Info
             Expanded(
@@ -278,7 +295,7 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
                           playlist.name,
                           style: TextStyle(
                             color: AppTheme.getTextPrimary(context),
-                            fontSize: 14,
+                            fontSize: isLandscape ? 12 : 14, // 横屏时字体更小
                             fontWeight: FontWeight.w600,
                           ),
                           maxLines: 1,
@@ -287,10 +304,14 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
                       ),
                       if (isActive)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isLandscape ? 4 : 6, // 横屏时减少padding
+                            vertical: isLandscape ? 2 : 3, // 横屏时减少padding
+                          ),
                           decoration: BoxDecoration(
                             color: AppTheme.getPrimaryColor(context),
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(
+                                isLandscape ? 4 : 6), // 横屏时圆角更小
                           ),
                           child: Text(
                             AppStrings.of(context)?.active ?? 'ACTIVE',
@@ -406,45 +427,43 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
     }
   }
 
-  Future<void> _refreshPlaylist(PlaylistProvider provider, dynamic playlist) async {
-    final success = await provider.refreshPlaylist(playlist);
-    await Future.delayed(const Duration(milliseconds: 100));
+  Future<void> _refreshPlaylist(
+      PlaylistProvider provider, dynamic playlist) async {
+    if (!mounted) return;
 
-    if (mounted) {
-      if (success) {
-        final channelProvider = context.read<ChannelProvider>();
-        if (provider.activePlaylist?.id == playlist.id) {
-          await channelProvider.loadChannels(playlist.id);
-        }
+    // Use unified refresh method with callback
+    await provider.refreshPlaylistWithCallback(
+      playlist: playlist,
+      context: context,
+      silent: false,
+      onComplete: (success, error) async {
+        if (!mounted) return;
 
-        if (mounted) {
+        if (success) {
+          // Reload channels if this is the active playlist
+          final channelProvider = context.read<ChannelProvider>();
+          if (provider.activePlaylist?.id == playlist.id) {
+            await channelProvider.loadChannels(playlist.id);
+          }
+
+          // Reload EPG if enabled
           final settingsProvider = context.read<SettingsProvider>();
           final epgProvider = context.read<EpgProvider>();
-          
+
           if (settingsProvider.enableEpg) {
             final playlistEpgUrl = provider.lastExtractedEpgUrl;
             final fallbackEpgUrl = settingsProvider.epgUrl;
-            
+
+            // Background loading - don't block UI, don't await
             if (playlistEpgUrl != null && playlistEpgUrl.isNotEmpty) {
-              epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl);
+              epgProvider.loadEpg(playlistEpgUrl, fallbackUrl: fallbackEpgUrl, silent: true);
             } else if (fallbackEpgUrl != null && fallbackEpgUrl.isNotEmpty) {
-              epgProvider.loadEpg(fallbackEpgUrl);
+              epgProvider.loadEpg(fallbackEpgUrl, silent: true);
             }
           }
         }
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              success ? (AppStrings.of(context)?.playlistRefreshed ?? 'Playlist refreshed successfully') : (AppStrings.of(context)?.playlistRefreshFailed ?? 'Failed to refresh playlist'),
-            ),
-            backgroundColor: success ? AppTheme.successColor : AppTheme.errorColor,
-          ),
-        );
-      }
-    }
+      },
+    );
   }
 
   void _copyUrl(String url) {
@@ -474,7 +493,9 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
             style: TextStyle(color: AppTheme.getTextPrimary(context)),
           ),
           content: Text(
-            (AppStrings.of(context)?.deleteConfirmation ?? 'Are you sure you want to delete "{name}"? This will also remove all channels from this playlist.').replaceAll('{name}', playlist.name),
+            (AppStrings.of(context)?.deleteConfirmation ??
+                    'Are you sure you want to delete "{name}"? This will also remove all channels from this playlist.')
+                .replaceAll('{name}', playlist.name),
             style: TextStyle(color: AppTheme.getTextSecondary(context)),
           ),
           actions: [
@@ -489,16 +510,19 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
 
                 if (mounted && success) {
                   final channelProvider = context.read<ChannelProvider>();
-                  
-                  if (provider.activePlaylist != null && provider.activePlaylist!.id != null) {
-                    await channelProvider.loadChannels(provider.activePlaylist!.id!);
+
+                  if (provider.activePlaylist != null &&
+                      provider.activePlaylist!.id != null) {
+                    await channelProvider
+                        .loadChannels(provider.activePlaylist!.id!);
                   } else {
                     await channelProvider.loadAllChannels();
                   }
 
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(AppStrings.of(context)?.playlistDeleted ?? 'Playlist deleted'),
+                      content: Text(AppStrings.of(context)?.playlistDeleted ??
+                          'Playlist deleted'),
                       backgroundColor: AppTheme.successColor,
                     ),
                   );

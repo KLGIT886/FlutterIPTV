@@ -146,27 +146,37 @@ class _TVFocusableState extends State<TVFocusable> with SingleTickerProviderStat
             builder: (context, child) {
               final focusedChild = widget.builder != null ? widget.builder!(context, _isFocused, widget.child) : widget.child;
 
-              return Transform.scale(
-                scale: _scaleAnimation.value,
-                child: Container(
-                  decoration: widget.showFocusBorder && _isFocused
-                      ? BoxDecoration(
-                          borderRadius: widget.borderRadius ?? BorderRadius.circular(AppTheme.radiusMedium),
-                          border: Border.all(
-                            color: AppTheme.getPrimaryColor(context),
-                            width: 3,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.getPrimaryColor(context).withAlpha(102),
-                              blurRadius: 16,
-                              spreadRadius: 2,
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // 内容（带缩放）
+                  Transform.scale(
+                    scale: _scaleAnimation.value,
+                    child: focusedChild,
+                  ),
+                  // 焦点边框（不缩放，贴合原始尺寸）
+                  if (widget.showFocusBorder && _isFocused)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: widget.borderRadius ?? BorderRadius.circular(AppTheme.radiusMedium),
+                            border: Border.all(
+                              color: AppTheme.getPrimaryColor(context),
+                              width: 3,
                             ),
-                          ],
-                        )
-                      : null,
-                  child: focusedChild,
-                ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.getPrimaryColor(context).withAlpha(102),
+                                blurRadius: 16,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               );
             },
           ),

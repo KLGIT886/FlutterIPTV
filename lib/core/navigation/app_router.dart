@@ -12,6 +12,9 @@ import '../../features/settings/screens/settings_screen.dart';
 import '../../features/epg/screens/epg_screen.dart';
 
 class AppRouter {
+  // Route observer for tracking navigation
+  static final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
+  
   // Route names
   static const String splash = '/';
   static const String home = '/home';

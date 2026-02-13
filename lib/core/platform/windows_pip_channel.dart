@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:screen_retriever/screen_retriever.dart';
+import '../services/service_locator.dart';
 
 /// Windows 迷你播放器模式控制
 class WindowsPipChannel {
@@ -59,13 +60,13 @@ class WindowsPipChannel {
       final screenWidth = primaryDisplay.size.width;
       final screenHeight = primaryDisplay.size.height;
       
-      debugPrint('WindowsPipChannel: 屏幕尺寸 - $screenWidth x $screenHeight');
+      ServiceLocator.log.d('WindowsPipChannel: 屏幕尺寸 - $screenWidth x $screenHeight');
       
       // 计算右下角位置，紧贴屏幕底部（覆盖任务栏）
       final x = screenWidth - _miniWidth - _margin;
       final y = screenHeight - _miniHeight - _margin;
 
-      debugPrint('WindowsPipChannel: 目标位置 - ($x, $y)');
+      ServiceLocator.log.d('WindowsPipChannel: 目标位置 - ($x, $y)');
 
       // 隐藏标题栏
       await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
@@ -87,10 +88,10 @@ class WindowsPipChannel {
       _isPinned = true;
       pipModeNotifier.value = true; // 通知状态变化
       
-      debugPrint('WindowsPipChannel: 进入迷你模式成功');
+      ServiceLocator.log.d('WindowsPipChannel: 进入迷你模式成功');
       return true;
     } catch (e) {
-      debugPrint('WindowsPipChannel: enterPipMode error: $e');
+      ServiceLocator.log.d('WindowsPipChannel: enterPipMode error: $e');
       return false;
     }
   }
@@ -133,9 +134,9 @@ class WindowsPipChannel {
           await Future.delayed(const Duration(milliseconds: 200));
           try {
             await windowManager.setFullScreen(true);
-            debugPrint('WindowsPipChannel: 全屏状态已恢复');
+            ServiceLocator.log.d('WindowsPipChannel: 全屏状态已恢复');
           } catch (e) {
-            debugPrint('WindowsPipChannel: 恢复全屏失败: $e');
+            ServiceLocator.log.d('WindowsPipChannel: 恢复全屏失败: $e');
           }
         });
       }
@@ -144,10 +145,10 @@ class WindowsPipChannel {
       _isPinned = false;
       pipModeNotifier.value = false; // 通知状态变化
       
-      debugPrint('WindowsPipChannel: 退出迷你模式');
+      ServiceLocator.log.d('WindowsPipChannel: 退出迷你模式');
       return true;
     } catch (e) {
-      debugPrint('WindowsPipChannel: exitPipMode error: $e');
+      ServiceLocator.log.d('WindowsPipChannel: exitPipMode error: $e');
       return false;
     }
   }
@@ -168,10 +169,10 @@ class WindowsPipChannel {
     try {
       _isPinned = !_isPinned;
       await windowManager.setAlwaysOnTop(_isPinned);
-      debugPrint('WindowsPipChannel: 置顶状态: $_isPinned');
+      ServiceLocator.log.d('WindowsPipChannel: 置顶状态: $_isPinned');
       return true;
     } catch (e) {
-      debugPrint('WindowsPipChannel: togglePin error: $e');
+      ServiceLocator.log.d('WindowsPipChannel: togglePin error: $e');
       return false;
     }
   }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/services/service_locator.dart';
+import '../../../core/services/log_service.dart';
 
 class SettingsProvider extends ChangeNotifier {
   // Keys for SharedPreferences
@@ -9,6 +11,7 @@ class SettingsProvider extends ChangeNotifier {
   static const String _keyDefaultQuality = 'default_quality';
   static const String _keyHardwareDecoding = 'hardware_decoding';
   static const String _keyDecodingMode = 'decoding_mode'; // New: auto, hardware, software
+  static const String _keyChannelMergeRule = 'channel_merge_rule'; // New: name, name_group
   static const String _keyBufferSize = 'buffer_size';
   static const String _keyLastPlaylistId = 'last_playlist_id';
   static const String _keyEnableEpg = 'enable_epg';
@@ -26,15 +29,22 @@ class SettingsProvider extends ChangeNotifier {
   static const String _keyShowClock = 'show_clock';
   static const String _keyShowNetworkSpeed = 'show_network_speed';
   static const String _keyShowVideoInfo = 'show_video_info';
+  static const String _keyProgressBarMode = 'progress_bar_mode'; // auto, always, never
   static const String _keyEnableMultiScreen = 'enable_multi_screen';
   static const String _keyDefaultScreenPosition = 'default_screen_position';
   static const String _keyActiveScreenIndex = 'active_screen_index';
   static const String _keyLastPlayMode = 'last_play_mode'; // 'single' or 'multi'
   static const String _keyLastMultiScreenChannels = 'last_multi_screen_channels'; // JSON string of channel IDs
+  static const String _keyShowMultiScreenChannelName = 'show_multi_screen_channel_name'; // 多屏播放是否显示频道名称
   static const String _keyDarkColorScheme = 'dark_color_scheme';
   static const String _keyLightColorScheme = 'light_color_scheme';
   static const String _keyFontFamily = 'font_family';
   static const String _keySimpleMenu = 'simple_menu';
+  static const String _keyLogLevel = 'log_level'; // debug, release, off
+  static const String _keyMobileOrientation = 'mobile_orientation'; // portrait, landscape, auto
+  static const String _keyLastAppVersion = 'last_app_version'; // 用于检测版本更新
+  static const String _keyShowWatchHistoryOnHome = 'show_watch_history_on_home'; // 首页是否显示观看记录
+  static const String _keyShowFavoritesOnHome = 'show_favorites_on_home'; // 首页是否显示收藏夹
 
   // Settings values
   String _themeMode = 'dark';
@@ -43,6 +53,7 @@ class SettingsProvider extends ChangeNotifier {
   String _defaultQuality = 'auto';
   bool _hardwareDecoding = true;
   String _decodingMode = 'auto'; // New: auto, hardware, software
+  String _channelMergeRule = 'name_group'; // New: name, name_group
   int _bufferSize = 30; // seconds
   int? _lastPlaylistId;
   bool _enableEpg = true;
@@ -60,15 +71,21 @@ class SettingsProvider extends ChangeNotifier {
   bool _showClock = true; // 默认显示时间
   bool _showNetworkSpeed = true; // 默认显示网速
   bool _showVideoInfo = true; // 默认显示分辨率码率
+  String _progressBarMode = 'auto'; // 进度条显示模式：auto, always, never
   bool _enableMultiScreen = true; // 默认开启分屏
   int _defaultScreenPosition = 1; // 默认播放位置（左上角）
   int _activeScreenIndex = 0; // 当前活动窗口索引
   String _lastPlayMode = 'single'; // 上次播放模式：'single' 或 'multi'
   List<int?> _lastMultiScreenChannels = [null, null, null, null]; // 分屏频道ID列表
+  bool _showMultiScreenChannelName = false; // 多屏播放是否显示频道名称（默认关闭）
   String _darkColorScheme = 'ocean'; // 黑暗模式配色方案（默认海洋）
   String _lightColorScheme = 'sky'; // 明亮模式配色方案（默认天空）
   String _fontFamily = 'Arial'; // 字体设置（默认Arial，英文环境）
   bool _simpleMenu = true; // 是否使用简单菜单栏（不展开）- 默认启用
+  String _logLevel = 'off'; // 日志级别：debug, release, off - 默认关闭
+  String _mobileOrientation = 'portrait'; // 手机端屏幕方向：portrait, landscape, auto - 默认竖屏
+  bool _showWatchHistoryOnHome = false; // 首页是否显示观看记录 - 默认不显示
+  bool _showFavoritesOnHome = false; // 首页是否显示收藏夹 - 默认不显示
 
   // Getters
   String get themeMode => _themeMode;
@@ -77,6 +94,7 @@ class SettingsProvider extends ChangeNotifier {
   String get defaultQuality => _defaultQuality;
   bool get hardwareDecoding => _hardwareDecoding;
   String get decodingMode => _decodingMode;
+  String get channelMergeRule => _channelMergeRule;
   int get bufferSize => _bufferSize;
   int? get lastPlaylistId => _lastPlaylistId;
   bool get enableEpg => _enableEpg;
@@ -93,15 +111,21 @@ class SettingsProvider extends ChangeNotifier {
   bool get showClock => _showClock;
   bool get showNetworkSpeed => _showNetworkSpeed;
   bool get showVideoInfo => _showVideoInfo;
+  String get progressBarMode => _progressBarMode;
   bool get enableMultiScreen => _enableMultiScreen;
   int get defaultScreenPosition => _defaultScreenPosition;
   int get activeScreenIndex => _activeScreenIndex;
   String get lastPlayMode => _lastPlayMode;
   List<int?> get lastMultiScreenChannels => _lastMultiScreenChannels;
+  bool get showMultiScreenChannelName => _showMultiScreenChannelName;
   String get darkColorScheme => _darkColorScheme;
   String get lightColorScheme => _lightColorScheme;
   String get fontFamily => _fontFamily;
   bool get simpleMenu => _simpleMenu;
+  String get logLevel => _logLevel;
+  String get mobileOrientation => _mobileOrientation;
+  bool get showWatchHistoryOnHome => _showWatchHistoryOnHome;
+  bool get showFavoritesOnHome => _showFavoritesOnHome;
   
   /// 获取当前应该使用的配色方案
   String get currentColorScheme {
@@ -114,6 +138,7 @@ class SettingsProvider extends ChangeNotifier {
 
   SettingsProvider() {
     _loadSettings();
+    _checkVersionUpdate();
   }
 
   void _loadSettings() {
@@ -125,6 +150,7 @@ class SettingsProvider extends ChangeNotifier {
     _defaultQuality = prefs.getString(_keyDefaultQuality) ?? 'auto';
     _hardwareDecoding = prefs.getBool(_keyHardwareDecoding) ?? true;
     _decodingMode = prefs.getString(_keyDecodingMode) ?? 'auto';
+    _channelMergeRule = prefs.getString(_keyChannelMergeRule) ?? 'name_group';
     _bufferSize = prefs.getInt(_keyBufferSize) ?? 30;
     _lastPlaylistId = prefs.getInt(_keyLastPlaylistId);
     _enableEpg = prefs.getBool(_keyEnableEpg) ?? true;
@@ -147,10 +173,13 @@ class SettingsProvider extends ChangeNotifier {
     _showClock = prefs.getBool(_keyShowClock) ?? true;
     _showNetworkSpeed = prefs.getBool(_keyShowNetworkSpeed) ?? true;
     _showVideoInfo = prefs.getBool(_keyShowVideoInfo) ?? true;
+    _progressBarMode = prefs.getString(_keyProgressBarMode) ?? 'auto';
     _enableMultiScreen = prefs.getBool(_keyEnableMultiScreen) ?? true;
     _defaultScreenPosition = prefs.getInt(_keyDefaultScreenPosition) ?? 1;
     _activeScreenIndex = prefs.getInt(_keyActiveScreenIndex) ?? 0;
     _lastPlayMode = prefs.getString(_keyLastPlayMode) ?? 'single';
+    _showMultiScreenChannelName = prefs.getBool(_keyShowMultiScreenChannelName) ?? false;
+    ServiceLocator.log.d('SettingsProvider: loaded showMultiScreenChannelName=$_showMultiScreenChannelName');
     
     // 加载分屏频道ID列表
     final multiScreenChannelsJson = prefs.getString(_keyLastMultiScreenChannels);
@@ -178,7 +207,45 @@ class SettingsProvider extends ChangeNotifier {
     // 加载简单菜单设置
     _simpleMenu = prefs.getBool(_keySimpleMenu) ?? true;
     
+    // 加载日志级别设置
+    _logLevel = prefs.getString(_keyLogLevel) ?? 'off';
+    
+    // 加载手机端屏幕方向设置
+    _mobileOrientation = prefs.getString(_keyMobileOrientation) ?? 'portrait';
+    
+    // 加载首页显示设置
+    _showWatchHistoryOnHome = prefs.getBool(_keyShowWatchHistoryOnHome) ?? false;
+    _showFavoritesOnHome = prefs.getBool(_keyShowFavoritesOnHome) ?? false;
+    
     // 不在构造函数中调用 notifyListeners()，避免 build 期间触发重建
+  }
+
+  /// 检测版本更新，如果版本更新则自动关闭开发者日志
+  Future<void> _checkVersionUpdate() async {
+    try {
+      final prefs = ServiceLocator.prefs;
+      final lastVersion = prefs.getString(_keyLastAppVersion);
+      
+      // 获取当前版本号
+      final packageInfo = await PackageInfo.fromPlatform();
+      final currentVersion = packageInfo.version;
+      
+      // 如果版本不同，说明应用更新了
+      if (lastVersion != null && lastVersion != currentVersion) {
+        ServiceLocator.log.d('检测到版本更新: $lastVersion → $currentVersion');
+        
+        // 自动关闭开发者日志
+        if (_logLevel != 'off') {
+          ServiceLocator.log.d('自动关闭开发者日志');
+          await setLogLevel('off');
+        }
+      }
+      
+      // 保存当前版本号
+      await prefs.setString(_keyLastAppVersion, currentVersion);
+    } catch (e) {
+      ServiceLocator.log.e('版本检测失败: $e');
+    }
   }
 
   Future<void> _saveSettings() async {
@@ -190,6 +257,7 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setString(_keyDefaultQuality, _defaultQuality);
     await prefs.setBool(_keyHardwareDecoding, _hardwareDecoding);
     await prefs.setString(_keyDecodingMode, _decodingMode);
+    await prefs.setString(_keyChannelMergeRule, _channelMergeRule);
     await prefs.setInt(_keyBufferSize, _bufferSize);
     if (_lastPlaylistId != null) {
       await prefs.setInt(_keyLastPlaylistId, _lastPlaylistId!);
@@ -219,15 +287,21 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setBool(_keyShowClock, _showClock);
     await prefs.setBool(_keyShowNetworkSpeed, _showNetworkSpeed);
     await prefs.setBool(_keyShowVideoInfo, _showVideoInfo);
+    await prefs.setString(_keyProgressBarMode, _progressBarMode);
     await prefs.setBool(_keyEnableMultiScreen, _enableMultiScreen);
     await prefs.setInt(_keyDefaultScreenPosition, _defaultScreenPosition);
     await prefs.setInt(_keyActiveScreenIndex, _activeScreenIndex);
     await prefs.setString(_keyLastPlayMode, _lastPlayMode);
     await prefs.setString(_keyLastMultiScreenChannels, _lastMultiScreenChannels.map((e) => e?.toString() ?? '').join(','));
+    await prefs.setBool(_keyShowMultiScreenChannelName, _showMultiScreenChannelName);
     await prefs.setString(_keyDarkColorScheme, _darkColorScheme);
     await prefs.setString(_keyLightColorScheme, _lightColorScheme);
     await prefs.setString(_keyFontFamily, _fontFamily);
     await prefs.setBool(_keySimpleMenu, _simpleMenu);
+    await prefs.setString(_keyLogLevel, _logLevel);
+    await prefs.setString(_keyMobileOrientation, _mobileOrientation);
+    await prefs.setBool(_keyShowWatchHistoryOnHome, _showWatchHistoryOnHome);
+    await prefs.setBool(_keyShowFavoritesOnHome, _showFavoritesOnHome);
   }
 
   // Setters with persistence
@@ -265,6 +339,12 @@ class SettingsProvider extends ChangeNotifier {
     _decodingMode = mode;
     // Also update hardwareDecoding based on mode for backward compatibility
     _hardwareDecoding = mode != 'software';
+    await _saveSettings();
+    notifyListeners();
+  }
+
+  Future<void> setChannelMergeRule(String rule) async {
+    _channelMergeRule = rule;
     await _saveSettings();
     notifyListeners();
   }
@@ -375,6 +455,14 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setProgressBarMode(String mode) async {
+    if (mode == 'auto' || mode == 'always' || mode == 'never') {
+      _progressBarMode = mode;
+      await _saveSettings();
+      notifyListeners();
+    }
+  }
+
   Future<void> setEnableMultiScreen(bool enabled) async {
     _enableMultiScreen = enabled;
     await _saveSettings();
@@ -389,6 +477,14 @@ class SettingsProvider extends ChangeNotifier {
 
   Future<void> setActiveScreenIndex(int index) async {
     _activeScreenIndex = index.clamp(0, 3);
+    await _saveSettings();
+    notifyListeners();
+  }
+
+  /// 设置多屏播放是否显示频道名称
+  Future<void> setShowMultiScreenChannelName(bool show) async {
+    ServiceLocator.log.d('SettingsProvider: setShowMultiScreenChannelName($show)');
+    _showMultiScreenChannelName = show;
     await _saveSettings();
     notifyListeners();
   }
@@ -439,25 +535,25 @@ class SettingsProvider extends ChangeNotifier {
   
   /// 设置黑暗模式配色方案
   Future<void> setDarkColorScheme(String scheme) async {
-    debugPrint('SettingsProvider: 设置黑暗配色方案 - $scheme');
+    ServiceLocator.log.d('SettingsProvider: 设置黑暗配色方案 - $scheme');
     _darkColorScheme = scheme;
     await _saveSettings();
-    debugPrint('SettingsProvider: 配色方案已保存，通知监听者');
+    ServiceLocator.log.d('SettingsProvider: 配色方案已保存，通知监听者');
     notifyListeners();
   }
   
   /// 设置明亮模式配色方案
   Future<void> setLightColorScheme(String scheme) async {
-    debugPrint('SettingsProvider: 设置明亮配色方案 - $scheme');
+    ServiceLocator.log.d('SettingsProvider: 设置明亮配色方案 - $scheme');
     _lightColorScheme = scheme;
     await _saveSettings();
-    debugPrint('SettingsProvider: 配色方案已保存，通知监听者');
+    ServiceLocator.log.d('SettingsProvider: 配色方案已保存，通知监听者');
     notifyListeners();
   }
 
   /// 设置字体
   Future<void> setFontFamily(String fontFamily) async {
-    debugPrint('SettingsProvider: 设置字体 - $fontFamily');
+    ServiceLocator.log.d('SettingsProvider: 设置字体 - $fontFamily');
     _fontFamily = fontFamily;
     await _saveSettings();
     notifyListeners();
@@ -465,8 +561,62 @@ class SettingsProvider extends ChangeNotifier {
 
   /// 设置简单菜单栏
   Future<void> setSimpleMenu(bool value) async {
-    debugPrint('SettingsProvider: 设置简单菜单栏 - $value');
+    ServiceLocator.log.d('SettingsProvider: 设置简单菜单栏 - $value');
     _simpleMenu = value;
+    await _saveSettings();
+    notifyListeners();
+  }
+
+  /// 设置日志级别
+  Future<void> setLogLevel(String level) async {
+    debugPrint('SettingsProvider: 开始设置日志级别 - $level');
+    _logLevel = level;
+    await _saveSettings();
+    
+    // 更新日志服务
+    final logLevel = switch (level) {
+      'debug' => LogLevel.debug,
+      'release' => LogLevel.release,
+      'off' => LogLevel.off,
+      _ => LogLevel.release,
+    };
+    
+    debugPrint('SettingsProvider: 调用 ServiceLocator.log.setLogLevel($logLevel)');
+    await ServiceLocator.log.setLogLevel(logLevel);
+    
+    // 写入测试日志
+    debugPrint('SettingsProvider: 写入测试日志...');
+    ServiceLocator.log.d('测试日志：日志级别已切换到 $level');
+    ServiceLocator.log.i('测试日志：Info 级别');
+    ServiceLocator.log.w('测试日志：Warning 级别');
+    
+    // 强制刷新日志缓冲区
+    await ServiceLocator.log.flush();
+    debugPrint('SettingsProvider: 日志缓冲区已刷新');
+    
+    notifyListeners();
+  }
+
+  /// 设置手机端屏幕方向
+  Future<void> setMobileOrientation(String orientation) async {
+    ServiceLocator.log.d('SettingsProvider: 设置手机端屏幕方向 - $orientation');
+    _mobileOrientation = orientation;
+    await _saveSettings();
+    notifyListeners();
+  }
+
+  /// 设置首页是否显示观看记录
+  Future<void> setShowWatchHistoryOnHome(bool show) async {
+    ServiceLocator.log.d('SettingsProvider: 设置首页显示观看记录 - $show');
+    _showWatchHistoryOnHome = show;
+    await _saveSettings();
+    notifyListeners();
+  }
+
+  /// 设置首页是否显示收藏夹
+  Future<void> setShowFavoritesOnHome(bool show) async {
+    ServiceLocator.log.d('SettingsProvider: 设置首页显示收藏夹 - $show');
+    _showFavoritesOnHome = show;
     await _saveSettings();
     notifyListeners();
   }
@@ -478,6 +628,7 @@ class SettingsProvider extends ChangeNotifier {
     _refreshInterval = 24;
     _defaultQuality = 'auto';
     _hardwareDecoding = true;
+    _channelMergeRule = 'name_group';
     _bufferSize = 30;
     _enableEpg = true;
     _epgUrl = null;
@@ -492,6 +643,7 @@ class SettingsProvider extends ChangeNotifier {
     _showClock = true;
     _showNetworkSpeed = true;
     _showVideoInfo = true;
+    _progressBarMode = 'auto';
     _enableMultiScreen = true;
     _defaultScreenPosition = 1;
     _activeScreenIndex = 0;
@@ -500,6 +652,11 @@ class SettingsProvider extends ChangeNotifier {
     _fontFamily = 'Arial';
 
     await _saveSettings();
+    
+    // 重置日志级别为关闭（性能优化）
+    await ServiceLocator.prefs.setString('log_level', 'off');
+    await ServiceLocator.log.setLogLevel(LogLevel.off);
+    
     notifyListeners();
   }
 }

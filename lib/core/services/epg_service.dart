@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
 import 'package:flutter/foundation.dart';
+import './service_locator.dart';
 
 /// EPG 节目信息
 class EpgProgram {
@@ -138,7 +140,9 @@ class EpgService {
     final startOfDay = DateTime.utc(today.year, today.month, today.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
 
-    return programs.where((p) => p.start.isAfter(startOfDay) && p.start.isBefore(endOfDay)).toList();
+    return programs
+        .where((p) => p.start.isAfter(startOfDay) && p.start.isBefore(endOfDay))
+        .toList();
   }
 
   /// 获取频道指定时区的节目列表（时间范围：前5天到后2天）
@@ -170,7 +174,9 @@ class EpgService {
     }
 
     // 先用 channelId 查找
-    if (channelId != null && channelId.isNotEmpty && _programs.containsKey(channelId)) {
+    if (channelId != null &&
+        channelId.isNotEmpty &&
+        _programs.containsKey(channelId)) {
       _lookupCache[cacheKey] = channelId;
       return _programs[channelId];
     }
@@ -178,12 +184,13 @@ class EpgService {
     // 用频道名称索引快速查找
     if (channelName != null && channelName.isNotEmpty) {
       final normalizedName = _normalizeName(channelName);
+
       if (_nameIndex.containsKey(normalizedName)) {
         final foundId = _nameIndex[normalizedName]!;
         _lookupCache[cacheKey] = foundId;
         return _programs[foundId];
       }
-      
+
       // 尝试用 channelId 作为名称查找
       if (channelId != null && channelId.isNotEmpty) {
         final normalizedId = _normalizeName(channelId);
@@ -200,9 +207,52 @@ class EpgService {
     return null;
   }
 
+  /// 规范化频道名称，用于智能匹配
+  /// 参考台标服务的匹配逻辑
   String _normalizeName(String name) {
-    // 保留 + 号，因为 CCTV5 和 CCTV5+ 是不同的频道
-    return name.toLowerCase().replaceAll(RegExp(r'[^\w\u4e00-\u9fa5+]'), '').replaceAll('hd', '').replaceAll('高清', '').replaceAll('标清', '').replaceAll('超清', '');
+    String normalized = name.toUpperCase();
+
+    // 1. 先去除空格、横线、下划线（保留 + 号），统一格式
+    normalized = normalized.replaceAll(RegExp(r'[-\s_]+'), '');
+
+    // 2. 特殊处理：CCTV01 -> CCTV1
+    normalized = normalized.replaceAllMapped(
+      RegExp(r'CCTV0*(\d+)'),
+      (match) => 'CCTV${match.group(1)}',
+    );
+
+    // 3. 去除英文后缀
+    normalized = normalized.replaceAll(RegExp(r'(HD|4K|8K|FHD|UHD|SD)'), '');
+
+    // 4. 去除中文后缀（匹配末尾的修饰词）
+    normalized = normalized.replaceAll(
+      RegExp(r'(高清|超清|蓝光|高码率|低码率|标清|频道)$'),
+      '',
+    );
+
+    // 5. 特殊处理 CCTV 频道：去除中文描述（如 CCTV1综合 -> CCTV1）
+    normalized = normalized.replaceAllMapped(
+      RegExp(r'(CCTV\d+\+?)[\u4e00-\u9fa5]+'),
+      (match) => match.group(1)!,
+    );
+
+    // 6. 特殊处理：保留"卫视"
+    if (!normalized.endsWith('卫视') && name.toUpperCase().contains('卫视')) {
+      // 如果原名包含卫视但被去掉了，加回来
+      final wsMatch = RegExp(r'(.+?)卫视')
+          .firstMatch(name.toUpperCase().replaceAll(RegExp(r'[-\s_]+'), ''));
+      if (wsMatch != null) {
+        normalized = '${wsMatch.group(1)!}卫视';
+      }
+    }
+
+    // 7. 去除卫视后缀的修饰词
+    normalized = normalized.replaceAll(
+      RegExp(r'(卫视)(高清|超清)$'),
+      r'$1',
+    );
+
+    return normalized;
   }
 
   /// 从 URL 加载 EPG 数据
@@ -211,46 +261,46 @@ class EpgService {
     _isLoading = true;
 
     try {
-      debugPrint('EPG: Loading from $url');
+      ServiceLocator.log.d('EPG: Loading from $url');
 
       final response = await http.get(Uri.parse(url)).timeout(
             const Duration(seconds: 30),
           );
 
       if (response.statusCode != 200) {
-        debugPrint('EPG: HTTP error ${response.statusCode}');
+        ServiceLocator.log.d('EPG: HTTP error ${response.statusCode}');
         return false;
       }
 
-      String content;
-
-      // 检查是否是 gzip 压缩
-      if (url.endsWith('.gz')) {
-        final decompressed = GZipCodec().decode(response.bodyBytes);
-        content = _decodeContent(decompressed);
-      } else {
-        content = _decodeContent(response.bodyBytes);
-      }
-
       // 在后台 isolate 中解析 XML，避免阻塞 UI
-      final result = await compute(_parseXmlTvInBackground, content);
+      final computeData = {
+        'bytes': response.bodyBytes,
+        'isGzip': url.endsWith('.gz'),
+      };
+
+      final result = await compute(_parseXmlTvInBackground, computeData);
+
       if (result != null) {
-        _programs.clear();
-        _channelNames.clear();
-        _nameIndex.clear();
-        _lookupCache.clear();
+        // Use scheduleMicrotask to ensure we're on the main thread
+        scheduleMicrotask(() {
+          _programs.clear();
+          _channelNames.clear();
+          _nameIndex.clear();
+          _lookupCache.clear();
 
-        _programs.addAll(result['programs'] as Map<String, List<EpgProgram>>);
-        _channelNames.addAll(result['channelNames'] as Map<String, String>);
-        _nameIndex.addAll(result['nameIndex'] as Map<String, String>);
+          _programs.addAll(result['programs'] as Map<String, List<EpgProgram>>);
+          _channelNames.addAll(result['channelNames'] as Map<String, String>);
+          _nameIndex.addAll(result['nameIndex'] as Map<String, String>);
 
-        _lastUpdate = DateTime.now();
-        debugPrint('EPG: Loaded ${_programs.length} channels, ${_programs.values.fold(0, (sum, list) => sum + list.length)} programs');
+          _lastUpdate = DateTime.now();
+          ServiceLocator.log.d(
+              'EPG: Loaded ${_programs.length} channels, ${_programs.values.fold(0, (sum, list) => sum + list.length)} programs');
+        });
         return true;
       }
       return false;
     } catch (e) {
-      debugPrint('EPG: Error loading: $e');
+      ServiceLocator.log.d('EPG: Error loading: $e');
       return false;
     } finally {
       _isLoading = false;
@@ -258,8 +308,20 @@ class EpgService {
   }
 
   /// 在后台 isolate 中解析 XML
-  static Map<String, dynamic>? _parseXmlTvInBackground(String content) {
+  static Map<String, dynamic>? _parseXmlTvInBackground(
+      Map<String, dynamic> data) {
     try {
+      final bytes = data['bytes'] as List<int>;
+      final isGzip = data['isGzip'] as bool;
+
+      String content;
+      if (isGzip) {
+        final decompressed = GZipCodec().decode(bytes);
+        content = _decodeContentStatic(decompressed);
+      } else {
+        content = _decodeContentStatic(bytes);
+      }
+
       final document = XmlDocument.parse(content);
       final tv = document.findElements('tv').firstOrNull;
       if (tv == null) return null;
@@ -276,9 +338,10 @@ class EpgService {
         // 支持两种格式：
         // 1. <channel id="11"><display-name>CCTV1</display-name></channel>
         // 2. <channel id="11" display-name="CCTV1"></channel>
-        var displayName = channel.findElements('display-name').firstOrNull?.innerText;
+        var displayName =
+            channel.findElements('display-name').firstOrNull?.innerText;
         displayName ??= channel.getAttribute('display-name');
-        
+
         if (displayName != null) {
           channelNames[id] = displayName;
           nameIndex[_normalizeNameStatic(displayName)] = id;
@@ -289,7 +352,7 @@ class EpgService {
       // 解析节目 (支持 programme 和 program 两种标签)
       final programmes = tv.findElements('programme').toList();
       programmes.addAll(tv.findElements('program'));
-      
+
       for (final programme in programmes) {
         final channelId = programme.getAttribute('channel');
         final startStr = programme.getAttribute('start');
@@ -301,9 +364,11 @@ class EpgService {
         final end = _parseDateTimeStatic(stopStr);
         if (start == null || end == null) continue;
 
-        final title = programme.findElements('title').firstOrNull?.innerText ?? '';
+        final title =
+            programme.findElements('title').firstOrNull?.innerText ?? '';
         final desc = programme.findElements('desc').firstOrNull?.innerText;
-        final category = programme.findElements('category').firstOrNull?.innerText;
+        final category =
+            programme.findElements('category').firstOrNull?.innerText;
 
         final program = EpgProgram(
           channelId: channelId,
@@ -332,9 +397,52 @@ class EpgService {
     }
   }
 
+  /// 规范化频道名称（静态版本，用于 isolate）
+  /// 参考台标服务的匹配逻辑
   static String _normalizeNameStatic(String name) {
-    // 保留 + 号，因为 CCTV5 和 CCTV5+ 是不同的频道
-    return name.toLowerCase().replaceAll(RegExp(r'[^\w\u4e00-\u9fa5+]'), '').replaceAll('hd', '').replaceAll('高清', '').replaceAll('标清', '').replaceAll('超清', '');
+    String normalized = name.toUpperCase();
+
+    // 1. 先去除空格、横线、下划线（保留 + 号），统一格式
+    normalized = normalized.replaceAll(RegExp(r'[-\s_]+'), '');
+
+    // 2. 特殊处理：CCTV01 -> CCTV1
+    normalized = normalized.replaceAllMapped(
+      RegExp(r'CCTV0*(\d+)'),
+      (match) => 'CCTV${match.group(1)}',
+    );
+
+    // 3. 去除英文后缀
+    normalized = normalized.replaceAll(RegExp(r'(HD|4K|8K|FHD|UHD|SD)'), '');
+
+    // 4. 去除中文后缀（匹配末尾的修饰词）
+    normalized = normalized.replaceAll(
+      RegExp(r'(高清|超清|蓝光|高码率|低码率|标清|频道)$'),
+      '',
+    );
+
+    // 5. 特殊处理 CCTV 频道：去除中文描述（如 CCTV1综合 -> CCTV1）
+    normalized = normalized.replaceAllMapped(
+      RegExp(r'(CCTV\d+\+?)[\u4e00-\u9fa5]+'),
+      (match) => match.group(1)!,
+    );
+
+    // 6. 特殊处理：保留"卫视"
+    if (!normalized.endsWith('卫视') && name.toUpperCase().contains('卫视')) {
+      // 如果原名包含卫视但被去掉了，加回来
+      final wsMatch = RegExp(r'(.+?)卫视')
+          .firstMatch(name.toUpperCase().replaceAll(RegExp(r'[-\s_]+'), ''));
+      if (wsMatch != null) {
+        normalized = '${wsMatch.group(1)!}卫视';
+      }
+    }
+
+    // 7. 去除卫视后缀的修饰词
+    normalized = normalized.replaceAll(
+      RegExp(r'(卫视)(高清|超清)$'),
+      r'$1',
+    );
+
+    return normalized;
   }
 
   static DateTime? _parseDateTimeStatic(String str) {
@@ -403,13 +511,13 @@ class EpgService {
     }
   }
 
-  /// 智能解码内容，支持 UTF-8 和 GBK
-  String _decodeContent(List<int> bytes) {
+  /// 智能解码内容，支持 UTF-8 和 GBK (Static version for isolate)
+  static String _decodeContentStatic(List<int> bytes) {
     // 先尝试 UTF-8
     try {
       final content = utf8.decode(bytes);
       // 检查是否有乱码（常见的 UTF-8 解码 GBK 的特征）
-      if (!content.contains('�') && !_hasGarbledChinese(content)) {
+      if (!content.contains('') && !_hasGarbledChineseStatic(content)) {
         return content;
       }
     } catch (_) {}
@@ -419,7 +527,10 @@ class EpgService {
     try {
       final latin1Content = latin1.decode(bytes);
       // 检查 XML 声明中的编码
-      if (latin1Content.contains('encoding="gb2312"') || latin1Content.contains('encoding="gbk"') || latin1Content.contains('encoding="GB2312"') || latin1Content.contains('encoding="GBK"')) {
+      if (latin1Content.contains('encoding="gb2312"') ||
+          latin1Content.contains('encoding="gbk"') ||
+          latin1Content.contains('encoding="GB2312"') ||
+          latin1Content.contains('encoding="GBK"')) {
         // 需要 GBK 解码，但 Dart 不支持，尝试用 UTF-8 with allowMalformed
         return utf8.decode(bytes, allowMalformed: true);
       }
@@ -429,9 +540,23 @@ class EpgService {
     return utf8.decode(bytes, allowMalformed: true);
   }
 
-  bool _hasGarbledChinese(String content) {
+  static bool _hasGarbledChineseStatic(String content) {
     // 检查是否有常见的乱码模式
-    final garbledPatterns = ['å', 'ä', 'ã', 'æ', 'ç', 'è', 'é', 'ê', 'ë', 'ì', 'í', 'î', 'ï'];
+    final garbledPatterns = [
+      'å',
+      'ä',
+      'ã',
+      'æ',
+      'ç',
+      'è',
+      'é',
+      'ê',
+      'ë',
+      'ì',
+      'í',
+      'î',
+      'ï'
+    ];
     int count = 0;
     for (final pattern in garbledPatterns) {
       if (content.contains(pattern)) count++;

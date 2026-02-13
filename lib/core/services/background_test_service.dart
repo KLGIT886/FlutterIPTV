@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import '../models/channel.dart';
 import 'channel_test_service.dart';
+import './service_locator.dart';
 
 /// 后台测试状态
 enum BackgroundTestStatus {
@@ -94,7 +94,7 @@ class BackgroundTestService {
   /// 开始后台测试
   void startTest(List<Channel> channels) {
     if (_status == BackgroundTestStatus.running) {
-      debugPrint('后台测试已在运行中');
+      ServiceLocator.log.d('后台测试已在运行中');
       return;
     }
 
@@ -122,7 +122,7 @@ class BackgroundTestService {
         _notifyListeners();
       },
       onError: (e) {
-        debugPrint('后台测试出错: $e');
+        ServiceLocator.log.d('后台测试出错: $e');
         _status = BackgroundTestStatus.completed;
         _notifyListeners();
       },
@@ -132,7 +132,7 @@ class BackgroundTestService {
       },
     );
 
-    debugPrint('后台测试已启动，共 ${channels.length} 个频道');
+    ServiceLocator.log.d('后台测试已启动，共 ${channels.length} 个频道');
   }
 
   /// 停止后台测试
@@ -141,7 +141,7 @@ class BackgroundTestService {
     _subscription = null;
     _status = BackgroundTestStatus.cancelled;
     _notifyListeners();
-    debugPrint('后台测试已停止');
+    ServiceLocator.log.d('后台测试已停止');
   }
 
   /// 清除结果

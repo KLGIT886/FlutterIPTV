@@ -1,8 +1,8 @@
 import 'dart:ui';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'color_scheme_data.dart';
 import 'color_scheme_manager.dart';
+import '../services/service_locator.dart';
 
 class AppTheme {
   // Lotus Theme - Brand Colors
@@ -95,7 +95,9 @@ class AppTheme {
 
   static Color getFocusBackgroundColor(BuildContext context) {
     // 使用配色方案的主色，添加透明度作为焦点背景
-    return Theme.of(context).colorScheme.primary.withOpacity(0.1);
+    // 明亮主题需要更高的透明度才能看清
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Theme.of(context).colorScheme.primary.withOpacity(isDark ? 0.1 : 0.15);
   }
 
   // Lotus Gradient - 莲花渐变
@@ -210,7 +212,7 @@ class AppTheme {
   /// 根据字体名称获取fontFamily
   /// 使用项目内字体文件，确保所有平台一致
   static String? resolveFontFamily(String fontName) {
-    if (fontName == 'System' || fontName == null) {
+    if (fontName == 'System') {
       return null;
     }
     return fontMap[fontName];
@@ -699,14 +701,14 @@ extension AppThemeDynamic on AppTheme {
   /// 根据配色方案 ID 生成黑暗主题
   static ThemeData getDarkTheme(String schemeId, [String? fontFamily]) {
     final scheme = ColorSchemeManager.instance.getDarkScheme(schemeId);
-    debugPrint('AppTheme: 生成黑暗主题 - schemeId=$schemeId, primaryColor=${scheme.primaryColor}, secondaryColor=${scheme.secondaryColor}, fontFamily=$fontFamily');
+    // ServiceLocator.log.d('AppTheme: 生成黑暗主题 - schemeId=$schemeId, primaryColor=${scheme.primaryColor}, secondaryColor=${scheme.secondaryColor}, fontFamily=$fontFamily');
     return _buildDarkTheme(scheme, fontFamily);
   }
   
   /// 根据配色方案 ID 生成明亮主题
   static ThemeData getLightTheme(String schemeId, [String? fontFamily]) {
     final scheme = ColorSchemeManager.instance.getLightScheme(schemeId);
-    debugPrint('AppTheme: 生成明亮主题 - schemeId=$schemeId, primaryColor=${scheme.primaryColor}, secondaryColor=${scheme.secondaryColor}, fontFamily=$fontFamily');
+    // ServiceLocator.log.d('AppTheme: 生成明亮主题 - schemeId=$schemeId, primaryColor=${scheme.primaryColor}, secondaryColor=${scheme.secondaryColor}, fontFamily=$fontFamily');
     return _buildLightTheme(scheme, fontFamily);
   }
   
@@ -718,6 +720,10 @@ extension AppThemeDynamic on AppTheme {
       primaryColor: scheme.primaryColor,
       scaffoldBackgroundColor: AppTheme.backgroundColorDark,
       fontFamily: fontFamily,
+      hoverColor: scheme.primaryColor.withOpacity(0.08),
+      focusColor: scheme.primaryColor.withOpacity(0.12),
+      highlightColor: scheme.primaryColor.withOpacity(0.1),
+      splashColor: scheme.primaryColor.withOpacity(0.12),
       colorScheme: ColorScheme.dark(
         primary: scheme.primaryColor,
         secondary: scheme.secondaryColor,
@@ -822,6 +828,16 @@ extension AppThemeDynamic on AppTheme {
       dialogTheme: DialogThemeData(
         backgroundColor: AppTheme.cardColorDark,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusLarge)),
+        elevation: 8,
+        shadowColor: Colors.black54,
+      ),
+      listTileTheme: ListTileThemeData(
+        selectedTileColor: scheme.primaryColor.withOpacity(0.1),
+        selectedColor: scheme.primaryColor,
+        iconColor: AppTheme.textSecondaryDark,
+        textColor: AppTheme.textPrimaryDark,
+        tileColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusSmall)),
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppTheme.cardColorDark,
@@ -855,6 +871,10 @@ extension AppThemeDynamic on AppTheme {
       primaryColor: scheme.primaryColor,
       scaffoldBackgroundColor: bgColor,
       fontFamily: fontFamily,
+      hoverColor: scheme.primaryColor.withOpacity(0.12),
+      focusColor: scheme.primaryColor.withOpacity(0.15),
+      highlightColor: scheme.primaryColor.withOpacity(0.15),
+      splashColor: scheme.primaryColor.withOpacity(0.2),
       colorScheme: ColorScheme.light(
         primary: scheme.primaryColor,
         secondary: scheme.secondaryColor,
@@ -958,6 +978,16 @@ extension AppThemeDynamic on AppTheme {
       dialogTheme: DialogThemeData(
         backgroundColor: AppTheme.cardColorLight,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusLarge)),
+        elevation: 8,
+        shadowColor: Colors.black26,
+      ),
+      listTileTheme: ListTileThemeData(
+        selectedTileColor: scheme.primaryColor.withOpacity(0.15),
+        selectedColor: scheme.primaryColor,
+        iconColor: AppTheme.textSecondaryLight,
+        textColor: AppTheme.textPrimaryLight,
+        tileColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusSmall)),
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppTheme.cardColorLight,

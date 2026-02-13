@@ -200,20 +200,32 @@ jobs:
           TAG="${{ steps.version.outputs.TAG }}"
           BASE_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}"
           
-          # Get commits since last tag
-          PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -v "^${TAG}$" | head -1)
-          if [ -n "$PREV_TAG" ]; then
-            COMMITS=$(git log --pretty=format:"- %s" ${PREV_TAG}..${TAG} 2>/dev/null | grep -v "^- Merge" || echo "- Bug fixes and improvements")
+          # Read changelog from version.json
+          if [ -f "docs/version.json" ]; then
+            CHANGELOG_ZH=$(jq -r '.changelog.zh' docs/version.json | sed 's/\\n/\n/g')
+            CHANGELOG_EN=$(jq -r '.changelog.en' docs/version.json | sed 's/\\n/\n/g')
           else
-            COMMITS="- Initial release"
+            # Fallback to git commits if version.json not found
+            PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -v "^${TAG}$" | head -1)
+            if [ -n "$PREV_TAG" ]; then
+              CHANGELOG_ZH=$(git log --pretty=format:"- %s" ${PREV_TAG}..${TAG} 2>/dev/null | grep -v "^- Merge" || echo "- Bug fixes and improvements")
+              CHANGELOG_EN="${CHANGELOG_ZH}"
+            else
+              CHANGELOG_ZH="- 初始版本"
+              CHANGELOG_EN="- Initial release"
+            fi
           fi
           
           cat > release_notes.md << EOF
           ## 📺 FlutterIPTV ${VERSION}
           
-          ### 📝 更新内容
+          ### 📝 更新内容 What's New
           
-          ${COMMITS}
+          **中文 Chinese:**
+          ${CHANGELOG_ZH}
+          
+          **English:**
+          ${CHANGELOG_EN}
           
           ---
           

@@ -1,3 +1,11 @@
+/// Channel type enum
+enum ChannelType {
+  live,      // 直播
+  vod,       // 点播
+  replay,    // 回放
+  unknown,   // 未知
+}
+
 /// Represents an IPTV channel with multiple sources
 class Channel {
   final int? id;
@@ -18,6 +26,8 @@ class Channel {
   bool isCurrentlyPlaying;
   int currentSourceIndex; // Current playing source index
 
+  String? fallbackLogoUrl;
+
   Channel({
     this.id,
     required this.playlistId,
@@ -34,6 +44,7 @@ class Channel {
     this.isFavorite = false,
     this.isCurrentlyPlaying = false,
     this.currentSourceIndex = 0,
+    this.fallbackLogoUrl,
   }) : sources = sources ?? [url],
        createdAt = createdAt ?? DateTime.now();
 
@@ -49,8 +60,64 @@ class Channel {
   /// Get source count
   int get sourceCount => sources.length;
 
+  /// Determine channel type based on group name and URL
+  ChannelType get type {
+    final group = groupName?.toLowerCase() ?? '';
+    final urlLower = currentUrl.toLowerCase();
+    
+    // 回放关键词（优先级最高，因为回放也可能是 .mp4 文件）
+    if (group.contains('回放') || group.contains('replay') ||
+        group.contains('时移') || group.contains('catchup') ||
+        group.contains('回看')) {
+      return ChannelType.replay;
+    }
+    
+    // 点播关键词
+    if (group.contains('电影') || group.contains('movie') ||
+        group.contains('电视剧') || group.contains('series') || group.contains('剧集') ||
+        group.contains('音乐') || group.contains('music') || group.contains('mv') ||
+        group.contains('舞曲') || group.contains('dance') ||
+        group.contains('点播') || group.contains('vod') ||
+        group.contains('综艺') || group.contains('variety') ||
+        group.contains('动漫') || group.contains('anime') ||
+        group.contains('纪录片') || group.contains('documentary')) {
+      return ChannelType.vod;
+    }
+    
+    // URL 扩展名判断（点播文件）
+    if (urlLower.endsWith('.mp4') || urlLower.endsWith('.mkv') ||
+        urlLower.endsWith('.avi') || urlLower.endsWith('.mov') ||
+        urlLower.endsWith('.flv') || urlLower.endsWith('.wmv') ||
+        urlLower.endsWith('.m4v') || urlLower.endsWith('.3gp')) {
+      return ChannelType.vod;
+    }
+    
+    // 直播关键词
+    if (group.contains('直播') || group.contains('live') ||
+        group.contains('央视') || group.contains('cctv') ||
+        group.contains('卫视') || group.contains('频道') || 
+        group.contains('channel') || group.contains('tv')) {
+      return ChannelType.live;
+    }
+    
+    // URL 特征判断（直播流）
+    if (urlLower.contains('/live/') || urlLower.contains('live.') ||
+        urlLower.endsWith('.m3u8') || urlLower.contains('.m3u8?')) {
+      return ChannelType.live;
+    }
+    
+    return ChannelType.unknown;
+  }
+  
+  /// Check if channel is seekable (can use progress bar)
+  bool get isSeekable => type == ChannelType.vod || type == ChannelType.replay;
+  
+  /// Check if channel is live stream
+  bool get isLive => type == ChannelType.live;
+
   factory Channel.fromMap(Map<String, dynamic> map) {
     final logoUrl = map['logo_url'] as String?;
+    final fallbackLogoUrl = map['fallback_logo_url'] as String?;
     final url = map['url'] as String;
     
     // Parse sources from JSON string or use single URL
@@ -73,6 +140,7 @@ class Channel {
       url: url,
       sources: sources,
       logoUrl: logoUrl,
+      fallbackLogoUrl: fallbackLogoUrl,
       groupName: map['group_name'] as String?,
       epgId: map['epg_id'] as String?,
       catchupType: map['catchup_type'] as String?,
@@ -90,6 +158,7 @@ class Channel {
       'url': url,
       'sources': sources.join('|||'), // Store as delimiter-separated string
       'logo_url': logoUrl,
+      'fallback_logo_url': fallbackLogoUrl,
       'group_name': groupName,
       'epg_id': epgId,
       'catchup_type': catchupType,
@@ -116,6 +185,7 @@ class Channel {
     bool? isFavorite,
     bool? isCurrentlyPlaying,
     int? currentSourceIndex,
+    String? fallbackLogoUrl,
   }) {
     return Channel(
       id: id ?? this.id,
@@ -133,6 +203,7 @@ class Channel {
       isFavorite: isFavorite ?? this.isFavorite,
       isCurrentlyPlaying: isCurrentlyPlaying ?? this.isCurrentlyPlaying,
       currentSourceIndex: currentSourceIndex ?? this.currentSourceIndex,
+      fallbackLogoUrl: fallbackLogoUrl ?? this.fallbackLogoUrl,
     );
   }
 

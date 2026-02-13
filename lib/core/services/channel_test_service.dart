@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../models/channel.dart';
+import './service_locator.dart';
 
 /// 频道测试结果
 class ChannelTestResult {
@@ -41,7 +42,7 @@ class SourceTestResult {
 
 /// 频道测试服务
 class ChannelTestService {
-  static const int _timeout = 3; // 超时时间（秒）- 改为3秒
+  static const int _timeout = 3; // 超时时间（秒）
   static const int _maxConcurrent = 5; // 最大并发数
 
   /// 测试单个频道（测试所有源）
@@ -199,7 +200,7 @@ class ChannelTestService {
       final isAvailable = statusCode >= 200 && statusCode < 400;
 
       final contentType = response.headers.contentType?.toString() ?? '';
-      debugPrint('测试频道 ${channel.name}: HTTP $statusCode, Content-Type: $contentType');
+      ServiceLocator.log.d('测试频道 ${channel.name}: HTTP $statusCode, Content-Type: $contentType');
 
       return ChannelTestResult(
         channel: channel,

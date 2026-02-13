@@ -1,0 +1,7 @@
+blank_issues_enabled: true
+contact_links:
+  - name: ⚠️ 使用说明 / 法律声明
+    url: https://github.com/shnulaa/FlutterIPTV#免责声明
+    about: >
+      本项目仅为播放器，不提供任何 IPTV / M3U / 播放源。
+      Issue 中请勿索要、分享播放源或受版权保护的内容。

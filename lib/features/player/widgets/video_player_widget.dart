@@ -3,6 +3,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../../core/models/channel.dart';
+import '../../../core/services/service_locator.dart';
 
 class VideoPlayerWidget extends StatefulWidget {
   final Channel channel;
@@ -69,7 +70,7 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
     try {
       _player.open(Media(widget.channel.url));
     } catch (e) {
-      debugPrint('Error loading channel: $e');
+      ServiceLocator.log.d('Error loading channel: $e');
     }
   }
 

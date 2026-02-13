@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../../../core/services/epg_service.dart';
 import '../../../core/services/service_locator.dart';
@@ -15,6 +16,7 @@ class EpgProvider extends ChangeNotifier {
   bool get hasData => _epgService.lastUpdate != null;
 
   EpgProvider() {
+    // Load EPG in background without blocking
     _loadEpgIfEnabled();
   }
 
@@ -24,50 +26,67 @@ class EpgProvider extends ChangeNotifier {
     final url = prefs.getString('epg_url');
 
     if (enabled && url != null && url.isNotEmpty) {
-      await loadEpg(url);
+      // Load in background, don't await
+      loadEpg(url).then((_) {
+        ServiceLocator.log.d('EPG: Background loading completed');
+      }).catchError((e) {
+        ServiceLocator.log.w('EPG: Background loading failed: $e');
+      });
     }
   }
 
-  Future<bool> loadEpg(String url, {String? fallbackUrl}) async {
-    if (_isLoading) return false;
+  Future<bool> loadEpg(String url, {String? fallbackUrl, bool silent = true}) async {
+    // Don't block if already loading
+    if (_isLoading) {
+      ServiceLocator.log.d('EPG: Already loading, skipping');
+      return false;
+    }
 
     _isLoading = true;
     _error = null;
-    notifyListeners();
+    
+    // Only notify if not silent (user-initiated refresh)
+    if (!silent) {
+      notifyListeners();
+    }
 
+    bool success = false;
+    
     try {
       // Try primary URL first
-      debugPrint('EPG: Attempting to load from primary URL: $url');
-      final success = await _epgService.loadFromUrl(url);
+      ServiceLocator.log.d('EPG: Attempting to load from primary URL: $url');
+      success = await _epgService.loadFromUrl(url);
       
       if (success) {
         _lastUpdate = DateTime.now();
-        debugPrint('EPG: Successfully loaded from primary URL');
-        return true;
-      }
-      
-      // If primary failed and fallback is available, try fallback
-      if (fallbackUrl != null && fallbackUrl.isNotEmpty && fallbackUrl != url) {
-        debugPrint('EPG: Primary URL failed, trying fallback URL: $fallbackUrl');
-        final fallbackSuccess = await _epgService.loadFromUrl(fallbackUrl);
+        ServiceLocator.log.d('EPG: Successfully loaded from primary URL');
+      } else if (fallbackUrl != null && fallbackUrl.isNotEmpty && fallbackUrl != url) {
+        // If primary failed and fallback is available, try fallback
+        ServiceLocator.log.d('EPG: Primary URL failed, trying fallback URL: $fallbackUrl');
+        success = await _epgService.loadFromUrl(fallbackUrl);
         
-        if (fallbackSuccess) {
+        if (success) {
           _lastUpdate = DateTime.now();
-          debugPrint('EPG: Successfully loaded from fallback URL');
-          return true;
+          ServiceLocator.log.d('EPG: Successfully loaded from fallback URL');
         }
       }
       
-      _error = 'Failed to load EPG data from all sources';
-      return false;
+      if (!success) {
+        _error = 'Failed to load EPG data from all sources';
+      }
     } catch (e) {
       _error = e.toString();
-      debugPrint('EPG: Error loading: $e');
-      return false;
+      ServiceLocator.log.w('EPG: Error loading', error: e);
+      success = false;
     } finally {
       _isLoading = false;
-      notifyListeners();
+      // Only notify if not silent (user-initiated refresh)
+      if (!silent) {
+        notifyListeners();
+      }
     }
+    
+    return success;
   }
 
   /// 获取频道当前节目
@@ -101,7 +120,8 @@ class EpgProvider extends ChangeNotifier {
     final prefs = ServiceLocator.prefs;
     final url = prefs.getString('epg_url');
     if (url != null && url.isNotEmpty) {
-      await loadEpg(url);
+      // User-initiated refresh, show loading state
+      await loadEpg(url, silent: false);
     }
   }
 }
