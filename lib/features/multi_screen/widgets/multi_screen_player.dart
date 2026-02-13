@@ -7,6 +7,7 @@ import 'package:window_manager/window_manager.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/channel_logo_widget.dart';
 import '../../../core/widgets/auto_scroll_text.dart';
+import '../../../core/platform/platform_detector.dart';
 import '../../../core/platform/windows_pip_channel.dart';
 import '../../../core/i18n/app_strings.dart';
 import '../../../core/services/epg_service.dart';
@@ -640,6 +641,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
 
   Widget _buildChannelCard(BuildContext context, dynamic channel,
       MultiScreenProvider multiScreenProvider) {
+    final forceAutoScroll = PlatformDetector.isWindows || PlatformDetector.isTV;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -698,6 +700,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                       scrollSpeed: 30.0,
                       scrollDelay: const Duration(milliseconds: 500),
                       textAlign: TextAlign.center,
+                      forceScroll: forceAutoScroll,
                     ),
                   ),
                 ),
@@ -763,6 +766,10 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
 
   Widget _buildBottomInfo(BuildContext context, ScreenPlayerState screen) {
     final settingsProvider = context.watch<SettingsProvider>();
+    final forceAutoScroll = PlatformDetector.isWindows || PlatformDetector.isTV;
+    final nameWidth = (PlatformDetector.isWindows || PlatformDetector.isTV)
+        ? 110.0
+        : 60.0;
 
     // 如果设置为不显示频道名称，则返回空组件
     if (!settingsProvider.showMultiScreenChannelName) {
@@ -791,7 +798,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
       child: Align(
         alignment: Alignment.centerLeft,
         child: SizedBox(
-          width: 60,
+          width: nameWidth,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -806,6 +813,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                 scrollSpeed: 30.0,
                 scrollDelay: const Duration(milliseconds: 1000),
                 textAlign: TextAlign.left,
+                forceScroll: forceAutoScroll,
               ),
               if (currentProgram != null) ...[
                 const SizedBox(height: 2),
@@ -824,6 +832,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                         scrollSpeed: 30.0,
                         scrollDelay: const Duration(milliseconds: 1000),
                         textAlign: TextAlign.left,
+                        forceScroll: forceAutoScroll,
                       ),
                     ),
                   ],

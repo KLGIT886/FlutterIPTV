@@ -15,6 +15,8 @@ class ScreenPlayerState {
   bool isPlaying = false;
   bool isLoading = false;
   String? error;
+  bool isSoftwareDecoding = false;
+  bool softwareFallbackAttempted = false;
   
   // 视频信息
   int videoWidth = 0;
@@ -43,6 +45,11 @@ class MultiScreenProvider extends ChangeNotifier {
   final List<ScreenPlayerState> _screens = List.generate(4, (_) => ScreenPlayerState());
   int _activeScreenIndex = 0;
   bool _isMultiScreenMode = false;
+  String _videoOutput = 'auto';
+  String _windowsHwdecMode = 'auto-safe';
+  bool _allowSoftwareFallback = true;
+  String _decodingMode = 'auto';
+  String _bufferStrength = 'fast';
   
   // 音量设置
   double _volume = 1.0;
@@ -65,6 +72,46 @@ class MultiScreenProvider extends ChangeNotifier {
     _volume = volume;
     _volumeBoostDb = volumeBoostDb;
     _applyVolumeToActiveScreen();
+  }
+
+  void updatePlaybackConfig({
+    required String videoOutput,
+    required String windowsHwdecMode,
+    required bool allowSoftwareFallback,
+    required String decodingMode,
+    required String bufferStrength,
+  }) {
+    _videoOutput = videoOutput;
+    _windowsHwdecMode = windowsHwdecMode;
+    _allowSoftwareFallback = allowSoftwareFallback;
+    _decodingMode = decodingMode;
+    _bufferStrength = bufferStrength;
+  }
+
+  Future<void> reinitializePlayers({
+    required String videoOutput,
+    required String windowsHwdecMode,
+    required bool allowSoftwareFallback,
+    required String decodingMode,
+    required String bufferStrength,
+  }) async {
+    updatePlaybackConfig(
+      videoOutput: videoOutput,
+      windowsHwdecMode: windowsHwdecMode,
+      allowSoftwareFallback: allowSoftwareFallback,
+      decodingMode: decodingMode,
+      bufferStrength: bufferStrength,
+    );
+
+    final channels = List<Channel?>.from(_screens.map((s) => s.channel));
+    for (int i = 0; i < _screens.length; i++) {
+      await _disposeScreenPlayer(i);
+    }
+    for (int i = 0; i < channels.length; i++) {
+      if (channels[i] != null) {
+        await playChannelOnScreen(i, channels[i]!, skipHistory: true);
+      }
+    }
   }
   
   // 计算有效音量（包含增强）
@@ -122,7 +169,8 @@ class MultiScreenProvider extends ChangeNotifier {
   }
 
   // 在指定屏幕播放频道
-  Future<void> playChannelOnScreen(int screenIndex, Channel channel) async {
+  Future<void> playChannelOnScreen(int screenIndex, Channel channel,
+      {bool skipHistory = false}) async {
     if (screenIndex < 0 || screenIndex >= 4) return;
     
     // 使用 currentUrl 而不是 url，以保留当前选择的源索引
@@ -138,7 +186,7 @@ class MultiScreenProvider extends ChangeNotifier {
     }
     
     // Windows端分屏模式也需要记录观看历史
-    if (channel.id != null && channel.playlistId != null) {
+    if (!skipHistory && channel.id != null && channel.playlistId != null) {
       await ServiceLocator.watchHistory.addWatchHistory(channel.id!, channel.playlistId!);
       ServiceLocator.log.d('MultiScreenProvider: Recorded watch history for channel ${channel.name} (Windows multi-screen)');
     }
@@ -152,8 +200,7 @@ class MultiScreenProvider extends ChangeNotifier {
       // 如果播放器不存在，创建新的播放器
       if (screen.player == null) {
         ServiceLocator.log.d('MultiScreenProvider: Creating new player for screen $screenIndex');
-        screen.player = Player();
-        screen.videoController = VideoController(screen.player!);
+        _createPlayerForScreen(screenIndex, useSoftwareDecoding: false);
         
         // 监听播放状态
         screen.player!.stream.playing.listen((playing) {
@@ -181,6 +228,10 @@ class MultiScreenProvider extends ChangeNotifier {
         screen.player!.stream.error.listen((error) {
           if (error.isNotEmpty) {
             ServiceLocator.log.d('MultiScreenProvider: Screen $screenIndex error=$error');
+            if (_shouldTrySoftwareFallback(error, screen)) {
+              _attemptSoftwareFallback(screenIndex);
+              return;
+            }
             screen.error = error;
             screen.isLoading = false;
             notifyListeners();
@@ -228,6 +279,102 @@ class MultiScreenProvider extends ChangeNotifier {
       screen.isLoading = false;
       notifyListeners();
     }
+  }
+
+  void _createPlayerForScreen(int screenIndex, {required bool useSoftwareDecoding}) {
+    final screen = _screens[screenIndex];
+    screen.player?.dispose();
+
+    final bufferSize = switch (_bufferStrength) {
+      'fast' => 32 * 1024 * 1024,
+      'balanced' => 64 * 1024 * 1024,
+      'stable' => 128 * 1024 * 1024,
+      _ => 32 * 1024 * 1024,
+    };
+
+    String? vo;
+    switch (_videoOutput) {
+      case 'gpu':
+        vo = 'gpu';
+        break;
+      case 'libmpv':
+        vo = 'libmpv';
+        break;
+      case 'auto':
+      default:
+        vo = null;
+        break;
+    }
+
+    final player = Player(
+      configuration: PlayerConfiguration(
+        bufferSize: bufferSize,
+        vo: vo,
+      ),
+    );
+    screen.player = player;
+
+    final effectiveSoftware = useSoftwareDecoding || _decodingMode == 'software';
+    String? hwdecMode;
+    if (effectiveSoftware) {
+      hwdecMode = 'no';
+    } else {
+      switch (_windowsHwdecMode) {
+        case 'auto-copy':
+          hwdecMode = 'auto-copy';
+          break;
+        case 'd3d11va':
+          hwdecMode = 'd3d11va';
+          break;
+        case 'dxva2':
+          hwdecMode = 'dxva2';
+          break;
+        case 'auto-safe':
+        default:
+          hwdecMode = 'auto-safe';
+          break;
+      }
+    }
+
+    screen.videoController = VideoController(
+      player,
+      configuration: VideoControllerConfiguration(
+        hwdec: hwdecMode,
+        enableHardwareAcceleration: !effectiveSoftware,
+      ),
+    );
+    screen.isSoftwareDecoding = effectiveSoftware;
+    screen.softwareFallbackAttempted = effectiveSoftware;
+  }
+
+  bool _shouldTrySoftwareFallback(String error, ScreenPlayerState screen) {
+    if (_decodingMode == 'software') return false;
+    if (!_allowSoftwareFallback) return false;
+    if (screen.softwareFallbackAttempted || screen.isSoftwareDecoding) return false;
+    final lower = error.toLowerCase();
+    return lower.contains('codec') ||
+        lower.contains('decoder') ||
+        lower.contains('hwdec') ||
+        lower.contains('hardware');
+  }
+
+  Future<void> _attemptSoftwareFallback(int screenIndex) async {
+    final screen = _screens[screenIndex];
+    if (screen.channel == null) return;
+    screen.softwareFallbackAttempted = true;
+    _createPlayerForScreen(screenIndex, useSoftwareDecoding: true);
+    await playChannelOnScreen(screenIndex, screen.channel!, skipHistory: true);
+  }
+
+  Future<void> _disposeScreenPlayer(int screenIndex) async {
+    final screen = _screens[screenIndex];
+    if (screen.player != null) {
+      await screen.player!.stop();
+      await screen.player!.dispose();
+    }
+    screen.player = null;
+    screen.videoController = null;
+    screen.isPlaying = false;
   }
   
   // 应用音量到指定屏幕

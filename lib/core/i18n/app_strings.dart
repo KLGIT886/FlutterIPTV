@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+﻿import 'package:flutter/widgets.dart';
 import 'package:flutter/foundation.dart';
 
 class AppStrings {
@@ -367,6 +367,36 @@ class AppStrings {
   String get changePinNotImplemented =>
       _localizedValues['changePinNotImplemented']!;
   String get decodingModeSet => _localizedValues['decodingModeSet']!;
+  String get videoOutput => _localizedValues['videoOutput']!;
+  String get videoOutputAuto => _localizedValues['videoOutputAuto']!;
+  String get videoOutputLibmpv => _localizedValues['videoOutputLibmpv']!;
+  String get videoOutputGpu => _localizedValues['videoOutputGpu']!;
+  String get videoOutputAutoDesc => _localizedValues['videoOutputAutoDesc']!;
+  String get videoOutputLibmpvDesc => _localizedValues['videoOutputLibmpvDesc']!;
+  String get videoOutputGpuDesc => _localizedValues['videoOutputGpuDesc']!;
+  String get videoOutputSet => _localizedValues['videoOutputSet']!;
+  String get windowsHwdecMode => _localizedValues['windowsHwdecMode']!;
+  String get windowsHwdecModeSet => _localizedValues['windowsHwdecModeSet']!;
+  String get windowsHwdecAutoSafe => _localizedValues['windowsHwdecAutoSafe']!;
+  String get windowsHwdecAutoCopy => _localizedValues['windowsHwdecAutoCopy']!;
+  String get windowsHwdecD3d11va => _localizedValues['windowsHwdecD3d11va']!;
+  String get windowsHwdecDxva2 => _localizedValues['windowsHwdecDxva2']!;
+  String get windowsHwdecAutoSafeDesc =>
+      _localizedValues['windowsHwdecAutoSafeDesc']!;
+  String get windowsHwdecAutoCopyDesc =>
+      _localizedValues['windowsHwdecAutoCopyDesc']!;
+  String get windowsHwdecD3d11vaDesc =>
+      _localizedValues['windowsHwdecD3d11vaDesc']!;
+  String get windowsHwdecDxva2Desc =>
+      _localizedValues['windowsHwdecDxva2Desc']!;
+  String get allowSoftwareFallback =>
+      _localizedValues['allowSoftwareFallback']!;
+  String get allowSoftwareFallbackDesc =>
+      _localizedValues['allowSoftwareFallbackDesc']!;
+  String get allowSoftwareFallbackEnabled =>
+      _localizedValues['allowSoftwareFallbackEnabled']!;
+  String get allowSoftwareFallbackDisabled =>
+      _localizedValues['allowSoftwareFallbackDisabled']!;
   String get fastBuffer => _localizedValues['fastBuffer']!;
   String get balancedBuffer => _localizedValues['balancedBuffer']!;
   String get stableBuffer => _localizedValues['stableBuffer']!;
@@ -834,6 +864,28 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'parentalControlNotImplemented': '家长控制尚未实现，设置不会生效',
     'changePinNotImplemented': '(未实现)',
     'decodingModeSet': '解码模式已设置为: {mode}',
+    'videoOutput': '视频输出',
+    'videoOutputAuto': '自动（嵌入）',
+    'videoOutputLibmpv': 'libmpv（嵌入）',
+    'videoOutputGpu': 'GPU（独立窗口）',
+    'videoOutputAutoDesc': '默认嵌入输出（推荐）',
+    'videoOutputLibmpvDesc': '使用 libmpv 嵌入渲染（推荐）',
+    'videoOutputGpuDesc': '使用 GPU 输出，可能打开独立窗口',
+    'videoOutputSet': '视频输出已设置为: {mode}',
+    'windowsHwdecMode': 'Windows 硬解方案',
+    'windowsHwdecModeSet': 'Windows 硬解方案已设置为: {mode}',
+    'windowsHwdecAutoSafe': '自动（安全）',
+    'windowsHwdecAutoCopy': '自动（拷回）',
+    'windowsHwdecD3d11va': 'D3D11VA',
+    'windowsHwdecDxva2': 'DXVA2',
+    'windowsHwdecAutoSafeDesc': '推荐。仅使用安全的硬解器。',
+    'windowsHwdecAutoCopyDesc': '兼容性更好，但拷回会更慢。',
+    'windowsHwdecD3d11vaDesc': '优先 D3D11VA，部分显卡可能失败。',
+    'windowsHwdecDxva2Desc': '优先 DXVA2，适合旧显卡。',
+    'allowSoftwareFallback': '允许软解回退',
+    'allowSoftwareFallbackDesc': '硬解失败时自动切换到软解。',
+    'allowSoftwareFallbackEnabled': '已开启软解回退',
+    'allowSoftwareFallbackDisabled': '已关闭软解回退',
     'fastBuffer': '快速 (切换快，可能卡顿)',
     'balancedBuffer': '平衡',
     'stableBuffer': '稳定 (切换慢，不易卡顿)',
@@ -1281,6 +1333,31 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
         'Parental control not implemented, setting will not take effect',
     'changePinNotImplemented': '(Not implemented)',
     'decodingModeSet': 'Decoding mode set to: {mode}',
+    'videoOutput': 'Video Output',
+    'videoOutputAuto': 'Auto (Embedded)',
+    'videoOutputLibmpv': 'libmpv (Embedded)',
+    'videoOutputGpu': 'GPU (External Window)',
+    'videoOutputAutoDesc': 'Default embedded output (recommended)',
+    'videoOutputLibmpvDesc': 'Use libmpv embedded renderer (recommended)',
+    'videoOutputGpuDesc': 'Use GPU output; may open a separate window',
+    'videoOutputSet': 'Video output set to: {mode}',
+    'windowsHwdecMode': 'Windows HW Decoder',
+    'windowsHwdecModeSet': 'Windows HW decode set to: {mode}',
+    'windowsHwdecAutoSafe': 'Auto (Safe)',
+    'windowsHwdecAutoCopy': 'Auto (Copy)',
+    'windowsHwdecD3d11va': 'D3D11VA',
+    'windowsHwdecDxva2': 'DXVA2',
+    'windowsHwdecAutoSafeDesc':
+        'Recommended. Only use safe hardware decoders.',
+    'windowsHwdecAutoCopyDesc':
+        'More compatible, but slower due to copy-back.',
+    'windowsHwdecD3d11vaDesc': 'Prefer D3D11VA. Can fail on some GPUs.',
+    'windowsHwdecDxva2Desc': 'Prefer DXVA2. Legacy path for older GPUs.',
+    'allowSoftwareFallback': 'Allow Software Fallback',
+    'allowSoftwareFallbackDesc':
+        'If hardware decode fails, automatically switch to software decoding.',
+    'allowSoftwareFallbackEnabled': 'Software fallback enabled',
+    'allowSoftwareFallbackDisabled': 'Software fallback disabled',
     'fastBuffer': 'Fast (Quick switching, may stutter)',
     'balancedBuffer': 'Balanced',
     'stableBuffer': 'Stable (Slow switching, less stuttering)',

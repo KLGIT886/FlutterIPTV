@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +12,8 @@ import '../../../core/widgets/color_scheme_dialog.dart';
 import '../../../core/platform/platform_detector.dart';
 import '../../../core/i18n/app_strings.dart';
 import '../../../core/services/service_locator.dart';
+import '../../player/providers/player_provider.dart';
+import '../../multi_screen/providers/multi_screen_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/dlna_provider.dart';
 import '../widgets/qr_log_export_dialog.dart';
@@ -94,6 +96,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final isTV = PlatformDetector.isTV || size.width > 1200;
+    final isWindows = PlatformDetector.isWindows;
+    final isAndroid = PlatformDetector.isAndroid;
+    final isMobile = PlatformDetector.isMobile;
 
     final content = Consumer<SettingsProvider>(
       builder: (context, settings, _) {
@@ -192,22 +197,178 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _showSuccess(context, value ? (strings?.autoPlayEnabled ?? 'Auto-play enabled') : (strings?.autoPlayDisabled ?? 'Auto-play disabled'));
                 },
               ),
-              _buildDivider(),
-              _buildSelectTile(
-                context,
-                title: AppStrings.of(context)?.decodingMode ?? 'Decoding Mode',
-                subtitle: _getDecodingModeLabel(context, settings.decodingMode),
-                icon: Icons.memory_rounded,
-                onTap: () => _showDecodingModeDialog(context, settings),
-              ),
-              _buildDivider(),
-              _buildSelectTile(
-                context,
-                title: AppStrings.of(context)?.channelMergeRule ?? 'Channel Merge Rule',
-                subtitle: _getChannelMergeRuleLabel(context, settings.channelMergeRule),
-                icon: Icons.merge_rounded,
-                onTap: () => _showChannelMergeRuleDialog(context, settings),
-              ),
+              if (isWindows) ...[
+                _buildDivider(),
+                _buildSelectTile(
+                  context,
+                  title: AppStrings.of(context)?.decodingMode ?? 'Decoding Mode',
+                  subtitle: _getDecodingModeLabel(context, settings.decodingMode),
+                  icon: Icons.tune_rounded,
+                  onTap: () => _showDecodingModeDialog(context, settings),
+                ),
+                _buildDivider(),
+                _buildSelectTile(
+                  context,
+                  title: AppStrings.of(context)?.windowsHwdecMode ??
+                      'Windows HW Decoder',
+                  subtitle:
+                      _getWindowsHwdecLabel(context, settings.windowsHwdecMode),
+                  icon: Icons.speed_rounded,
+                  onTap: () => _showWindowsHwdecDialog(context, settings),
+                ),
+                _buildDivider(),
+                _buildSwitchTile(
+                  context,
+                  title: AppStrings.of(context)?.allowSoftwareFallback ??
+                      'Allow Software Fallback',
+                  subtitle: AppStrings.of(context)?.allowSoftwareFallbackDesc ??
+                      'If hardware decode fails, automatically switch to software decoding.',
+                  icon: Icons.swap_horiz_rounded,
+                  value: settings.allowSoftwareFallback,
+                  onChanged: (value) async {
+                    await settings.setAllowSoftwareFallback(value);
+                    await _reinitMediaKitPlayer(context, settings);
+                    final strings = AppStrings.of(context);
+                    _showSuccess(
+                      context,
+                      value
+                          ? (strings?.allowSoftwareFallbackEnabled ??
+                              'Software fallback enabled')
+                          : (strings?.allowSoftwareFallbackDisabled ??
+                              'Software fallback disabled'),
+                    );
+                  },
+                ),
+                _buildDivider(),
+                _buildSelectTile(
+                  context,
+                  title: AppStrings.of(context)?.videoOutput ?? 'Video Output',
+                  subtitle: _getVideoOutputLabel(context, settings.videoOutput),
+                  icon: Icons.display_settings_rounded,
+                  onTap: () => _showVideoOutputDialog(context, settings),
+                ),
+              ] else if (isAndroid && isMobile) ...[
+                _buildDivider(),
+                _buildSelectTile(
+                  context,
+                  title: AppStrings.of(context)?.decodingMode ?? 'Decoding Mode',
+                  subtitle: _getDecodingModeLabel(context, settings.decodingMode),
+                  icon: Icons.tune_rounded,
+                  onTap: () => _showDecodingModeDialog(context, settings,
+                      options: const ['auto', 'hardware', 'software']),
+                ),
+                _buildDivider(),
+                _buildSwitchTile(
+                  context,
+                  title: AppStrings.of(context)?.allowSoftwareFallback ??
+                      'Allow Software Fallback',
+                  subtitle: AppStrings.of(context)?.allowSoftwareFallbackDesc ??
+                      'If hardware decode fails, automatically switch to software decoding.',
+                  icon: Icons.swap_horiz_rounded,
+                  value: settings.allowSoftwareFallback,
+                  onChanged: (value) async {
+                    await settings.setAllowSoftwareFallback(value);
+                    await _reinitMediaKitPlayer(context, settings);
+                    final strings = AppStrings.of(context);
+                    _showSuccess(
+                      context,
+                      value
+                          ? (strings?.allowSoftwareFallbackEnabled ??
+                              'Software fallback enabled')
+                          : (strings?.allowSoftwareFallbackDisabled ??
+                              'Software fallback disabled'),
+                    );
+                  },
+                ),
+                _buildDivider(),
+                _buildSelectTile(
+                  context,
+                  title: AppStrings.of(context)?.videoOutput ?? 'Video Output',
+                  subtitle: _getVideoOutputLabel(context, settings.videoOutput),
+                  icon: Icons.display_settings_rounded,
+                  onTap: () => _showVideoOutputDialog(
+                    context,
+                    settings,
+                    options: const ['auto', 'libmpv'],
+                  ),
+                ),
+              ] else if (isAndroid && isTV) ...[
+                _buildDivider(),
+                _buildSelectTile(
+                  context,
+                  title: AppStrings.of(context)?.decodingMode ?? 'Decoding Mode',
+                  subtitle: _getDecodingModeLabel(context, settings.decodingMode),
+                  icon: Icons.tune_rounded,
+                  onTap: () => _showDecodingModeDialog(
+                    context,
+                    settings,
+                    options: const ['auto', 'software'],
+                  ),
+                ),
+                _buildDivider(),
+                _buildSwitchTile(
+                  context,
+                  title: AppStrings.of(context)?.allowSoftwareFallback ??
+                      'Allow Software Fallback',
+                  subtitle: AppStrings.of(context)?.allowSoftwareFallbackDesc ??
+                      'If hardware decode fails, automatically switch to software decoding.',
+                  icon: Icons.swap_horiz_rounded,
+                  value: settings.allowSoftwareFallback,
+                  onChanged: (value) async {
+                    await settings.setAllowSoftwareFallback(value);
+                    await _reinitMediaKitPlayer(context, settings);
+                    final strings = AppStrings.of(context);
+                    _showSuccess(
+                      context,
+                      value
+                          ? (strings?.allowSoftwareFallbackEnabled ??
+                              'Software fallback enabled')
+                          : (strings?.allowSoftwareFallbackDisabled ??
+                              'Software fallback disabled'),
+                    );
+                  },
+                ),
+              ] else ...[
+                _buildDivider(),
+                _buildSwitchTile(
+                  context,
+                  title: AppStrings.of(context)?.allowSoftwareFallback ??
+                      'Allow Software Fallback',
+                  subtitle: AppStrings.of(context)?.allowSoftwareFallbackDesc ??
+                      'If hardware decode fails, automatically switch to software decoding.',
+                  icon: Icons.swap_horiz_rounded,
+                  value: settings.allowSoftwareFallback,
+                  onChanged: (value) async {
+                    await settings.setAllowSoftwareFallback(value);
+                    await _reinitMediaKitPlayer(context, settings);
+                    final strings = AppStrings.of(context);
+                    _showSuccess(
+                      context,
+                      value
+                          ? (strings?.allowSoftwareFallbackEnabled ??
+                              'Software fallback enabled')
+                          : (strings?.allowSoftwareFallbackDisabled ??
+                              'Software fallback disabled'),
+                    );
+                  },
+                ),
+                _buildDivider(),
+                _buildSelectTile(
+                  context,
+                  title: AppStrings.of(context)?.videoOutput ?? 'Video Output',
+                  subtitle: _getVideoOutputLabel(context, settings.videoOutput),
+                  icon: Icons.display_settings_rounded,
+                  onTap: () => _showVideoOutputDialog(context, settings),
+                ),
+              ],
+                _buildDivider(),
+                _buildSelectTile(
+                  context,
+                  title: AppStrings.of(context)?.channelMergeRule ?? 'Channel Merge Rule',
+                  subtitle: _getChannelMergeRuleLabel(context, settings.channelMergeRule),
+                  icon: Icons.merge_rounded,
+                  onTap: () => _showChannelMergeRuleDialog(context, settings),
+                ),
               // 缓冲大小 - 暂时隐藏（未实现）
               // _buildDivider(),
               // _buildSelectTile(
@@ -796,24 +957,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  void _showDecodingModeDialog(BuildContext context, SettingsProvider settings) {
+  String _getDecodingModeDesc(BuildContext context, String mode) {
+    final strings = AppStrings.of(context);
+    switch (mode) {
+      case 'hardware':
+        return strings?.decodingModeHardwareDesc ??
+            'Force hardware decoding. May fail on some GPUs.';
+      case 'software':
+        return strings?.decodingModeSoftwareDesc ??
+            'Use CPU decoding for compatibility.';
+      case 'auto':
+      default:
+        return strings?.decodingModeAutoDesc ??
+            'Automatically choose the best option. Recommended.';
+    }
+  }
+
+  void _showDecodingModeDialog(
+    BuildContext context,
+    SettingsProvider settings, {
+    List<String>? options,
+  }) {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
     final isLandscape = screenWidth > 600 && screenWidth < 900 && screenHeight < screenWidth;
-    final options = ['auto', 'hardware', 'software'];
+    final modeOptions = options ?? const ['auto', 'hardware', 'software'];
 
     showDialog(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.getSurfaceColor(context),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(isLandscape ? 12 : 16),
-          ),
-          contentPadding: EdgeInsets.all(isLandscape ? 12 : 20),
-          titlePadding: EdgeInsets.fromLTRB(
+          backgroundColor: AppTheme.getSurfaceColor(dialogContext),
+          contentPadding: EdgeInsets.fromLTRB(
             isLandscape ? 16 : 24,
-            isLandscape ? 12 : 20,
+            isLandscape ? 8 : 16,
             isLandscape ? 16 : 24,
             isLandscape ? 8 : 16,
           ),
@@ -825,10 +1002,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: options.map((mode) {
-                return RadioListTile<String>(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: modeOptions.map((mode) {
+                  return RadioListTile<String>(
                   title: Text(
                     _getDecodingModeLabel(context, mode),
                     style: TextStyle(
@@ -837,7 +1014,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                   subtitle: Text(
-                    _getDecodingModeDescription(context, mode),
+                    _getDecodingModeDesc(context, mode),
                     style: TextStyle(
                       color: AppTheme.getTextMuted(context),
                       fontSize: isLandscape ? 9 : 11,
@@ -845,12 +1022,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   value: mode,
                   groupValue: settings.decodingMode,
-                  onChanged: (value) {
+                  onChanged: (value) async {
                     if (value != null) {
-                      settings.setDecodingMode(value);
+                      await settings.setDecodingMode(value);
+                      await _reinitMediaKitPlayer(context, settings);
                       Navigator.pop(dialogContext);
                       final strings = AppStrings.of(context);
-                      _showSuccess(context, (strings?.decodingModeSet ?? 'Decoding mode set to: {mode}').replaceFirst('{mode}', _getDecodingModeLabel(context, value)));
+                      _showSuccess(
+                        context,
+                        (strings?.decodingModeSet ?? 'Decoding mode set to: {mode}')
+                            .replaceFirst('{mode}', _getDecodingModeLabel(context, value)),
+                      );
                     }
                   },
                   activeColor: AppTheme.getPrimaryColor(dialogContext),
@@ -858,7 +1040,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     horizontal: isLandscape ? 8 : 16,
                     vertical: isLandscape ? 0 : 4,
                   ),
-                  visualDensity: isLandscape ? VisualDensity.compact : null,
                 );
               }).toList(),
             ),
@@ -868,17 +1049,235 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  String _getDecodingModeDescription(BuildContext context, String mode) {
+  String _getVideoOutputLabel(BuildContext context, String mode) {
     final strings = AppStrings.of(context);
     switch (mode) {
-      case 'hardware':
-        return strings?.decodingModeHardwareDesc ?? 'Force MediaCodec. May cause errors on some devices.';
-      case 'software':
-        return strings?.decodingModeSoftwareDesc ?? 'Use CPU decoding. More compatible but uses more power.';
+      case 'libmpv':
+        return strings?.videoOutputLibmpv ?? 'libmpv (Embedded)';
+      case 'gpu':
+        return strings?.videoOutputGpu ?? 'GPU (External Window)';
       case 'auto':
       default:
-        return strings?.decodingModeAutoDesc ?? 'Automatically choose best option. Recommended.';
+        return strings?.videoOutputAuto ?? 'Auto (Embedded)';
     }
+  }
+
+  String _getVideoOutputDesc(BuildContext context, String mode) {
+    final strings = AppStrings.of(context);
+    switch (mode) {
+      case 'libmpv':
+        return strings?.videoOutputLibmpvDesc ??
+            'Use libmpv embedded renderer (recommended).';
+      case 'gpu':
+        return strings?.videoOutputGpuDesc ??
+            'Use GPU output; may open a separate window.';
+      case 'auto':
+      default:
+        return strings?.videoOutputAutoDesc ??
+            'Default embedded output (recommended).';
+    }
+  }
+
+  void _showVideoOutputDialog(
+    BuildContext context,
+    SettingsProvider settings, {
+    List<String>? options,
+  }) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isLandscape = screenWidth > 600 && screenWidth < 900 && screenHeight < screenWidth;
+    final outputOptions = options ?? const ['auto', 'libmpv', 'gpu'];
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppTheme.getSurfaceColor(dialogContext),
+          contentPadding: EdgeInsets.fromLTRB(
+            isLandscape ? 16 : 24,
+            isLandscape ? 8 : 16,
+            isLandscape ? 16 : 24,
+            isLandscape ? 8 : 16,
+          ),
+          title: Text(
+            AppStrings.of(context)?.videoOutput ?? 'Video Output',
+            style: TextStyle(
+              color: AppTheme.getTextPrimary(context),
+              fontSize: isLandscape ? 14 : 18,
+            ),
+          ),
+          content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: outputOptions.map((mode) {
+                  return RadioListTile<String>(
+                  title: Text(
+                    _getVideoOutputLabel(context, mode),
+                    style: TextStyle(
+                      color: AppTheme.getTextPrimary(context),
+                      fontSize: isLandscape ? 12 : 14,
+                    ),
+                  ),
+                  subtitle: Text(
+                    _getVideoOutputDesc(context, mode),
+                    style: TextStyle(
+                      color: AppTheme.getTextMuted(context),
+                      fontSize: isLandscape ? 9 : 11,
+                    ),
+                  ),
+                  value: mode,
+                  groupValue: settings.videoOutput,
+                  onChanged: (value) async {
+                    if (value != null) {
+                      await settings.setVideoOutput(value);
+                      await _reinitMediaKitPlayer(context, settings);
+                      Navigator.pop(dialogContext);
+                      final strings = AppStrings.of(context);
+                      _showSuccess(
+                        context,
+                        (strings?.videoOutputSet ?? 'Video output set to: {mode}')
+                            .replaceFirst('{mode}', _getVideoOutputLabel(context, value)),
+                      );
+                    }
+                  },
+                  activeColor: AppTheme.getPrimaryColor(dialogContext),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: isLandscape ? 8 : 16,
+                    vertical: isLandscape ? 0 : 4,
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _getWindowsHwdecLabel(BuildContext context, String mode) {
+    final strings = AppStrings.of(context);
+    switch (mode) {
+      case 'auto-copy':
+        return strings?.windowsHwdecAutoCopy ?? 'Auto (Copy)';
+      case 'd3d11va':
+        return strings?.windowsHwdecD3d11va ?? 'D3D11VA';
+      case 'dxva2':
+        return strings?.windowsHwdecDxva2 ?? 'DXVA2';
+      case 'auto-safe':
+      default:
+        return strings?.windowsHwdecAutoSafe ?? 'Auto (Safe)';
+    }
+  }
+
+  String _getWindowsHwdecDesc(BuildContext context, String mode) {
+    final strings = AppStrings.of(context);
+    switch (mode) {
+      case 'auto-copy':
+        return strings?.windowsHwdecAutoCopyDesc ??
+            'More compatible, but slower due to copy-back.';
+      case 'd3d11va':
+        return strings?.windowsHwdecD3d11vaDesc ??
+            'Prefer D3D11VA. Can fail on some GPUs.';
+      case 'dxva2':
+        return strings?.windowsHwdecDxva2Desc ??
+            'Prefer DXVA2. Legacy path for older GPUs.';
+      case 'auto-safe':
+      default:
+        return strings?.windowsHwdecAutoSafeDesc ??
+            'Recommended. Only use safe hardware decoders.';
+    }
+  }
+
+  void _showWindowsHwdecDialog(BuildContext context, SettingsProvider settings) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isLandscape = screenWidth > 600 && screenWidth < 900 && screenHeight < screenWidth;
+    final options = ['auto-safe', 'auto-copy', 'd3d11va', 'dxva2'];
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppTheme.getSurfaceColor(dialogContext),
+          contentPadding: EdgeInsets.fromLTRB(
+            isLandscape ? 16 : 24,
+            isLandscape ? 8 : 16,
+            isLandscape ? 16 : 24,
+            isLandscape ? 8 : 16,
+          ),
+          title: Text(
+            AppStrings.of(context)?.windowsHwdecMode ?? 'Windows HW Decoder',
+            style: TextStyle(
+              color: AppTheme.getTextPrimary(context),
+              fontSize: isLandscape ? 14 : 18,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: options.map((mode) {
+                return RadioListTile<String>(
+                  title: Text(
+                    _getWindowsHwdecLabel(context, mode),
+                    style: TextStyle(
+                      color: AppTheme.getTextPrimary(context),
+                      fontSize: isLandscape ? 12 : 14,
+                    ),
+                  ),
+                  subtitle: Text(
+                    _getWindowsHwdecDesc(context, mode),
+                    style: TextStyle(
+                      color: AppTheme.getTextMuted(context),
+                      fontSize: isLandscape ? 9 : 11,
+                    ),
+                  ),
+                  value: mode,
+                  groupValue: settings.windowsHwdecMode,
+                  onChanged: (value) async {
+                    if (value != null) {
+                      await settings.setWindowsHwdecMode(value);
+                      await _reinitMediaKitPlayer(context, settings);
+                      Navigator.pop(dialogContext);
+                      final strings = AppStrings.of(context);
+                      _showSuccess(
+                        context,
+                        (strings?.windowsHwdecModeSet ??
+                                'Windows HW decode set to: {mode}')
+                            .replaceFirst('{mode}', _getWindowsHwdecLabel(context, value)),
+                      );
+                    }
+                  },
+                  activeColor: AppTheme.getPrimaryColor(dialogContext),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: isLandscape ? 8 : 16,
+                    vertical: isLandscape ? 0 : 4,
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _reinitMediaKitPlayer(BuildContext context, SettingsProvider settings) async {
+    // Settings screen may appear without PlayerProvider in the widget tree.
+    try {
+      await context.read<PlayerProvider>().reinitializePlayer(
+        bufferStrength: settings.bufferStrength,
+      );
+    } catch (_) {}
+    // Reinitialize multi-screen players if available.
+    try {
+      await context.read<MultiScreenProvider>().reinitializePlayers(
+        videoOutput: settings.videoOutput,
+        windowsHwdecMode: settings.windowsHwdecMode,
+        allowSoftwareFallback: settings.allowSoftwareFallback,
+        decodingMode: settings.decodingMode,
+        bufferStrength: settings.bufferStrength,
+      );
+    } catch (_) {}
   }
 
   String _getChannelMergeRuleLabel(BuildContext context, String rule) {
@@ -1356,12 +1755,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   value: strength,
                   groupValue: settings.bufferStrength,
-                  onChanged: (value) {
-                    if (value != null) {
-                      settings.setBufferStrength(value);
-                      Navigator.pop(dialogContext);
-                    }
-                  },
+                    onChanged: (value) async {
+                      if (value != null) {
+                        await settings.setBufferStrength(value);
+                        await _reinitMediaKitPlayer(context, settings);
+                        Navigator.pop(dialogContext);
+                      }
+                    },
                   activeColor: AppTheme.getPrimaryColor(dialogContext),
                   contentPadding: style['itemPadding'],
                   visualDensity: style['visualDensity'],
@@ -2451,6 +2851,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 }
+
 
 
 

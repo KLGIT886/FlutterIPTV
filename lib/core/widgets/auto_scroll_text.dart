@@ -97,7 +97,7 @@ class _AutoScrollTextState extends State<AutoScrollText>
           });
 
           // 如果当前处于 Hover 状态，且发现溢出，重新触发滚动
-          if (_isHovering) {
+          if (_isHovering || widget.forceScroll) {
             _startScrolling();
           }
         } else {

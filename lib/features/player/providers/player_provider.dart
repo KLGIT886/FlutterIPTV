@@ -49,6 +49,14 @@ class PlayerProvider extends ChangeNotifier {
   Timer? _retryTimer;
   bool _isAutoSwitching = false; // 标记是否正在自动切换源
   bool _isAutoDetecting = false; // 标记是否正在自动检测源
+  bool _isSoftwareDecoding = false;
+  bool _noVideoFallbackAttempted = false;
+  bool _allowSoftwareFallback = true;
+  String _windowsHwdecMode = 'auto-safe';
+  bool _isDisposed = false;
+  String _videoOutput = 'auto';
+  String _vo = 'unknown';
+  String _configuredVo = 'auto';
 
   // On Android TV, we use native player via Activity, so don't init any Flutter player
   // On Android phone/tablet and other platforms, use media_kit
@@ -341,7 +349,14 @@ class PlayerProvider extends ChangeNotifier {
     final parts = <String>['${w}x$h'];
     if (_videoCodec.isNotEmpty) parts.add(_videoCodec);
     if (_fps > 0) parts.add('${_fps.toStringAsFixed(1)} fps');
-    parts.add('hwdec: $_hwdecMode');
+    final hwdecInfo = _formatHwdecInfo();
+    if (hwdecInfo.isNotEmpty) {
+      parts.add('hwdec: $hwdecInfo');
+    }
+    final voInfo = _formatVoInfo();
+    if (voInfo.isNotEmpty) {
+      parts.add('vo: $voInfo');
+    }
     return parts.join(' | ');
   }
 
@@ -376,23 +391,21 @@ class PlayerProvider extends ChangeNotifier {
       _initMediaKitPlayer();
     }
     
-    // 可选: 预加载一个空的媒体源来初始化解码器
-    // 这会让首次播放更流畅
-    try {
-      ServiceLocator.log.d('PlayerProvider: 预热播放器 - 预加载空媒体', tag: 'PlayerProvider');
-      // 使用一个很短的空白视频来预热解码器
-      // 注意: 这里不实际播放,只是让播放器准备好
-      await _mediaKitPlayer?.open(Media(''), play: false);
-      ServiceLocator.log.d('PlayerProvider: 播放器预热完成', tag: 'PlayerProvider');
-    } catch (e) {
-      // 预热失败不影响正常使用
-      ServiceLocator.log.d('PlayerProvider: 播放器预热失败 (不影响使用): $e', tag: 'PlayerProvider');
-    }
+    // 使用空 Media 预热会触发错误回调，可能导致首次播放黑屏/红叹号
+    // 目前只做实例初始化，不做无效媒体预加载
   }
 
   void _initMediaKitPlayer({bool useSoftwareDecoding = false, String bufferStrength = 'fast'}) {
     _mediaKitPlayer?.dispose();
     _debugInfoTimer?.cancel();
+    // Load decoding settings (overridden by explicit useSoftwareDecoding)
+    final prefs = ServiceLocator.prefs;
+    final decodingMode = prefs.getString('decoding_mode') ?? 'auto';
+    _windowsHwdecMode = prefs.getString('windows_hwdec_mode') ?? 'auto-safe';
+    _allowSoftwareFallback = prefs.getBool('allow_software_fallback') ?? true;
+    _videoOutput = prefs.getString('video_output') ?? 'auto';
+    final effectiveSoftware = useSoftwareDecoding || decodingMode == 'software';
+    _isSoftwareDecoding = effectiveSoftware;
 
     ServiceLocator.log.i('========== 初始化播放器 ==========', tag: 'PlayerProvider');
     ServiceLocator.log.i('平台: ${Platform.operatingSystem}', tag: 'PlayerProvider');
@@ -407,34 +420,74 @@ class PlayerProvider extends ChangeNotifier {
       _ => 32 * 1024 * 1024,
     };
 
+    String? vo;
+    switch (_videoOutput) {
+      case 'gpu':
+        vo = 'gpu';
+        break;
+      case 'libmpv':
+        vo = 'libmpv';
+        break;
+      case 'auto':
+      default:
+        vo = null;
+        break;
+    }
+    _configuredVo = _videoOutput;
+
     _mediaKitPlayer = Player(
       configuration: PlayerConfiguration(
         bufferSize: bufferSize,
+        vo: vo,
         // 设置网络超时（秒）
         // timeout: 3 秒连接超时
-        // 根据日志级别启用 mpv 日志（关闭时使用 error 级别，只记录严重错误）
-        logLevel: ServiceLocator.log.currentLevel != LogLevel.off 
-          ? MPVLogLevel.info 
-          : MPVLogLevel.error,
+        // 根据日志级别启用 mpv 日志
+        logLevel: ServiceLocator.log.currentLevel == LogLevel.debug
+            ? MPVLogLevel.debug
+            : (ServiceLocator.log.currentLevel == LogLevel.off
+                ? MPVLogLevel.error
+                : MPVLogLevel.info),
       ),
     );
 
     // 确定硬件解码模式
     String? hwdecMode;
     if (Platform.isAndroid) {
-      hwdecMode = useSoftwareDecoding ? 'no' : 'mediacodec';
+      hwdecMode = effectiveSoftware ? 'no' : 'mediacodec';
     } else if (Platform.isWindows) {
-      hwdecMode = useSoftwareDecoding ? 'no' : 'auto-copy';
+      if (effectiveSoftware) {
+        hwdecMode = 'no';
+      } else {
+        switch (_windowsHwdecMode) {
+          case 'auto-copy':
+            hwdecMode = 'auto-copy';
+            break;
+          case 'd3d11va':
+            hwdecMode = 'd3d11va';
+            break;
+          case 'dxva2':
+            hwdecMode = 'dxva2';
+            break;
+          case 'auto-safe':
+          default:
+            hwdecMode = 'auto-safe';
+            break;
+        }
+      }
     }
 
     _configuredHwdec = hwdecMode ?? 'default';
     ServiceLocator.log.i('硬件解码模式: ${hwdecMode ?? "默认"}', tag: 'PlayerProvider');
-    ServiceLocator.log.i('硬件加速: ${!useSoftwareDecoding}', tag: 'PlayerProvider');
+    ServiceLocator.log.i('硬件加速: ${!effectiveSoftware}', tag: 'PlayerProvider');
 
     VideoControllerConfiguration config = VideoControllerConfiguration(
       hwdec: hwdecMode,
-      enableHardwareAcceleration: !useSoftwareDecoding,
+      enableHardwareAcceleration: !effectiveSoftware,
     );
+
+    // 默认显示为配置值，后续可被实际日志覆盖
+    _hwdecMode = effectiveSoftware ? 'no' : _configuredHwdec;
+    _vo = vo ?? 'auto';
 
     _videoController = VideoController(_mediaKitPlayer!, configuration: config);
     _setupMediaKitListeners();
@@ -447,19 +500,21 @@ class PlayerProvider extends ChangeNotifier {
     ServiceLocator.log.d('设置播放器监听器', tag: 'PlayerProvider');
     
     // 只在日志开启时监听 mpv 日志
-    if (ServiceLocator.log.currentLevel != LogLevel.off) {
-      _mediaKitPlayer!.stream.log.listen((log) {
-        final message = log.text.toLowerCase();
-        
-        // 检测硬件解码器信息
+      if (ServiceLocator.log.currentLevel != LogLevel.off) {
+        _mediaKitPlayer!.stream.log.listen((log) {
+          final message = log.text.toLowerCase();
+          ServiceLocator.log.d('MPV log: ${log.text}', tag: 'PlayerProvider');
+          
+          // 检测硬件解码器信息
         if (message.contains('using hardware decoding') || 
             message.contains('hwdec') ||
             message.contains('d3d11va') ||
             message.contains('nvdec') ||
             message.contains('dxva2') ||
             message.contains('qsv')) {
-          ServiceLocator.log.i('🎮 硬件解码: ${log.text}', tag: 'PlayerProvider');
-        }
+            ServiceLocator.log.i('🎮 硬件解码: ${log.text}', tag: 'PlayerProvider');
+            _updateHwdecFromLog(message);
+          }
         
         // 检测 GPU 信息
         if (message.contains('gpu') || 
@@ -472,12 +527,15 @@ class PlayerProvider extends ChangeNotifier {
         }
         
         // 检测渲染器信息
-        if (message.contains('vo/gpu') || 
-            message.contains('opengl') || 
-            message.contains('d3d11') ||
-            message.contains('vulkan')) {
-          ServiceLocator.log.i('🎨 渲染器: ${log.text}', tag: 'PlayerProvider');
-        }
+          if (message.contains('vo/gpu') || 
+              message.contains('opengl') || 
+              message.contains('d3d11') ||
+              message.contains('vulkan') ||
+              message.contains('video output') ||
+              message.contains('vo:')) {
+            ServiceLocator.log.i('🎨 渲染器: ${log.text}', tag: 'PlayerProvider');
+            _updateVoFromLog(message);
+          }
         
         // 检测解码器选择
         if (message.contains('decoder') || message.contains('codec')) {
@@ -490,8 +548,8 @@ class PlayerProvider extends ChangeNotifier {
         } else if (log.level == MPVLogLevel.warn) {
           ServiceLocator.log.w('MPV警告: ${log.text}', tag: 'PlayerProvider');
         }
-      });
-    }
+        });
+      }
     
     _mediaKitPlayer!.stream.playing.listen((playing) {
       ServiceLocator.log.d('播放状态变化: playing=$playing', tag: 'PlayerProvider');
@@ -619,8 +677,11 @@ class PlayerProvider extends ChangeNotifier {
     _debugInfoTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_mediaKitPlayer == null) return;
       
-      // 使用配置的 hwdec 模式，而不是硬编码
-      _hwdecMode = _configuredHwdec;
+      // 如果日志未开启或尚未解析到实际值，使用配置值兜底
+      if (ServiceLocator.log.currentLevel == LogLevel.off &&
+          (_hwdecMode == 'unknown' || _hwdecMode.isEmpty)) {
+        _hwdecMode = _configuredHwdec;
+      }
       
       // 更新视频尺寸
       final newWidth = _mediaKitPlayer!.state.width ?? 0;
@@ -673,8 +734,85 @@ class PlayerProvider extends ChangeNotifier {
     });
   }
 
+  void _updateHwdecFromLog(String lowerMessage) {
+    String? detected;
+
+    // e.g. "Using hardware decoding (d3d11va-copy)"
+    final hwdecMatch =
+        RegExp(r'using hardware decoding\s*\(([^)]+)\)').firstMatch(lowerMessage);
+    if (hwdecMatch != null) {
+      detected = hwdecMatch.group(1);
+    }
+
+    // e.g. "hwdec=auto", "hwdec: d3d11va"
+    final hwdecKeyMatch =
+        RegExp(r'hwdec(?:-current)?\s*[:=]\s*([\w\-]+)')
+            .firstMatch(lowerMessage);
+    if (detected == null && hwdecKeyMatch != null) {
+      detected = hwdecKeyMatch.group(1);
+    }
+
+    if (detected == null && lowerMessage.contains('software decoding')) {
+      detected = 'no';
+    }
+
+    if (detected != null && detected.isNotEmpty && detected != _hwdecMode) {
+      _hwdecMode = detected;
+      notifyListeners();
+    }
+  }
+
+  void _updateVoFromLog(String lowerMessage) {
+    String? detected;
+
+    // e.g. "VO: [gpu] 1920x1080"
+    final voMatch = RegExp(r'vo:\s*\[?([a-z0-9_\-]+)\]?').firstMatch(lowerMessage);
+    if (voMatch != null) {
+      detected = voMatch.group(1);
+    }
+
+    // e.g. "Using video output driver: gpu"
+    final driverMatch =
+        RegExp(r'video output driver:\s*([a-z0-9_\-]+)').firstMatch(lowerMessage);
+    if (detected == null && driverMatch != null) {
+      detected = driverMatch.group(1);
+    }
+
+    if (detected != null && detected.isNotEmpty && detected != _vo) {
+      _vo = detected;
+      notifyListeners();
+    }
+  }
+
+  String _formatHwdecInfo() {
+    final configured = _configuredHwdec.trim();
+    final actual = _hwdecMode.trim();
+    if (configured.isEmpty || configured == 'unknown') {
+      return actual == 'unknown' ? '' : actual;
+    }
+    if (actual.isEmpty || actual == 'unknown' || actual == configured) {
+      return configured;
+    }
+    return '$configured -> $actual';
+  }
+
+  String _formatVoInfo() {
+    final configured = _configuredVo.trim();
+    final actual = _vo.trim();
+    if (configured.isEmpty || configured == 'unknown') {
+      return actual == 'unknown' ? '' : actual;
+    }
+    if (actual.isEmpty || actual == 'unknown' || actual == configured) {
+      return configured;
+    }
+    return '$configured -> $actual';
+  }
+
   bool _shouldTrySoftwareFallback(String error) {
     final lowerError = error.toLowerCase();
+    
+    // 首先检查是否允许软件解码回退
+    if (!_allowSoftwareFallback) return false;
     
     // 过滤掉已知的非致命警告（mpv 常见的误报）
     // 这些警告通常不影响实际播放，可以忽略
@@ -695,14 +833,15 @@ class PlayerProvider extends ChangeNotifier {
     }
     
     // 真正的编解码器错误才尝试软件解码
-    return ((lowerError.contains('codec') ||
+    return (lowerError.contains('codec') ||
             lowerError.contains('decoder') ||
             lowerError.contains('hwdec') ||
             lowerError.contains('mediacodec')) &&
-            _retryCount < _maxRetries);
+        _retryCount < _maxRetries;
   }
 
   void _attemptSoftwareFallback() {
+    if (!_allowSoftwareFallback) return;
     _retryCount++;
     final channelToPlay = _currentChannel;
     _initMediaKitPlayer(useSoftwareDecoding: true);
@@ -728,6 +867,7 @@ class PlayerProvider extends ChangeNotifier {
     _retryCount = 0; // 重置重试计数
     _retryTimer?.cancel(); // 取消任何正在进行的重试
     _isAutoDetecting = false; // 取消任何正在进行的自动检测
+    _noVideoFallbackAttempted = false;
     loadVolumeSettings(); // Apply volume boost settings
     notifyListeners();
 
@@ -781,6 +921,7 @@ class PlayerProvider extends ChangeNotifier {
         
         _state = PlayerState.playing;
         notifyListeners();
+        _scheduleNoVideoFallbackIfNeeded();
       }
       
       // 记录观看历史
@@ -796,6 +937,17 @@ class PlayerProvider extends ChangeNotifier {
       ServiceLocator.log.e('播放频道失败', tag: 'PlayerProvider', error: e);
       _setError('Failed to play channel: $e');
       return;
+    }
+  }
+
+  Future<void> reinitializePlayer({required String bufferStrength}) async {
+    if (_useNativePlayer) return;
+    final channelToPlay = _currentChannel;
+    _state = PlayerState.loading;
+    notifyListeners();
+    _initMediaKitPlayer(bufferStrength: bufferStrength);
+    if (channelToPlay != null) {
+      await playChannel(channelToPlay);
     }
   }
 
@@ -850,6 +1002,7 @@ class PlayerProvider extends ChangeNotifier {
     _error = null;
     _lastErrorMessage = null; // 重置错误防抖
     _errorDisplayed = false; // 重置错误显示标记
+    _noVideoFallbackAttempted = false;
     loadVolumeSettings(); // Apply volume boost settings
     notifyListeners();
 
@@ -876,6 +1029,7 @@ class PlayerProvider extends ChangeNotifier {
       ServiceLocator.log.i('>>> 播放流程总耗时: ${totalTime}ms', tag: 'PlayerProvider');
       
       _state = PlayerState.playing;
+      _scheduleNoVideoFallbackIfNeeded();
     } catch (e) {
       final totalTime = DateTime.now().difference(startTime).inMilliseconds;
       ServiceLocator.log.e('>>> 播放失败 (${totalTime}ms): $e', tag: 'PlayerProvider');
@@ -1148,6 +1302,7 @@ class PlayerProvider extends ChangeNotifier {
     _error = null;
     _lastErrorMessage = null;
     _errorDisplayed = false;
+    _noVideoFallbackAttempted = false;
     notifyListeners();
 
     try {
@@ -1171,6 +1326,7 @@ class PlayerProvider extends ChangeNotifier {
         ServiceLocator.log.i('>>> 切换源: 总耗时: ${totalTime}ms', tag: 'PlayerProvider');
         
         _state = PlayerState.playing;
+        _scheduleNoVideoFallbackIfNeeded();
       }
       ServiceLocator.log.i('播放成功', tag: 'PlayerProvider');
     } catch (e) {
@@ -1196,9 +1352,28 @@ class PlayerProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _isDisposed = true;
     _debugInfoTimer?.cancel();
     _retryTimer?.cancel();
     _mediaKitPlayer?.dispose();
     super.dispose();
+  }
+
+  void _scheduleNoVideoFallbackIfNeeded() {
+    if (_useNativePlayer) return;
+    if (!Platform.isWindows) return;
+    if (_isSoftwareDecoding) return;
+    if (!_allowSoftwareFallback) return;
+    if (_noVideoFallbackAttempted) return;
+
+    _noVideoFallbackAttempted = true;
+    Future.delayed(const Duration(seconds: 3), () {
+      if (_isDisposed) return;
+      // 若已播放但仍无画面（宽高为 0），尝试软解回退
+      if (_state == PlayerState.playing && _videoWidth == 0 && _videoHeight == 0) {
+        ServiceLocator.log.w('PlayerProvider: 音频有但无画面，尝试软解回退', tag: 'PlayerProvider');
+        _attemptSoftwareFallback();
+      }
+    });
   }
 }
