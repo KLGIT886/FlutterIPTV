@@ -25,6 +25,7 @@ import '../../../core/services/epg_service.dart';
 import '../../multi_screen/providers/multi_screen_provider.dart';
 import '../../multi_screen/widgets/multi_screen_player.dart';
 import '../../../core/services/service_locator.dart';
+import '../../../core/navigation/app_router.dart';
 
 class PlayerScreen extends StatefulWidget {
   final String channelUrl;
@@ -2109,28 +2110,47 @@ class _PlayerScreenState extends State<PlayerScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // EPG 当前节目和下一个节目
+              // EPG 当前节目和下一个节目（或回放节目）
               Consumer<EpgProvider>(
                 builder: (context, epgProvider, _) {
                   final channel = provider.currentChannel;
-                  final currentProgram = epgProvider.getCurrentProgram(
-                      channel?.epgId, channel?.name);
-                  final nextProgram =
-                      epgProvider.getNextProgram(channel?.epgId, channel?.name);
+                  final isCatchup = provider.isPlayingCatchup;
+                  final catchupProgram = provider.catchupProgram;
+
+                  // 回放模式：显示回放节目，不显示即将播放
+                  final currentProgram = isCatchup
+                      ? catchupProgram
+                      : epgProvider.getCurrentProgram(channel?.epgId, channel?.name);
+                  final nextProgram = isCatchup
+                      ? null
+                      : epgProvider.getNextProgram(channel?.epgId, channel?.name);
 
                   if (currentProgram != null || nextProgram != null) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0x33000000),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.pushNamed(
+                          context,
+                          AppRouter.epg,
+                          arguments: {
+                            'channelId': channel?.epgId,
+                            'channelName': channel?.name,
+                            'channel': channel, // 传递完整的Channel对象
+                            'catchupProgram': isCatchup ? catchupProgram : null, // 传递回放节目
+                          },
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0x33000000),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                             if (currentProgram != null)
                               Row(
                                 children: [
@@ -2138,12 +2158,15 @@ class _PlayerScreenState extends State<PlayerScreen>
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: AppTheme.getPrimaryColor(context),
+                                      color: isCatchup
+                                          ? AppTheme.warningColor
+                                          : AppTheme.getPrimaryColor(context),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(
-                                        AppStrings.of(context)?.nowPlaying ??
-                                            'Now playing',
+                                        isCatchup
+                                            ? '回放中'
+                                            : (AppStrings.of(context)?.nowPlaying ?? 'Now playing'),
                                         style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 10,
@@ -2159,8 +2182,8 @@ class _PlayerScreenState extends State<PlayerScreen>
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  // 回放按钮 (如果频道支持catchup)
-                                  if (channel?.catchupSource != null && channel!.catchupSource!.isNotEmpty)
+                                  // 回放按钮 (仅直播时显示，回放时不显示)
+                                  if (!isCatchup && channel?.catchupSource != null && channel!.catchupSource!.isNotEmpty)
                                     GestureDetector(
                                       onTap: () => _playCatchup(currentProgram),
                                       child: Padding(
@@ -2226,9 +2249,10 @@ class _PlayerScreenState extends State<PlayerScreen>
                           ],
                         ),
                       ),
-                    );
-                  }
-                  return const SizedBox.shrink();
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
                 },
               ),
 
@@ -3011,6 +3035,6 @@ class _PlayerScreenState extends State<PlayerScreen>
         .replaceAll(r'${end}', end);
 
     ServiceLocator.log.i('PlayerScreen: 播放回放 - ${channel.name}, URL: $playbackUrl');
-    await provider.playCatchup(channel, playbackUrl);
+    await provider.playCatchup(channel, playbackUrl, program: program);
   }
 }

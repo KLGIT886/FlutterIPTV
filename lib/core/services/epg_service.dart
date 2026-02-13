@@ -54,28 +54,42 @@ class EpgProgram {
   }
 
   /// 将时间转换到指定时区（小时偏移量）
-  /// 例如：+8 表示东八区（北京时间）
+  /// 注意：返回UTC类型的DateTime，但时间值是目标时区的时间
+  /// 这样可以避免Dart根据设备时区再次转换
   DateTime startInTimeZone(int hourOffset) {
-    return start.add(Duration(hours: hourOffset));
+    return DateTime.fromMillisecondsSinceEpoch(
+      start.millisecondsSinceEpoch + hourOffset * 3600000,
+      isUtc: true,  // 保持UTC类型，避免设备时区影响
+    );
   }
 
   DateTime endInTimeZone(int hourOffset) {
-    return end.add(Duration(hours: hourOffset));
+    return DateTime.fromMillisecondsSinceEpoch(
+      end.millisecondsSinceEpoch + hourOffset * 3600000,
+      isUtc: true,  // 保持UTC类型，避免设备时区影响
+    );
   }
 
   /// 检查节目是否正在播放（基于指定时区）
   bool isNowInTimeZone(int hourOffset) {
-    final now = DateTime.now().add(Duration(hours: hourOffset));
-    final localStart = startInTimeZone(hourOffset);
-    final localEnd = endInTimeZone(hourOffset);
-    return now.isAfter(localStart) && now.isBefore(localEnd);
+    final nowMs = DateTime.now().toUtc().millisecondsSinceEpoch + hourOffset * 3600000;
+    final startMs = start.millisecondsSinceEpoch + hourOffset * 3600000;
+    final endMs = end.millisecondsSinceEpoch + hourOffset * 3600000;
+    return nowMs > startMs && nowMs < endMs;
   }
 
   /// 检查节目是否即将播放（基于指定时区）
   bool isNextInTimeZone(int hourOffset) {
-    final now = DateTime.now().add(Duration(hours: hourOffset));
-    final localStart = startInTimeZone(hourOffset);
-    return localStart.isAfter(now);
+    final nowMs = DateTime.now().toUtc().millisecondsSinceEpoch + hourOffset * 3600000;
+    final startMs = start.millisecondsSinceEpoch + hourOffset * 3600000;
+    return startMs > nowMs;
+  }
+
+  /// 检查节目是否已经结束（基于指定时区）
+  bool isPastInTimeZone(int hourOffset) {
+    final nowMs = DateTime.now().toUtc().millisecondsSinceEpoch + hourOffset * 3600000;
+    final endMs = end.millisecondsSinceEpoch + hourOffset * 3600000;
+    return endMs < nowMs;
   }
 }
 
@@ -150,14 +164,90 @@ class EpgService {
     final programs = _findPrograms(channelId, channelName);
     if (programs == null) return [];
 
-    final now = DateTime.now().add(Duration(hours: hourOffset));
-    final startRange = DateTime(now.year, now.month, now.day).subtract(Duration(days: daysBefore));
-    final endRange = DateTime(now.year, now.month, now.day).add(Duration(days: daysAfter + 1));
+    // 计算目标时区的当前日期
+    final nowMs = DateTime.now().toUtc().millisecondsSinceEpoch + hourOffset * 3600000;
+    final nowInTz = DateTime.fromMillisecondsSinceEpoch(nowMs, isUtc: true);
+    
+    // 目标时区今天的日期
+    final todayInTz = DateTime.utc(nowInTz.year, nowInTz.month, nowInTz.day);
+    
+    // 计算时间范围的UTC时间戳
+    // 范围起始：目标时区的 (今天 - daysBefore) 天的 00:00
+    // 对应UTC时间需要减去 hourOffset 小时
+    final utcStartRange = todayInTz
+        .subtract(Duration(days: daysBefore))
+        .subtract(Duration(hours: hourOffset));
+    final utcEndRange = todayInTz
+        .add(Duration(days: daysAfter + 1))
+        .subtract(Duration(hours: hourOffset));
+
+    final startMs = utcStartRange.millisecondsSinceEpoch;
+    final endMs = utcEndRange.millisecondsSinceEpoch;
 
     return programs.where((program) {
-      final programStartLocal = program.startInTimeZone(hourOffset);
-      return programStartLocal.isAfter(startRange) && programStartLocal.isBefore(endRange);
+      // 节目的UTC时间戳
+      final programStartMs = program.start.millisecondsSinceEpoch;
+      return programStartMs >= startMs && programStartMs < endMs;
     }).toList();
+  }
+
+  /// 获取频道指定日期的节目列表
+  List<EpgProgram> getProgramsForDate(String? channelId, String? channelName, DateTime date, int hourOffset) {
+    final programs = _findPrograms(channelId, channelName);
+    if (programs == null) return [];
+
+    // 计算选中日期在目标时区的起始和结束时间戳
+    // date是目标时区的日期，比如UTC+8的2026-02-13
+    // 该日期的起始时间在目标时区是 2026-02-13 00:00:00 UTC+8
+    // 对应的UTC时间是 2026-02-12 16:00:00 UTC
+    // 所以时间戳 = UTC时间的00:00 - hourOffset小时
+    final utcStartOfDay = DateTime.utc(date.year, date.month, date.day)
+        .subtract(Duration(hours: hourOffset));
+    final utcEndOfDay = utcStartOfDay.add(const Duration(days: 1));
+    
+    final startMs = utcStartOfDay.millisecondsSinceEpoch;
+    final endMs = utcEndOfDay.millisecondsSinceEpoch;
+
+    // 筛选当天节目
+    final dayPrograms = programs.where((program) {
+      final programStartMs = program.start.millisecondsSinceEpoch;
+      return programStartMs >= startMs && programStartMs < endMs;
+    }).toList();
+
+    // 去重：相同标题且时间接近（5分钟内）的节目视为重复，保留持续时间更长的
+    final result = <EpgProgram>[];
+    const toleranceMs = 5 * 60 * 1000; // 5分钟容差
+    
+    for (final program in dayPrograms) {
+      // 检查是否已存在相似的节目
+      int existingIndex = -1;
+      for (int i = 0; i < result.length; i++) {
+        final existing = result[i];
+        // 标题相同且开始时间相差在5分钟内
+        if (existing.title == program.title &&
+            (existing.start.millisecondsSinceEpoch - program.start.millisecondsSinceEpoch).abs() < toleranceMs) {
+          existingIndex = i;
+          break;
+        }
+      }
+      
+      if (existingIndex >= 0) {
+        // 找到相似的，保留持续时间更长的
+        final existing = result[existingIndex];
+        final existingDuration = existing.end.difference(existing.start);
+        final newDuration = program.end.difference(program.start);
+        if (newDuration > existingDuration) {
+          result[existingIndex] = program;
+        }
+      } else {
+        result.add(program);
+      }
+    }
+
+    // 排序
+    result.sort((a, b) => a.start.compareTo(b.start));
+    
+    return result;
   }
 
   List<EpgProgram>? _findPrograms(String? channelId, String? channelName) {

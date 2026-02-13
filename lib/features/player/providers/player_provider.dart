@@ -10,6 +10,7 @@ import '../../../core/platform/platform_detector.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/channel_test_service.dart';
 import '../../../core/services/log_service.dart';
+import '../../../core/services/epg_service.dart';
 
 enum PlayerState {
   idle,
@@ -40,6 +41,8 @@ class PlayerProvider extends ChangeNotifier {
   bool _isFullscreen = false;
   bool _controlsVisible = true;
   int _volumeBoostDb = 0;
+  bool _isPlayingCatchup = false; // 是否正在播放回放
+  EpgProgram? _catchupProgram; // 当前回放的节目信息
 
   int _retryCount = 0;
   static const int _maxRetries = 2;  // 改为重试2次
@@ -69,12 +72,17 @@ class PlayerProvider extends ChangeNotifier {
   bool get isPlaying => _state == PlayerState.playing;
   bool get isLoading => _state == PlayerState.loading || _state == PlayerState.buffering;
   bool get hasError => _state == PlayerState.error && _error != null;
+  bool get isPlayingCatchup => _isPlayingCatchup;
+  EpgProgram? get catchupProgram => _catchupProgram;
 
   /// Check if current content is seekable (VOD or replay)
   bool get isSeekable {
+    // 0. 回放内容始终可拖动
+    if (_isPlayingCatchup) return true;
+
     // 1. 检查频道类型（如果明确是直播，不可拖动）
     if (_currentChannel?.isLive == true) return false;
-    
+
     // 2. 检查频道类型（如果是点播或回放，可拖动）
     if (_currentChannel?.isSeekable == true) {
       // 但还需要检查 duration 是否有效
@@ -82,7 +90,7 @@ class PlayerProvider extends ChangeNotifier {
         return true;
       }
     }
-    
+
     // 3. 检查 duration（点播内容有明确时长）
     // 直播流通常 duration 为 0 或超大值
     if (_duration.inSeconds > 0 && _duration.inSeconds <= 86400) {
@@ -91,7 +99,7 @@ class PlayerProvider extends ChangeNotifier {
         return true;
       }
     }
-    
+
     // 4. 默认不可拖动（安全起见）
     return false;
   }
@@ -709,8 +717,10 @@ class PlayerProvider extends ChangeNotifier {
     ServiceLocator.log.d('URL: ${channel.url}', tag: 'PlayerProvider');
     ServiceLocator.log.d('源数量: ${channel.sourceCount}', tag: 'PlayerProvider');
     final playStartTime = DateTime.now();
-    
+
     _currentChannel = channel;
+    _isPlayingCatchup = false; // 重置回放标记
+    _catchupProgram = null; // 重置回放节目信息
     _state = PlayerState.loading;
     _error = null;
     _lastErrorMessage = null; // 重置错误防抖
@@ -875,8 +885,10 @@ class PlayerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> playCatchup(Channel channel, String url) async {
+  Future<void> playCatchup(Channel channel, String url, {EpgProgram? program}) async {
     _currentChannel = channel;
+    _isPlayingCatchup = true; // 标记正在播放回放
+    _catchupProgram = program; // 存储回放节目信息
     _state = PlayerState.loading;
     _error = null;
     _lastErrorMessage = null;
@@ -927,13 +939,15 @@ class PlayerProvider extends ChangeNotifier {
     _lastErrorTime = null;
     _isAutoSwitching = false;
     _isAutoDetecting = false;
-    
+    _isPlayingCatchup = false; // 重置回放标记
+    _catchupProgram = null; // 重置回放节目信息
+
     if (!_useNativePlayer) {
       _mediaKitPlayer?.stop();
     }
     _state = PlayerState.idle;
     _currentChannel = null;
-    
+
     if (!silent) {
       notifyListeners();
     }

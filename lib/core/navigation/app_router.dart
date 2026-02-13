@@ -78,6 +78,8 @@ class AppRouter {
           EpgScreen(
             channelId: args?['channelId'],
             channelName: args?['channelName'],
+            channel: args?['channel'],
+            catchupProgram: args?['catchupProgram'],
           ),
           settings,
         );
