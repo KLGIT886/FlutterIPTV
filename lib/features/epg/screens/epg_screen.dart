@@ -44,7 +44,6 @@ class _EpgScreenState extends State<EpgScreen> {
   @override
   void initState() {
     super.initState();
-    // 如果有回放节目，计算其所在日期并选中
     if (widget.catchupProgram != null) {
       _selectDateForCatchupProgram();
     }
@@ -60,7 +59,7 @@ class _EpgScreenState extends State<EpgScreen> {
     final programDay = DateTime(programDate.year, programDate.month, programDate.day);
 
     // 获取今天的日期
-    final now = DateTime.now().toUtc().add(Duration(hours: timeZoneOffset));
+    final now = _getLocalNow();
     final today = DateTime(now.year, now.month, now.day);
 
     // 计算日期索引
@@ -88,7 +87,6 @@ class _EpgScreenState extends State<EpgScreen> {
     // 优先级1：如果有回放节目，定位到回放节目
     if (widget.catchupProgram != null) {
       for (int i = 0; i < programs.length; i++) {
-        // 通过开始时间和标题匹配
         if (programs[i].start.millisecondsSinceEpoch == widget.catchupProgram!.start.millisecondsSinceEpoch &&
             programs[i].title == widget.catchupProgram!.title) {
           targetIndex = i;
@@ -133,12 +131,14 @@ class _EpgScreenState extends State<EpgScreen> {
     if (targetIndex >= 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients && mounted) {
-          // 每个节目卡片高度约100（包括margin和padding）
-          const itemHeight = 100.0;
-          final offset = targetIndex * itemHeight;
+          const itemHeight = 88.0;
+          const topPadding = 16.0;
+          final offset = targetIndex * itemHeight + topPadding;
+          final maxScroll = _scrollController.position.maxScrollExtent;
+          final clampedOffset = offset.clamp(0.0, maxScroll);
 
           _scrollController.animateTo(
-            offset.clamp(0.0, _scrollController.position.maxScrollExtent),
+            clampedOffset,
             duration: const Duration(milliseconds: 500),
             curve: Curves.easeOut,
           );
@@ -149,6 +149,7 @@ class _EpgScreenState extends State<EpgScreen> {
 
   /// 切换日期时重置滚动状态
   void _onDaySelected(int index) {
+    if (_selectedDayIndex == index) return;
     setState(() {
       _selectedDayIndex = index;
       _hasScrolledToCurrentProgram = false;
@@ -193,6 +194,26 @@ class _EpgScreenState extends State<EpgScreen> {
                 onPressed: () => Navigator.pop(context),
               ),
               actions: [
+                // 回放模式下显示"回到直播"按钮
+                if (widget.catchupProgram != null)
+                  TextButton.icon(
+                    onPressed: () {
+                      // 返回并播放直播
+                      final playerProvider = context.read<PlayerProvider>();
+                      final channel = widget.channel;
+                      if (channel != null) {
+                        playerProvider.playChannel(channel);
+                      }
+                      Navigator.pop(context);
+                    },
+                    icon: const Icon(Icons.live_tv, size: 18),
+                    label: const Text('回到直播', style: TextStyle(fontSize: 14)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppTheme.getPrimaryColor(context),
+                      backgroundColor: AppTheme.getPrimaryColor(context).withOpacity(0.1),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                  ),
                 Padding(
                   padding: const EdgeInsets.only(right: 16.0),
                   child: Row(
@@ -317,8 +338,8 @@ class _EpgScreenState extends State<EpgScreen> {
     final today = DateTime(now.year, now.month, now.day);
 
     return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      height: 64,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: daysBefore + daysAfter + 1,
@@ -383,11 +404,19 @@ class _EpgScreenState extends State<EpgScreen> {
     final localStart = program.startInTimeZone(timeZoneOffset);
     final localEnd = program.endInTimeZone(timeZoneOffset);
     final duration = localEnd.difference(localStart);
+    
+    // 判断节目状态
     final isNow = program.isNowInTimeZone(timeZoneOffset);
     final isNext = program.isNextInTimeZone(timeZoneOffset);
     final isPast = program.isPastInTimeZone(timeZoneOffset);
+    
+    // 回放模式：检查当前节目是否是回放的节目
+    final isCatchupMode = widget.catchupProgram != null;
+    final isCatchupProgram = isCatchupMode &&
+        program.start.millisecondsSinceEpoch == widget.catchupProgram!.start.millisecondsSinceEpoch &&
+        program.title == widget.catchupProgram!.title;
 
-    // 检查是否支持回放
+    // 检查是否支持回放（回放模式下仍然可以播放其他节目）
     final canReplay = isPast && widget.channel?.catchupSource != null && widget.channel!.catchupSource!.isNotEmpty;
 
     return Container(
@@ -396,12 +425,14 @@ class _EpgScreenState extends State<EpgScreen> {
         color: AppTheme.getCardColor(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isNow
-              ? AppTheme.successColor
-              : isNext
-                  ? AppTheme.getPrimaryColor(context).withOpacity(0.5)
-                  : AppTheme.getGlassBorderColor(context),
-          width: isNow ? 2 : 1,
+          color: isCatchupProgram
+              ? AppTheme.warningColor  // 回放节目用橙色边框
+              : (isNow && !isCatchupMode)
+                  ? AppTheme.successColor  // 直播节目用绿色边框
+                  : isNext
+                      ? AppTheme.getPrimaryColor(context).withOpacity(0.5)
+                      : AppTheme.getGlassBorderColor(context),
+          width: (isCatchupProgram || (isNow && !isCatchupMode)) ? 2 : 1,
         ),
         boxShadow: [
           BoxShadow(
@@ -431,7 +462,30 @@ class _EpgScreenState extends State<EpgScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (isNow)
+                if (isCatchupProgram)
+                  // 回放中标签
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppTheme.warningColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.replay, size: 12, color: AppTheme.warningColor),
+                        const SizedBox(width: 4),
+                        Text(
+                          '回放中',
+                          style: TextStyle(
+                            color: AppTheme.warningColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (isNow && !isCatchupMode)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
@@ -453,7 +507,7 @@ class _EpgScreenState extends State<EpgScreen> {
                       ],
                     ),
                   )
-                else if (isNext)
+                else if (isNext && !isCatchupMode)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(

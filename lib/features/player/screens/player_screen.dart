@@ -2195,14 +2195,16 @@ class _PlayerScreenState extends State<PlayerScreen>
                                         ),
                                       ),
                                     ),
-                                  Text(
-                                    (AppStrings.of(context)?.endsInMinutes ??
-                                            'Ends in {minutes} min')
-                                        .replaceFirst('{minutes}',
-                                            '${currentProgram.remainingMinutes}'),
-                                    style: const TextStyle(
-                                        color: Color(0x99FFFFFF), fontSize: 11),
-                                  ),
+                                  // 仅直播模式下显示剩余时间
+                                  if (!isCatchup && currentProgram.remainingMinutes > 0)
+                                    Text(
+                                      (AppStrings.of(context)?.endsInMinutes ??
+                                              'Ends in {minutes} min')
+                                          .replaceFirst('{minutes}',
+                                              '${currentProgram.remainingMinutes}'),
+                                      style: const TextStyle(
+                                          color: Color(0x99FFFFFF), fontSize: 11),
+                                    ),
                                 ],
                               ),
                             if (nextProgram != null) ...[

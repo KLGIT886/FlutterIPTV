@@ -1091,37 +1091,11 @@ class _ChannelsScreenState extends State<ChannelsScreen> with ThrottledStateMixi
                       ),
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
-                          // ✅ 只在前10个和最后10个卡片打印日志，避免日志过多
-                          // if (index < 10 || index >= channels.length - 10) {
-                          //   ServiceLocator.log.d(
-                          //       '[ChannelsScreen] 构建卡片 #$index/${channels.length}');
-                          // }
-
                           final channel = channels[index];
-
-                          // ✅ 使用 select 替代 watch，只监听特定频道的数据变化
-                          // 这样可以避免其他频道的更新导致所有卡片重建
-                          final isFavorite =
-                              context.select<FavoritesProvider, bool>(
-                            (provider) => provider.isFavorite(channel.id ?? 0),
-                          );
 
                           final isUnavailable =
                               ChannelProvider.isUnavailableChannel(
                                   channel.groupName);
-
-                          // ✅ 使用 select 获取 EPG 数据，只在该频道的 EPG 变化时重建
-                          final currentProgram =
-                              context.select<EpgProvider, EpgProgram?>(
-                            (provider) => provider.getCurrentProgram(
-                                channel.epgId, channel.name),
-                          );
-
-                          final nextProgram =
-                              context.select<EpgProvider, EpgProgram?>(
-                            (provider) => provider.getNextProgram(
-                                channel.epgId, channel.name),
-                          );
 
                           // TV端：确保焦点节点数量正确
                           if (PlatformDetector.isTV) {
@@ -1139,34 +1113,24 @@ class _ChannelsScreenState extends State<ChannelsScreen> with ThrottledStateMixi
                           final currentRow = index ~/ crossAxisCount;
                           final isLastRow = currentRow == totalRows - 1;
 
-                          return ChannelCard(
-                            name: channel.name,
-                            logoUrl: channel.logoUrl,
-                            channel: channel, // 传递完整的 channel 对象
-                            groupName: isUnavailable
-                                ? ChannelProvider.extractOriginalGroup(
-                                    channel.groupName)
-                                : channel.groupName,
-                            currentProgram: currentProgram?.title,
-                            nextProgram: nextProgram?.title,
-                            isFavorite: isFavorite,
+                          // 使用包装组件，在非 Sliver 上下文中使用 Provider
+                          return _ChannelCardWrapper(
+                            channel: channel,
                             isUnavailable: isUnavailable,
-                            autofocus: index == 0,
+                            isFirstColumn: isFirstColumn && PlatformDetector.isTV,
+                            isLastRow: isLastRow && PlatformDetector.isTV,
                             focusNode: PlatformDetector.isTV &&
                                     index < _channelFocusNodes.length
                                 ? _channelFocusNodes[index]
                                 : null,
+                            autofocus: index == 0,
                             onFocused: PlatformDetector.isTV
                                 ? () {
-                                    // 记住当前聚焦的频道索引
                                     _lastChannelIndex = index;
                                   }
                                 : null,
                             onLeft: (PlatformDetector.isTV && isFirstColumn)
                                 ? () {
-                                    // 第一列按左键，跳转到当前选中的分类
-                                    ServiceLocator.log.d(
-                                        'ChannelsScreen: onLeft pressed, _currentGroupIndex=$_currentGroupIndex, _selectedGroup=$_selectedGroup');
                                     if (_currentGroupIndex <
                                         _groupFocusNodes.length) {
                                       _groupFocusNodes[_currentGroupIndex]
@@ -1184,7 +1148,6 @@ class _ChannelsScreenState extends State<ChannelsScreen> with ThrottledStateMixi
                                   .read<FavoritesProvider>()
                                   .toggleFavorite(channel);
                             },
-                            onTest: () => _testSingleChannel(context, channel),
                             onTap: () async {
                               final settingsProvider =
                                   context.read<SettingsProvider>();
@@ -1770,6 +1733,75 @@ class _ChannelsScreenState extends State<ChannelsScreen> with ThrottledStateMixi
           ),
         );
       },
+    );
+  }
+}
+
+/// 包装组件，用于在非 Sliver 上下文中使用 Provider
+/// 解决 SliverList/SliverGrid 中不能使用 context.select 的问题
+class _ChannelCardWrapper extends StatelessWidget {
+  final Channel channel;
+  final bool isUnavailable;
+  final bool isFirstColumn;
+  final bool isLastRow;
+  final FocusNode? focusNode;
+  final bool autofocus;
+  final VoidCallback? onFocused;
+  final VoidCallback? onLeft;
+  final VoidCallback? onDown;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final VoidCallback? onFavoriteToggle;
+
+  const _ChannelCardWrapper({
+    required this.channel,
+    required this.isUnavailable,
+    this.isFirstColumn = false,
+    this.isLastRow = false,
+    this.focusNode,
+    this.autofocus = false,
+    this.onFocused,
+    this.onLeft,
+    this.onDown,
+    this.onTap,
+    this.onLongPress,
+    this.onFavoriteToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // 在非 Sliver 上下文中使用 Provider
+    final isFavorite = context.select<FavoritesProvider, bool>(
+      (provider) => provider.isFavorite(channel.id ?? 0),
+    );
+
+    final currentProgram = context.select<EpgProvider, EpgProgram?>(
+      (provider) => provider.getCurrentProgram(channel.epgId, channel.name),
+    );
+
+    final nextProgram = context.select<EpgProvider, EpgProgram?>(
+      (provider) => provider.getNextProgram(channel.epgId, channel.name),
+    );
+
+    return ChannelCard(
+      name: channel.name,
+      logoUrl: channel.logoUrl,
+      channel: channel,
+      groupName: isUnavailable
+          ? ChannelProvider.extractOriginalGroup(channel.groupName)
+          : channel.groupName,
+      currentProgram: currentProgram?.title,
+      nextProgram: nextProgram?.title,
+      isFavorite: isFavorite,
+      isUnavailable: isUnavailable,
+      autofocus: autofocus,
+      focusNode: focusNode,
+      onFocused: onFocused,
+      onLeft: onLeft,
+      onDown: onDown,
+      onFavoriteToggle: onFavoriteToggle,
+      onLongPress: onLongPress,
+      onTap: onTap,
     );
   }
 }
