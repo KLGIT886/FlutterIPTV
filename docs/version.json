@@ -1,24 +1,23 @@
-﻿{
-  "version": "1.5.6",
-  "build": 166,
-  "releaseDate": "2026-02-19",
-  "assets": {
-    "windows": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.6/flutteriptv-Windows-x64-Setup.exe",
-    "android_mobile": {
-      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.6/flutteriptv-Android-Mobile-arm64-v8a.apk",
-      "armeabi-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.6/flutteriptv-Android-Mobile-armeabi-v7a.apk",
-      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.6/flutteriptv-Android-Mobile-x86_64.apk"
-    },
-    "android_tv": {
-      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.6/flutteriptv-AndroidTV-arm64-v8a.apk",
-      "armeabi-v7a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.6/flutteriptv-AndroidTV-armeabi-v7a.apk",
-      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.6/flutteriptv-AndroidTV-x86_64.apk"
-    }
-  },
-  "changelog": {
-    "zh": "- 鏂板锛歐indows 璁剧疆涓鍔犺В鐮佹ā寮忛€夐」\n- 鏂板锛歐indows 纭В鏂规閰嶇疆\n- 鏂板锛氳蒋瑙ｅ洖閫€鏈哄埗\n- 鏂板锛氳棰戣緭鍑鸿缃?,
-    "en": "- New: Added decode mode option in Windows settings\n- New: Windows hardware decode solution configuration\n- New: Software decode fallback mechanism\n- New: Video output settings"
-  },
-  "minVersion": "1.0.0"
+{
+    "version":  "1.5.6",
+    "build":  166,
+    "releaseDate":  "2026-02-19",
+    "assets":  {
+                   "windows":  "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.6/flutteriptv-Windows-x64-Setup.exe",
+                   "android_mobile":  {
+                                          "arm64-v8a":  "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.6/flutteriptv-Android-Mobile-arm64-v8a.apk",
+                                          "armeabi-v8a":  "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.6/flutteriptv-Android-Mobile-armeabi-v7a.apk",
+                                          "x86_64":  "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.6/flutteriptv-Android-Mobile-x86_64.apk"
+                                      },
+                   "android_tv":  {
+                                      "arm64-v8a":  "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.6/flutteriptv-AndroidTV-arm64-v8a.apk",
+                                      "armeabi-v7a":  "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.6/flutteriptv-AndroidTV-armeabi-v7a.apk",
+                                      "x86_64":  "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.6/flutteriptv-AndroidTV-x86_64.apk"
+                                  }
+               },
+    "changelog":  {
+                      "zh":  "- 新增：多屏每个分屏支持独立悬浮控件（进度条/播放暂停/音量/切换源）`n- 优化：多屏全屏功能对齐单屏，Windows 走原生 API`n- 修复：退出分屏后单屏继承多屏当前源 index，源数量保持不变`n- 修复：多屏源异常时自动尝试下一个源，全部失败才显示错误`n- 修复：返回首页后统一停止并释放播放资源（单屏与多屏）`n- 优化：单屏与多屏切换时互斥释放播放实例，并保留多屏已选频道状态`n- 兼容：移动端行为不受本次桌面多屏改动影响",
+                      "en":  "- New: Per-cell hover controls in multi-screen (progress/play-pause/volume/source switch)`n- Improved: Multi-screen fullscreen now aligns with single-screen and uses native Windows API`n- Fixed: Single-screen now keeps active source index from multi-screen when exiting grid mode, with source count unchanged`n- Fixed: Multi-screen auto-tries next source on source failure and only shows error after all sources fail`n- Fixed: Returning to Home now stops and releases playback resources for both single and multi-screen`n- Improved: Single/multi-screen transitions now release playback instances mutually while preserving selected multi-screen channels`n- Compatibility: Mobile behavior is unaffected by these desktop multi-screen changes"
+                  },
+    "minVersion":  "1.0.0"
 }
-
