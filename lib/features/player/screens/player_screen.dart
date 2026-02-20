@@ -342,7 +342,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 
             if (mounted) {
               // 杩斿洖棣栭〉
-              Navigator.of(context).popUntil((route) => route.isFirst);
+              Navigator.of(context).maybePop();
             }
           },
         );
@@ -3059,3 +3059,4 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
   }
 }
+

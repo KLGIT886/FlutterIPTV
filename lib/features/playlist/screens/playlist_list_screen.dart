@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/navigation/app_router.dart';
 import '../../../core/widgets/tv_focusable.dart';
 import '../../../core/widgets/tv_sidebar.dart';
 import '../../../core/i18n/app_strings.dart';
@@ -13,7 +14,7 @@ import '../../favorites/providers/favorites_provider.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../../epg/providers/epg_provider.dart';
 
-/// 直播源列表页面 - 只显示已保存的播放列表（只读）
+/// Playlist sources page (read-only list of saved playlists).
 class PlaylistListScreen extends StatefulWidget {
   const PlaylistListScreen({super.key});
 
@@ -22,6 +23,173 @@ class PlaylistListScreen extends StatefulWidget {
 }
 
 class _PlaylistListScreenState extends State<PlaylistListScreen> {
+  final Map<String, FocusNode> _tvFocusNodes = <String, FocusNode>{};
+  bool _pendingTvMenuFocusAfterDelete = false;
+
+  FocusNode _getTvFocusNode(String key) {
+    return _tvFocusNodes.putIfAbsent(key, () => FocusNode(debugLabel: key));
+  }
+
+  bool _requestNodeFocus(FocusNode? node) {
+    if (!mounted || node == null) return false;
+    if (!node.canRequestFocus || node.context == null) return false;
+    FocusScope.of(context).requestFocus(node);
+    return true;
+  }
+
+  void _clearPrimaryFocus() {
+    FocusManager.instance.primaryFocus
+        ?.unfocus(disposition: UnfocusDisposition.scope);
+  }
+
+  void _cleanupTvFocusNodes(List<dynamic> playlists) {
+    final validIds = playlists
+        .map((p) => (p.id).toString())
+        .toSet();
+    final keysToRemove = <String>[];
+    for (final key in _tvFocusNodes.keys) {
+      final underscoreIndex = key.lastIndexOf('_');
+      if (underscoreIndex <= 0 || underscoreIndex >= key.length - 1) continue;
+      final idPart = key.substring(underscoreIndex + 1);
+      if (!validIds.contains(idPart)) {
+        keysToRemove.add(key);
+      }
+    }
+    for (final key in keysToRemove) {
+      _tvFocusNodes.remove(key)?.dispose();
+    }
+  }
+
+  void _requestTvFocusWithRetry(
+    String key, {
+    int retries = 8,
+    VoidCallback? onFailure,
+  }) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final node = _getTvFocusNode(key);
+      if (_requestNodeFocus(node)) {
+        return;
+      }
+      if (retries > 0) {
+        Future.delayed(
+          const Duration(milliseconds: 40),
+          () => _requestTvFocusWithRetry(
+            key,
+            retries: retries - 1,
+            onFailure: onFailure,
+          ),
+        );
+      } else {
+        onFailure?.call();
+      }
+    });
+  }
+
+  bool _requestTvMenuFocus({int preferredIndex = 2}) {
+    final menuNodes = TVSidebar.menuFocusNodes;
+    if (menuNodes == null || menuNodes.isEmpty) return false;
+
+    final candidates = {
+      preferredIndex,
+      0,
+      for (int i = 0; i < menuNodes.length; i++) i,
+    };
+
+    for (final index in candidates) {
+      if (index < 0 || index >= menuNodes.length) continue;
+      if (_requestNodeFocus(menuNodes[index])) return true;
+    }
+    return false;
+  }
+
+  void _requestTvMenuFocusWithRetry({
+    int preferredIndex = 2,
+    int retries = 8,
+    VoidCallback? onFailure,
+  }) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_requestTvMenuFocus(preferredIndex: preferredIndex)) {
+        return;
+      }
+      if (retries > 0) {
+        Future.delayed(
+          const Duration(milliseconds: 40),
+          () => _requestTvMenuFocusWithRetry(
+            preferredIndex: preferredIndex,
+            retries: retries - 1,
+            onFailure: onFailure,
+          ),
+        );
+      } else {
+        onFailure?.call();
+      }
+    });
+  }
+
+  void _requestTvFallbackFocus(PlaylistProvider provider) {
+    final sortedPlaylists = List.from(provider.playlists)
+      ..sort((a, b) => (b.id ?? 0).compareTo(a.id ?? 0));
+
+    for (final playlist in sortedPlaylists) {
+      if (playlist.id == null) continue;
+      final key = 'card_${playlist.id}';
+      final node = _tvFocusNodes[key];
+      if (_requestNodeFocus(node)) {
+        return;
+      }
+    }
+
+    if (sortedPlaylists.isNotEmpty && sortedPlaylists.first.id != null) {
+      _requestTvFocusWithRetry(
+        'card_${sortedPlaylists.first.id}',
+        onFailure: () => _requestTvMenuFocusWithRetry(preferredIndex: 2),
+      );
+      return;
+    }
+
+    _requestTvMenuFocusWithRetry(preferredIndex: 2);
+  }
+
+  void _ensureTvFocusAlive(PlaylistProvider provider) {
+    if (!PlatformDetector.isTV) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      if (_pendingTvMenuFocusAfterDelete) {
+        if (_requestTvMenuFocus(preferredIndex: 2)) {
+          _pendingTvMenuFocusAfterDelete = false;
+          return;
+        }
+        _requestTvMenuFocusWithRetry(
+          preferredIndex: 2,
+          onFailure: () {
+            if (!mounted) return;
+            _pendingTvMenuFocusAfterDelete = false;
+            _requestTvFallbackFocus(provider);
+          },
+        );
+        return;
+      }
+
+      final current = FocusManager.instance.primaryFocus;
+      if (current != null && current.context != null && current.hasFocus) {
+        return;
+      }
+      _requestTvFallbackFocus(provider);
+    });
+  }
+
+  @override
+  void dispose() {
+    for (final node in _tvFocusNodes.values) {
+      node.dispose();
+    }
+    _tvFocusNodes.clear();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -50,7 +218,18 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
             ),
           ),
           child: TVSidebar(
-            selectedIndex: 2, // 直播源列表页
+            selectedIndex: 2, // Playlist sources page
+            onRight: () {
+              final provider = context.read<PlaylistProvider>();
+              final sortedPlaylists = List.from(provider.playlists)
+                ..sort((a, b) => (b.id ?? 0).compareTo(a.id ?? 0));
+              if (sortedPlaylists.isNotEmpty && sortedPlaylists.first.id != null) {
+                _requestTvFocusWithRetry(
+                  'card_${sortedPlaylists.first.id}',
+                  onFailure: () => _requestTvFallbackFocus(provider),
+                );
+              }
+            },
             child: content,
           ),
         ),
@@ -72,17 +251,17 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
         ),
         child: Column(
           children: [
-            // 手机端添加状态栏高度
+            // Add top safe-area spacing on mobile.
             if (PlatformDetector.isMobile)
               SizedBox(height: MediaQuery.of(context).padding.top),
             AppBar(
               backgroundColor: Colors.transparent,
-              primary: false, // 禁用自动SafeArea padding
+              primary: false, // Disable automatic SafeArea padding.
               toolbarHeight: PlatformDetector.isMobile &&
                       MediaQuery.of(context).size.width > 600
                   ? 24.0
-                  : 56.0, // 横屏时进一步减小到24px
-              automaticallyImplyLeading: false, // 不显示返回按钮
+                  : 56.0, // Keep compact height in landscape mode.
+              automaticallyImplyLeading: false, // Hide the default back button.
               title: Text(
                 AppStrings.of(context)?.playlistList ?? 'Playlist List',
                 style: TextStyle(
@@ -90,7 +269,7 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
                   fontSize: PlatformDetector.isMobile &&
                           MediaQuery.of(context).size.width > 600
                       ? 14
-                      : 20, // 横屏时字体14px
+                      : 20, // Use smaller title font in landscape mode.
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -135,6 +314,13 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
         }
 
         if (provider.playlists.isEmpty) {
+          _pendingTvMenuFocusAfterDelete = false;
+          if (PlatformDetector.isTV) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              _requestTvMenuFocusWithRetry(preferredIndex: 2);
+            });
+          }
           return _buildEmptyState();
         }
 
@@ -186,9 +372,11 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
   }
 
   Widget _buildPlaylistsList(PlaylistProvider provider) {
-    // 按照 ID 降序排序（最新的在前面）
+    // Sort by ID descending (newest first).
     final sortedPlaylists = List.from(provider.playlists)
       ..sort((a, b) => (b.id ?? 0).compareTo(a.id ?? 0));
+    _cleanupTvFocusNodes(sortedPlaylists);
+    _ensureTvFocusAlive(provider);
 
     return ListView.builder(
       padding: const EdgeInsets.all(20),
@@ -208,8 +396,17 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
     final isActive = provider.activePlaylist?.id == playlist.id;
     final isMobile = PlatformDetector.isMobile;
     final isLandscape = isMobile && MediaQuery.of(context).size.width > 600;
+    final isTv = PlatformDetector.isTV;
+    final playlistKey = (playlist.id ?? index).toString();
+    final cardFocusNode = isTv ? _getTvFocusNode('card_$playlistKey') : null;
+    final copyFocusNode = isTv ? _getTvFocusNode('copy_$playlistKey') : null;
+    final refreshFocusNode =
+        isTv ? _getTvFocusNode('refresh_$playlistKey') : null;
+    final deleteFocusNode =
+        isTv ? _getTvFocusNode('delete_$playlistKey') : null;
 
     return TVFocusable(
+      focusNode: cardFocusNode,
       autofocus: index == 0,
       onSelect: () {
         provider.setActivePlaylist(
@@ -220,6 +417,16 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
           favoritesProvider: context.read<FavoritesProvider>(),
         );
       },
+      // TV only: move focus from card to first action on RIGHT key.
+      onRight: isTv
+          ? () {
+              if (playlist.isRemote && playlist.url != null) {
+                copyFocusNode?.requestFocus();
+              } else {
+                refreshFocusNode?.requestFocus();
+              }
+            }
+          : null,
       focusScale: 1.02,
       showFocusBorder: false,
       builder: (context, isFocused, child) {
@@ -237,8 +444,7 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
                   )
                 : null,
             color: isActive ? null : AppTheme.getSurfaceColor(context),
-            borderRadius:
-                BorderRadius.circular(isLandscape ? 12 : 16), // 横屏时圆角更小
+            borderRadius: BorderRadius.circular(isLandscape ? 12 : 16),
             border: Border.all(
               color: isFocused
                   ? AppTheme.getPrimaryColor(context)
@@ -260,28 +466,27 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
         );
       },
       child: Padding(
-        padding: EdgeInsets.all(isLandscape ? 6 : 10), // 横屏时减少padding
+        padding: EdgeInsets.all(isLandscape ? 6 : 10),
         child: Row(
           children: [
             // Icon
             Container(
-              width: isLandscape ? 36 : 48, // 横屏时图标容器更小
-              height: isLandscape ? 36 : 48, // 横屏时图标容器更小
+              width: isLandscape ? 36 : 48,
+              height: isLandscape ? 36 : 48,
               decoration: BoxDecoration(
                 color: AppTheme.getPrimaryColor(context).withOpacity(0.2),
-                borderRadius:
-                    BorderRadius.circular(isLandscape ? 8 : 10), // 横屏时圆角更小
+                borderRadius: BorderRadius.circular(isLandscape ? 8 : 10),
               ),
               child: Icon(
                 playlist.isRemote
                     ? Icons.cloud_outlined
                     : Icons.folder_outlined,
                 color: AppTheme.getPrimaryColor(context),
-                size: isLandscape ? 18 : 24, // 横屏时图标更小
+                size: isLandscape ? 18 : 24,
               ),
             ),
 
-            SizedBox(width: isLandscape ? 10 : 16), // 横屏时减少间距
+            SizedBox(width: isLandscape ? 10 : 16),
 
             // Info
             Expanded(
@@ -295,7 +500,7 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
                           playlist.name,
                           style: TextStyle(
                             color: AppTheme.getTextPrimary(context),
-                            fontSize: isLandscape ? 12 : 14, // 横屏时字体更小
+                            fontSize: isLandscape ? 12 : 14,
                             fontWeight: FontWeight.w600,
                           ),
                           maxLines: 1,
@@ -305,13 +510,13 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
                       if (isActive)
                         Container(
                           padding: EdgeInsets.symmetric(
-                            horizontal: isLandscape ? 4 : 6, // 横屏时减少padding
-                            vertical: isLandscape ? 2 : 3, // 横屏时减少padding
+                            horizontal: isLandscape ? 4 : 6,
+                            vertical: isLandscape ? 2 : 3,
                           ),
                           decoration: BoxDecoration(
                             color: AppTheme.getPrimaryColor(context),
-                            borderRadius: BorderRadius.circular(
-                                isLandscape ? 4 : 6), // 横屏时圆角更小
+                            borderRadius:
+                                BorderRadius.circular(isLandscape ? 4 : 6),
                           ),
                           child: Text(
                             AppStrings.of(context)?.active ?? 'ACTIVE',
@@ -326,7 +531,7 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '${playlist.format} · ${playlist.isRemote ? 'URL' : (AppStrings.of(context)?.localFile ?? 'Local File')} · ${playlist.channelCount} ${AppStrings.of(context)?.channels ?? 'channels'}',
+                    '${playlist.format} | ${playlist.isRemote ? 'URL' : (AppStrings.of(context)?.localFile ?? 'Local File')} | ${playlist.channelCount} ${AppStrings.of(context)?.channels ?? 'channels'}',
                     style: TextStyle(
                       color: AppTheme.getTextSecondary(context),
                       fontSize: 11,
@@ -346,13 +551,15 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
               ),
             ),
 
-            // Actions
+            // Actions (always visible; TV can focus via RIGHT key)
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Copy URL Button (only for remote playlists)
                 if (playlist.isRemote && playlist.url != null) ...[
                   TVFocusable(
+                    focusNode: copyFocusNode,
+                    onLeft: isTv ? () => cardFocusNode?.requestFocus() : null,
+                    onRight: isTv ? () => refreshFocusNode?.requestFocus() : null,
                     onSelect: () => _copyUrl(playlist.url!),
                     child: Container(
                       padding: const EdgeInsets.all(8),
@@ -369,9 +576,18 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
                   ),
                   const SizedBox(width: 6),
                 ],
-
-                // Refresh Button
                 TVFocusable(
+                  focusNode: refreshFocusNode,
+                  onLeft: isTv
+                      ? () {
+                          if (playlist.isRemote && playlist.url != null) {
+                            copyFocusNode?.requestFocus();
+                          } else {
+                            cardFocusNode?.requestFocus();
+                          }
+                        }
+                      : null,
+                  onRight: isTv ? () => deleteFocusNode?.requestFocus() : null,
                   onSelect: () => _refreshPlaylist(provider, playlist),
                   child: Container(
                     padding: const EdgeInsets.all(8),
@@ -387,9 +603,10 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
                   ),
                 ),
                 const SizedBox(width: 6),
-
-                // Delete Button
                 TVFocusable(
+                  focusNode: deleteFocusNode,
+                  onLeft: isTv ? () => refreshFocusNode?.requestFocus() : null,
+                  onRight: isTv ? () {} : null,
                   onSelect: () => _confirmDelete(provider, playlist),
                   child: Container(
                     padding: const EdgeInsets.all(8),
@@ -470,9 +687,9 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
     Clipboard.setData(ClipboardData(text: url));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('URL已复制到剪贴板'),
-          duration: Duration(seconds: 2),
+        SnackBar(
+          content: Text(AppStrings.of(context)?.urlCopied ?? 'URL copied to clipboard'),
+          duration: const Duration(seconds: 2),
           backgroundColor: AppTheme.successColor,
         ),
       );
@@ -480,36 +697,38 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
   }
 
   void _confirmDelete(PlaylistProvider provider, dynamic playlist) {
+    final pageContext = context;
     showDialog(
-      context: context,
-      builder: (context) {
+      context: pageContext,
+      builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: AppTheme.getSurfaceColor(context),
+          backgroundColor: AppTheme.getSurfaceColor(dialogContext),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
           title: Text(
-            AppStrings.of(context)?.deletePlaylist ?? 'Delete Playlist',
-            style: TextStyle(color: AppTheme.getTextPrimary(context)),
+            AppStrings.of(dialogContext)?.deletePlaylist ?? 'Delete Playlist',
+            style: TextStyle(color: AppTheme.getTextPrimary(dialogContext)),
           ),
           content: Text(
-            (AppStrings.of(context)?.deleteConfirmation ??
+            (AppStrings.of(dialogContext)?.deleteConfirmation ??
                     'Are you sure you want to delete "{name}"? This will also remove all channels from this playlist.')
                 .replaceAll('{name}', playlist.name),
-            style: TextStyle(color: AppTheme.getTextSecondary(context)),
+            style: TextStyle(color: AppTheme.getTextSecondary(dialogContext)),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(AppStrings.of(context)?.cancel ?? 'Cancel'),
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(AppStrings.of(dialogContext)?.cancel ?? 'Cancel'),
             ),
             ElevatedButton(
+              autofocus: true,
               onPressed: () async {
-                Navigator.pop(context);
+                Navigator.pop(dialogContext);
                 final success = await provider.deletePlaylist(playlist.id);
 
                 if (mounted && success) {
-                  final channelProvider = context.read<ChannelProvider>();
+                  final channelProvider = pageContext.read<ChannelProvider>();
 
                   if (provider.activePlaylist != null &&
                       provider.activePlaylist!.id != null) {
@@ -519,13 +738,25 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
                     await channelProvider.loadAllChannels();
                   }
 
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(pageContext).showSnackBar(
                     SnackBar(
-                      content: Text(AppStrings.of(context)?.playlistDeleted ??
+                      content: Text(AppStrings.of(pageContext)?.playlistDeleted ??
                           'Playlist deleted'),
                       backgroundColor: AppTheme.successColor,
                     ),
                   );
+
+                  // TV: hard refresh current page to fully rebuild focus tree.
+                  if (PlatformDetector.isTV) {
+                    _pendingTvMenuFocusAfterDelete = false;
+                    _clearPrimaryFocus();
+                    if (!mounted) return;
+                    Navigator.of(pageContext)
+                        .pushReplacementNamed(AppRouter.playlistList);
+                    return;
+                  } else {
+                    _pendingTvMenuFocusAfterDelete = false;
+                  }
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -539,3 +770,4 @@ class _PlaylistListScreenState extends State<PlaylistListScreen> {
     );
   }
 }
+
