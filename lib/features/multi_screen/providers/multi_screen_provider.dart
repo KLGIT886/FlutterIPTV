@@ -17,6 +17,8 @@ class ScreenPlayerState {
   String? error;
   bool isSoftwareDecoding = false;
   bool softwareFallbackAttempted = false;
+  Duration position = Duration.zero;
+  Duration duration = Duration.zero;
   
   // 视频信息
   int videoWidth = 0;
@@ -58,6 +60,8 @@ class MultiScreenProvider extends ChangeNotifier {
   List<ScreenPlayerState> get screens => _screens;
   int get activeScreenIndex => _activeScreenIndex;
   bool get isMultiScreenMode => _isMultiScreenMode;
+  double get volume => _volume;
+  ScreenPlayerState get activeScreen => _screens[_activeScreenIndex];
 
   // 获取指定屏幕的状态
   ScreenPlayerState getScreen(int index) {
@@ -186,14 +190,17 @@ class MultiScreenProvider extends ChangeNotifier {
     }
     
     // Windows端分屏模式也需要记录观看历史
-    if (!skipHistory && channel.id != null && channel.playlistId != null) {
-      await ServiceLocator.watchHistory.addWatchHistory(channel.id!, channel.playlistId!);
+    if (!skipHistory && channel.id != null) {
+      await ServiceLocator.watchHistory
+          .addWatchHistory(channel.id!, channel.playlistId);
       ServiceLocator.log.d('MultiScreenProvider: Recorded watch history for channel ${channel.name} (Windows multi-screen)');
     }
     
     screen.isLoading = true;
     screen.error = null;
     screen.channel = channel;
+    screen.position = Duration.zero;
+    screen.duration = Duration.zero;
     notifyListeners();
     
     try {
@@ -223,15 +230,28 @@ class MultiScreenProvider extends ChangeNotifier {
           screen.videoHeight = height ?? 0;
           notifyListeners();
         });
+
+        screen.player!.stream.position.listen((position) {
+          screen.position = position;
+          notifyListeners();
+        });
+
+        screen.player!.stream.duration.listen((duration) {
+          screen.duration = duration;
+          notifyListeners();
+        });
         
         // 监听错误
-        screen.player!.stream.error.listen((error) {
+        screen.player!.stream.error.listen((error) async {
           if (error.isNotEmpty) {
             ServiceLocator.log.d('MultiScreenProvider: Screen $screenIndex error=$error');
             if (_shouldTrySoftwareFallback(error, screen)) {
               _attemptSoftwareFallback(screenIndex);
               return;
             }
+            final switched =
+                await _tryNextSourceOnError(screenIndex, screen, error);
+            if (switched) return;
             screen.error = error;
             screen.isLoading = false;
             notifyListeners();
@@ -275,6 +295,9 @@ class MultiScreenProvider extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       ServiceLocator.log.d('MultiScreenProvider: Screen $screenIndex playback error: $e');
+      final switched =
+          await _tryNextSourceOnError(screenIndex, screen, e.toString());
+      if (switched) return;
       screen.error = e.toString();
       screen.isLoading = false;
       notifyListeners();
@@ -364,6 +387,25 @@ class MultiScreenProvider extends ChangeNotifier {
     screen.softwareFallbackAttempted = true;
     _createPlayerForScreen(screenIndex, useSoftwareDecoding: true);
     await playChannelOnScreen(screenIndex, screen.channel!, skipHistory: true);
+  }
+
+  Future<bool> _tryNextSourceOnError(
+      int screenIndex, ScreenPlayerState screen, String error) async {
+    final channel = screen.channel;
+    if (channel == null || !channel.hasMultipleSources) return false;
+
+    final nextIndex = channel.currentSourceIndex + 1;
+    if (nextIndex >= channel.sourceCount) {
+      ServiceLocator.log.d(
+          'MultiScreenProvider: Screen $screenIndex all sources failed, lastError=$error');
+      return false;
+    }
+
+    final nextChannel = channel.copyWith(currentSourceIndex: nextIndex);
+    ServiceLocator.log.d(
+        'MultiScreenProvider: Screen $screenIndex source ${channel.currentSourceIndex + 1}/${channel.sourceCount} failed, trying ${nextIndex + 1}/${channel.sourceCount}');
+    await playChannelOnScreen(screenIndex, nextChannel, skipHistory: true);
+    return true;
   }
 
   Future<void> _disposeScreenPlayer(int screenIndex) async {
@@ -513,6 +555,62 @@ class MultiScreenProvider extends ChangeNotifier {
     
     final prevIndex = (currentIndex - 1 + channels.length) % channels.length;
     playChannelOnScreen(_activeScreenIndex, channels[prevIndex]);
+  }
+
+  bool shouldShowProgressBarForActiveScreen(String progressBarMode) {
+    final screen = activeScreen;
+    final durationSeconds = screen.duration.inSeconds;
+    if (progressBarMode == 'never') return false;
+    if (progressBarMode == 'always') return durationSeconds > 0;
+    return screen.channel?.isSeekable == true &&
+        durationSeconds > 0 &&
+        durationSeconds <= 86400;
+  }
+
+  void seekActiveScreen(Duration position) {
+    final screen = activeScreen;
+    if (screen.player == null) return;
+    screen.player!.seek(position);
+  }
+
+  Future<void> togglePlayPauseOnActiveScreen() async {
+    final screen = activeScreen;
+    final player = screen.player;
+    if (player == null) return;
+    if (screen.isPlaying) {
+      await player.pause();
+      screen.isPlaying = false;
+    } else {
+      await player.play();
+      screen.isPlaying = true;
+    }
+    notifyListeners();
+  }
+
+  void setVolume(double volume) {
+    _volume = volume.clamp(0.0, 1.0).toDouble();
+    _applyVolumeToActiveScreen();
+    notifyListeners();
+  }
+
+  void switchToNextSourceOnActiveScreen() {
+    final screen = activeScreen;
+    final channel = screen.channel;
+    if (channel == null || !channel.hasMultipleSources) return;
+    final newIndex = (channel.currentSourceIndex + 1) % channel.sourceCount;
+    final nextChannel = channel.copyWith(currentSourceIndex: newIndex);
+    playChannelOnScreen(_activeScreenIndex, nextChannel, skipHistory: true);
+  }
+
+  void switchToPreviousSourceOnActiveScreen() {
+    final screen = activeScreen;
+    final channel = screen.channel;
+    if (channel == null || !channel.hasMultipleSources) return;
+    final newIndex =
+        (channel.currentSourceIndex - 1 + channel.sourceCount) %
+            channel.sourceCount;
+    final prevChannel = channel.copyWith(currentSourceIndex: newIndex);
+    playChannelOnScreen(_activeScreenIndex, prevChannel, skipHistory: true);
   }
 
   @override

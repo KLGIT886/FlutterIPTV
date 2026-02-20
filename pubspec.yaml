@@ -1,7 +1,7 @@
-name: flutter_iptv
+﻿name: flutter_iptv
 description: A professional IPTV player application supporting Windows, Android Mobile, and Android TV with D-Pad navigation.
 publish_to: 'none'
-version: 1.5.5+165
+version: 1.5.8+168
 
 environment:
   sdk: '>=3.5.0 <4.0.0'
@@ -87,7 +87,7 @@ flutter:
     - assets/sql/
 
   fonts:
-    # 中文字体
+    # 涓枃瀛椾綋
     - family: SimHei
       fonts:
         - asset: assets/fonts/SimHei.ttf
@@ -103,7 +103,7 @@ flutter:
     - family: MicrosoftYaHei
       fonts:
         - asset: assets/fonts/MicrosoftYaHei.ttc
-    # 英文字体
+    # 鑻辨枃瀛椾綋
     - family: Arial
       fonts:
         - asset: assets/fonts/Arial.ttf
@@ -128,5 +128,6 @@ flutter:
     - family: Impact
       fonts:
         - asset: assets/fonts/Impact.ttf
+
 
 

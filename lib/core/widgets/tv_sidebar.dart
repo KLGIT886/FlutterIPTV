@@ -111,7 +111,7 @@ class _TVSidebarState extends State<TVSidebar> {
     // 根据简单菜单设置决定是否展开
     // 简单模式：始终收起，非简单模式：始终展开
     final shouldExpand = !simpleMenu;
-    final width = shouldExpand ? 150.0 : 52.0;
+    final width = shouldExpand ? 130.0 : 52.0;
 
     return Row(
       children: [

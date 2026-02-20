@@ -29,6 +29,7 @@ class AppStrings {
   String get deleteConfirmation => _localizedValues['deleteConfirmation']!;
   String get cancel => _localizedValues['cancel']!;
   String get delete => _localizedValues['delete']!;
+  String get actions => _localizedValues['actions']!;
   String get settings => _localizedValues['settings']!;
   String get language => _localizedValues['language']!;
   String get general => _localizedValues['general']!;
@@ -108,6 +109,7 @@ class AppStrings {
       _localizedValues['playlistRefreshFailed']!;
   String get playlistDeleted => _localizedValues['playlistDeleted']!;
   String get playlistImported => _localizedValues['playlistImported']!;
+  String get urlCopied => _localizedValues['urlCopied']!;
   String get errorPickingFile => _localizedValues['errorPickingFile']!;
   String get minutesAgo => _localizedValues['minutesAgo']!;
   String get hoursAgo => _localizedValues['hoursAgo']!;
@@ -575,6 +577,7 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'deleteConfirmation': '确定要删除 "{name}" 吗？这将同时删除该列表下的所有频道。',
     'cancel': '取消',
     'delete': '删除',
+    'actions': '操作',
     'settings': '设置',
     'language': '语言',
     'general': '通用',
@@ -646,6 +649,7 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'playlistRefreshFailed': '播放列表刷新失败',
     'playlistDeleted': '播放列表已删除',
     'playlistImported': '播放列表导入成功',
+    'urlCopied': 'URL已复制到剪贴板',
     'errorPickingFile': '选择文件时出错: {error}',
     'minutesAgo': '分钟前',
     'hoursAgo': '小时前',
@@ -1019,6 +1023,7 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
         'Are you sure you want to delete "{name}"? This will also remove all channels from this playlist.',
     'cancel': 'Cancel',
     'delete': 'Delete',
+    'actions': 'Actions',
     'settings': 'Settings',
     'language': 'Language',
     'general': 'General',
@@ -1092,6 +1097,7 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'playlistRefreshFailed': 'Failed to refresh playlist',
     'playlistDeleted': 'Playlist deleted',
     'playlistImported': 'Playlist imported successfully',
+    'urlCopied': 'URL copied to clipboard',
     'errorPickingFile': 'Error picking file: {error}',
     'minutesAgo': 'm ago',
     'hoursAgo': 'h ago',

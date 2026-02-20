@@ -38,6 +38,8 @@ class SettingsProvider extends ChangeNotifier {
   static const String _keyActiveScreenIndex = 'active_screen_index';
   static const String _keyLastPlayMode = 'last_play_mode'; // 'single' or 'multi'
   static const String _keyLastMultiScreenChannels = 'last_multi_screen_channels'; // JSON string of channel IDs
+  static const String _keyLastMultiScreenSourceIndexes =
+      'last_multi_screen_source_indexes'; // comma-separated source indexes
   static const String _keyShowMultiScreenChannelName = 'show_multi_screen_channel_name'; // 多屏播放是否显示频道名称
   static const String _keyDarkColorScheme = 'dark_color_scheme';
   static const String _keyLightColorScheme = 'light_color_scheme';
@@ -83,6 +85,7 @@ class SettingsProvider extends ChangeNotifier {
   int _activeScreenIndex = 0; // 当前活动窗口索引
   String _lastPlayMode = 'single'; // 上次播放模式：'single' 或 'multi'
   List<int?> _lastMultiScreenChannels = [null, null, null, null]; // 分屏频道ID列表
+  List<int> _lastMultiScreenSourceIndexes = [0, 0, 0, 0]; // 分屏源索引列表
   bool _showMultiScreenChannelName = false; // 多屏播放是否显示频道名称（默认关闭）
   String _darkColorScheme = 'ocean'; // 黑暗模式配色方案（默认海洋）
   String _lightColorScheme = 'sky'; // 明亮模式配色方案（默认天空）
@@ -126,6 +129,7 @@ class SettingsProvider extends ChangeNotifier {
   int get activeScreenIndex => _activeScreenIndex;
   String get lastPlayMode => _lastPlayMode;
   List<int?> get lastMultiScreenChannels => _lastMultiScreenChannels;
+  List<int> get lastMultiScreenSourceIndexes => _lastMultiScreenSourceIndexes;
   bool get showMultiScreenChannelName => _showMultiScreenChannelName;
   String get darkColorScheme => _darkColorScheme;
   String get lightColorScheme => _lightColorScheme;
@@ -206,6 +210,23 @@ class SettingsProvider extends ChangeNotifier {
         }
       } catch (_) {
         _lastMultiScreenChannels = [null, null, null, null];
+      }
+    }
+
+    final multiScreenSourceIndexesStr =
+        prefs.getString(_keyLastMultiScreenSourceIndexes);
+    if (multiScreenSourceIndexesStr != null) {
+      try {
+        final parsed = multiScreenSourceIndexesStr
+            .split(',')
+            .map((s) => int.tryParse(s) ?? 0)
+            .toList();
+        _lastMultiScreenSourceIndexes = parsed.take(4).toList();
+        while (_lastMultiScreenSourceIndexes.length < 4) {
+          _lastMultiScreenSourceIndexes.add(0);
+        }
+      } catch (_) {
+        _lastMultiScreenSourceIndexes = [0, 0, 0, 0];
       }
     }
     
@@ -308,6 +329,8 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setInt(_keyActiveScreenIndex, _activeScreenIndex);
     await prefs.setString(_keyLastPlayMode, _lastPlayMode);
     await prefs.setString(_keyLastMultiScreenChannels, _lastMultiScreenChannels.map((e) => e?.toString() ?? '').join(','));
+    await prefs.setString(_keyLastMultiScreenSourceIndexes,
+        _lastMultiScreenSourceIndexes.map((e) => e.toString()).join(','));
     await prefs.setBool(_keyShowMultiScreenChannelName, _showMultiScreenChannelName);
     await prefs.setString(_keyDarkColorScheme, _darkColorScheme);
     await prefs.setString(_keyLightColorScheme, _lightColorScheme);
@@ -550,12 +573,20 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   /// 保存分屏播放状态
-  Future<void> saveLastMultiScreen(List<int?> channelIds, int activeIndex) async {
+  Future<void> saveLastMultiScreen(List<int?> channelIds, int activeIndex,
+      {List<int>? sourceIndexes}) async {
     _lastPlayMode = 'multi';
     _lastMultiScreenChannels = List<int?>.from(channelIds);
     while (_lastMultiScreenChannels.length < 4) {
       _lastMultiScreenChannels.add(null);
     }
+    _lastMultiScreenSourceIndexes =
+        List<int>.from(sourceIndexes ?? _lastMultiScreenSourceIndexes);
+    while (_lastMultiScreenSourceIndexes.length < 4) {
+      _lastMultiScreenSourceIndexes.add(0);
+    }
+    _lastMultiScreenSourceIndexes =
+        _lastMultiScreenSourceIndexes.take(4).map((e) => e < 0 ? 0 : e).toList();
     _activeScreenIndex = activeIndex.clamp(0, 3);
     await _saveSettings();
     notifyListeners();
@@ -684,6 +715,7 @@ class SettingsProvider extends ChangeNotifier {
     _enableMultiScreen = true;
     _defaultScreenPosition = 1;
     _activeScreenIndex = 0;
+    _lastMultiScreenSourceIndexes = [0, 0, 0, 0];
     _darkColorScheme = 'ocean';
     _lightColorScheme = 'sky';
     _fontFamily = 'Arial';

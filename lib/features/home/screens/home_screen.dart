@@ -1014,6 +1014,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
 
     final channels = provider.channels;
     final multiScreenChannelIds = settingsProvider.lastMultiScreenChannels;
+    final multiScreenSourceIndexes = settingsProvider.lastMultiScreenSourceIndexes;
     final activeIndex = settingsProvider.activeScreenIndex;
 
     ServiceLocator.log.d('分屏频道ID: $multiScreenChannelIds', tag: 'HomeScreen');
@@ -1100,8 +1101,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
             (c) => c.id == channelId,
             orElse: () => channels.first,
           );
+          final sourceIndex =
+              (i < multiScreenSourceIndexes.length ? multiScreenSourceIndexes[i] : 0)
+                  .clamp(0, channel.sourceCount - 1);
+          final restoredChannel =
+              channel.copyWith(currentSourceIndex: sourceIndex);
           // 播放频道到对应屏幕
-          futures.add(multiScreenProvider.playChannelOnScreen(i, channel));
+          futures.add(multiScreenProvider.playChannelOnScreen(i, restoredChannel));
         }
       }
 

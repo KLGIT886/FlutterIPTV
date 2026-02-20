@@ -9,6 +9,7 @@ import '../../../core/widgets/tv_focusable.dart';
 import '../../../core/widgets/tv_sidebar.dart';
 import '../../../core/widgets/channel_card.dart';
 import '../../../core/widgets/category_card.dart';
+import '../../../core/widgets/auto_scroll_text.dart';
 import '../../../core/platform/platform_detector.dart';
 import '../../../core/platform/native_player_channel.dart';
 import '../../../core/i18n/app_strings.dart';
@@ -446,7 +447,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> with ThrottledStateMixi
 
         return FocusTraversalGroup(
           child: Container(
-            width: 240,
+            width: 180,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
@@ -801,18 +802,17 @@ class _ChannelsScreenState extends State<ChannelsScreen> with ThrottledStateMixi
 
                 // Name
                 Expanded(
-                  child: Text(
-                    name,
+                  child: AutoScrollText(
+                    text: name,
+                    forceScroll: true,
                     style: TextStyle(
                       color: isSelected
                           ? AppTheme.getPrimaryColor(context)
                           : AppTheme.getTextPrimary(context),
-                      fontSize: 14,
+                      fontSize: 12,
                       fontWeight:
                           isSelected ? FontWeight.w600 : FontWeight.normal,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
 

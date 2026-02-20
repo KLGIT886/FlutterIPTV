@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -9,8 +9,10 @@ import '../../../core/widgets/channel_logo_widget.dart';
 import '../../../core/widgets/auto_scroll_text.dart';
 import '../../../core/platform/platform_detector.dart';
 import '../../../core/platform/windows_pip_channel.dart';
+import '../../../core/platform/windows_fullscreen_native.dart';
 import '../../../core/i18n/app_strings.dart';
 import '../../../core/services/epg_service.dart';
+import '../../../core/services/service_locator.dart';
 import '../providers/multi_screen_provider.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../../epg/providers/epg_provider.dart';
@@ -36,11 +38,81 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
   int _targetScreenIndex = 0;
   String? _selectedCategory;
   Timer? _hideControlsTimer;
+  bool _isWindowFullscreen = false;
+  DateTime? _lastFullScreenToggle;
+  int? _hoveredScreenIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncWindowFullscreenState();
+  }
 
   @override
   void dispose() {
     _hideControlsTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _syncWindowFullscreenState() async {
+    if (!mounted) return;
+    if (PlatformDetector.isWindows) {
+      setState(() => _isWindowFullscreen = WindowsFullscreenNative.isFullScreen());
+      return;
+    }
+    if (PlatformDetector.isDesktop) {
+      final isFullscreen = await windowManager.isFullScreen();
+      if (!mounted) return;
+      setState(() => _isWindowFullscreen = isFullscreen);
+    }
+  }
+
+  void _toggleWindowFullscreen() {
+    if (!PlatformDetector.isDesktop) return;
+    if (PlatformDetector.isWindows) {
+      final now = DateTime.now();
+      if (_lastFullScreenToggle != null &&
+          now.difference(_lastFullScreenToggle!).inMilliseconds < 200) {
+        return;
+      }
+      _lastFullScreenToggle = now;
+
+      final success = WindowsFullscreenNative.toggleFullScreen();
+      if (success) {
+        Future.microtask(() {
+          if (mounted) {
+            setState(() {
+              _isWindowFullscreen = WindowsFullscreenNative.isFullScreen();
+            });
+          }
+        });
+      } else {
+        ServiceLocator.log.d(
+            'MultiScreenPlayer: Native fullscreen failed, falling back to window_manager');
+        windowManager
+            .isFullScreen()
+            .then((value) => windowManager.setFullScreen(!value));
+        Future.microtask(() {
+          if (mounted) {
+            windowManager.isFullScreen().then((value) {
+              if (mounted) setState(() => _isWindowFullscreen = value);
+            });
+          }
+        });
+      }
+      return;
+    }
+
+    windowManager
+        .isFullScreen()
+        .then((value) => windowManager.setFullScreen(!value));
+    Future.microtask(() {
+      if (mounted) {
+        windowManager
+            .isFullScreen()
+            .then((value) => setState(() => _isWindowFullscreen = value));
+      }
+    });
   }
 
   @override
@@ -65,7 +137,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
             }
           },
           child: GestureDetector(
-            // Mini模式下整个区域可拖动
+            // Mini妯″紡涓嬫暣涓尯鍩熷彲鎷栧姩
             onPanStart:
                 isMiniMode ? (_) => windowManager.startDragging() : null,
             onTap: () {
@@ -77,7 +149,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
             },
             child: Stack(
               children: [
-                // 2x2 网格
+                // 2x2 缃戞牸
                 Container(
                   color: Colors.black,
                   child: Column(
@@ -102,7 +174,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                   ),
                 ),
 
-                // 顶部控制栏（非Mini模式）
+                // 椤堕儴鎺у埗鏍忥紙闈濵ini妯″紡锛?
                 if (_showControls && !isMiniMode)
                   Positioned(
                     top: 0,
@@ -111,7 +183,8 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                     child: _buildTopControls(context),
                   ),
 
-                // Mini模式控制按钮（右上角，始终显示）
+
+                // Mini妯″紡鎺у埗鎸夐挳锛堝彸涓婅锛屽缁堟樉绀猴級
                 if (isMiniMode)
                   Positioned(
                     top: 4,
@@ -154,7 +227,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                     ),
                   ),
 
-                // 频道选择器
+                // 棰戦亾閫夋嫨鍣?
                 if (_showChannelSelector)
                   _buildChannelSelector(context, multiScreenProvider),
               ],
@@ -177,7 +250,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
 
   Widget _buildTopControls(BuildContext context) {
     return Container(
-      // 调整顶部间距未 30，使按钮下移，与右上角信息窗口错开并齐平
+      // 璋冩暣椤堕儴闂磋窛鏈?30锛屼娇鎸夐挳涓嬬Щ锛屼笌鍙充笂瑙掍俊鎭獥鍙ｉ敊寮€骞堕綈骞?
       padding: const EdgeInsets.fromLTRB(16, 30, 16, 8),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -208,16 +281,192 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
               },
               tooltip: AppStrings.of(context)?.miniMode ?? 'Mini Mode',
             ),
+            if (PlatformDetector.isWindows)
+              IconButton(
+                icon: Icon(
+                  _isWindowFullscreen
+                      ? Icons.fullscreen_exit_rounded
+                      : Icons.fullscreen_rounded,
+                  color: Colors.white,
+                ),
+                onPressed: _toggleWindowFullscreen,
+                tooltip: _isWindowFullscreen ? '退出全屏' : '全屏',
+              ),
             IconButton(
-              icon: const Icon(Icons.fullscreen_exit, color: Colors.white),
+              icon: const Icon(Icons.grid_off_rounded, color: Colors.white),
               onPressed: widget.onExitMultiScreen,
               tooltip: AppStrings.of(context)?.exitMultiScreen ??
-                  'Exit Multi-Screen',
+                  '退出分屏',
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildScreenControlsOverlay(
+    BuildContext context,
+    MultiScreenProvider multiScreenProvider,
+    int index,
+    ScreenPlayerState screen,
+    SettingsProvider settings,
+  ) {
+    final channel = screen.channel;
+    if (channel == null) return const SizedBox.shrink();
+
+    final durationSeconds = screen.duration.inSeconds;
+    final showProgress = settings.progressBarMode != 'never' &&
+        ((settings.progressBarMode == 'always' && durationSeconds > 0) ||
+            (settings.progressBarMode == 'auto' &&
+                channel.isSeekable &&
+                durationSeconds > 0 &&
+                durationSeconds <= 86400));
+    final maxDuration = durationSeconds > 0 ? durationSeconds.toDouble() : 1.0;
+    final currentPosition =
+        screen.position.inSeconds.toDouble().clamp(0.0, maxDuration).toDouble();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 3),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.bottomCenter,
+          end: Alignment.topCenter,
+          colors: [
+            Colors.black.withOpacity(0.8),
+            Colors.black.withOpacity(0.3),
+            Colors.transparent,
+          ],
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (showProgress) ...[
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 1.5,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 3),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 6),
+                activeTrackColor: AppTheme.getPrimaryColor(context),
+                inactiveTrackColor: const Color(0x33FFFFFF),
+                thumbColor: Colors.white,
+              ),
+              child: Slider(
+                value: currentPosition,
+                max: maxDuration,
+                onChanged: (value) {
+                  multiScreenProvider.setActiveScreen(index);
+                  multiScreenProvider
+                      .seekActiveScreen(Duration(seconds: value.toInt()));
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _formatDuration(screen.position),
+                    style: const TextStyle(color: Color(0xCCFFFFFF), fontSize: 8),
+                  ),
+                  Text(
+                    _formatDuration(screen.duration),
+                    style: const TextStyle(color: Color(0xCCFFFFFF), fontSize: 8),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 3),
+          ],
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 66,
+                child: Row(
+                  children: [
+                    const Icon(Icons.volume_up_rounded,
+                        color: Colors.white, size: 12),
+                    Expanded(
+                      child: SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          trackHeight: 1.5,
+                          thumbShape:
+                              const RoundSliderThumbShape(enabledThumbRadius: 2.5),
+                        ),
+                        child: Slider(
+                          value: multiScreenProvider.volume,
+                          max: 1.0,
+                          min: 0.0,
+                          onChanged: (value) {
+                            multiScreenProvider.setActiveScreen(index);
+                            multiScreenProvider.setVolume(value);
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              SizedBox(
+                height: 24,
+                width: 24,
+                child: FilledButton.tonal(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white.withOpacity(0.14),
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.zero,
+                  ),
+                  onPressed: () {
+                    multiScreenProvider.setActiveScreen(index);
+                    multiScreenProvider.togglePlayPauseOnActiveScreen();
+                  },
+                  child: Icon(
+                    screen.isPlaying
+                        ? Icons.pause_rounded
+                        : Icons.play_arrow_rounded,
+                    size: 14,
+                  ),
+                ),
+              ),
+              if (channel.hasMultipleSources) ...[
+                const SizedBox(width: 4),
+                SizedBox(
+                  height: 24,
+                  child: FilledButton.tonal(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white.withOpacity(0.14),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                    ),
+                    onPressed: () {
+                      multiScreenProvider.setActiveScreen(index);
+                      multiScreenProvider.switchToNextSourceOnActiveScreen();
+                    },
+                    child: Text(
+                      '${AppStrings.of(context)?.source ?? 'Source'} ${channel.currentSourceIndex + 1}/${channel.sourceCount}',
+                      style: const TextStyle(fontSize: 9),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+  String _formatDuration(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+
+    if (hours > 0) {
+      return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    }
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
   Widget _buildScreenCell(BuildContext context, int index,
@@ -228,119 +477,147 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
     final isMiniMode = WindowsPipChannel.isInPipMode;
 
     return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          multiScreenProvider.setActiveScreen(index);
-          // 如果是空屏幕且非Mini模式，显示频道选择器
-          if (screen.channel == null && !isMiniMode) {
+      child: MouseRegion(
+        onEnter: (_) {
+          if (!isMiniMode) {
             setState(() {
-              _targetScreenIndex = index;
-              _showChannelSelector = true;
+              _hoveredScreenIndex = index;
+              _showControls = true;
             });
+            _showControlsTemporarily();
           }
         },
-        onDoubleTap: () {
-          // 双击清空该屏幕的频道
-          if (screen.channel != null) {
-            multiScreenProvider.clearScreen(index);
+        onHover: (_) {
+          if (!isMiniMode && _hoveredScreenIndex != index) {
+            setState(() => _hoveredScreenIndex = index);
           }
         },
-        child: Container(
-          margin: EdgeInsets.all(isMiniMode ? 1 : 2),
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: isActive
-                  ? AppTheme.getPrimaryColor(context)
-                  : Colors.grey.withOpacity(0.3),
-              width: isActive ? (isMiniMode ? 2 : 3) : 1,
+        onExit: (_) {
+          if (!isMiniMode && _hoveredScreenIndex == index) {
+            setState(() => _hoveredScreenIndex = null);
+          }
+        },
+        child: GestureDetector(
+          onTap: () {
+            multiScreenProvider.setActiveScreen(index);
+            if (screen.channel == null && !isMiniMode) {
+              setState(() {
+                _targetScreenIndex = index;
+                _showChannelSelector = true;
+              });
+            }
+          },
+          onDoubleTap: () {
+            if (screen.channel != null) {
+              multiScreenProvider.clearScreen(index);
+            }
+          },
+          child: Container(
+            margin: EdgeInsets.all(isMiniMode ? 1 : 2),
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: isActive
+                    ? AppTheme.getPrimaryColor(context)
+                    : Colors.grey.withOpacity(0.3),
+                width: isActive ? (isMiniMode ? 2 : 3) : 1,
+              ),
             ),
-          ),
-          child: Stack(
-            children: [
-              // 视频播放器或占位符
-              if (screen.channel != null && screen.videoController != null)
-                Video(
-                  controller: screen.videoController!,
-                  fill: Colors.black,
-                  controls: NoVideoControls,
-                )
-              else if (screen.channel != null)
-                _buildLoadingPlaceholder(screen)
-              else
-                _buildEmptyScreenPlaceholder(context, index, isMiniMode),
+            child: Stack(
+              children: [
+                if (screen.channel != null && screen.videoController != null)
+                  Video(
+                    controller: screen.videoController!,
+                    fill: Colors.black,
+                    controls: NoVideoControls,
+                  )
+                else if (screen.channel != null)
+                  _buildLoadingPlaceholder(screen)
+                else
+                  _buildEmptyScreenPlaceholder(context, index, isMiniMode),
 
-              // Mini模式下不显示额外信息
-              if (!isMiniMode) ...[
-                // 屏幕标识（左上角）
-                Positioned(
-                  top: 8,
-                  left: 8,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isActive
-                          ? AppTheme.getPrimaryColor(context)
-                          : Colors.black54,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      '${index + 1}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
+                if (!isMiniMode) ...[
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isActive
+                            ? AppTheme.getPrimaryColor(context)
+                            : Colors.black54,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '${index + 1}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
-                ),
+                  if (screen.channel != null)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child:
+                          _buildInfoOverlay(context, screen, settingsProvider),
+                    ),
+                  if (screen.channel != null)
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: _buildBottomInfo(context, screen),
+                    ),
+                  if (_showControls &&
+                      _hoveredScreenIndex == index &&
+                      screen.channel != null)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: settingsProvider.showMultiScreenChannelName
+                          ? 30
+                          : 0,
+                      child: _buildScreenControlsOverlay(
+                        context,
+                        multiScreenProvider,
+                        index,
+                        screen,
+                        settingsProvider,
+                      ),
+                    ),
+                ],
 
-                // 右上角信息显示
-                if (screen.channel != null)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: _buildInfoOverlay(context, screen, settingsProvider),
+                if (screen.isLoading)
+                  Center(
+                    child: SizedBox(
+                      width: isMiniMode ? 16 : 32,
+                      height: isMiniMode ? 16 : 32,
+                      child: CircularProgressIndicator(
+                        color: AppTheme.getPrimaryColor(context),
+                        strokeWidth: 2,
+                      ),
+                    ),
                   ),
 
-                // 频道名称和EPG（底部）
-                if (screen.channel != null)
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    child: _buildBottomInfo(context, screen),
+                if (screen.error != null)
+                  Center(
+                    child: Icon(
+                      Icons.error_outline,
+                      color: Colors.red,
+                      size: isMiniMode ? 16 : 32,
+                    ),
                   ),
               ],
-
-              // 加载指示器
-              if (screen.isLoading)
-                Center(
-                  child: SizedBox(
-                    width: isMiniMode ? 16 : 32,
-                    height: isMiniMode ? 16 : 32,
-                    child: CircularProgressIndicator(
-                        color: AppTheme.getPrimaryColor(context),
-                        strokeWidth: 2),
-                  ),
-                ),
-
-              // 错误显示
-              if (screen.error != null)
-                Center(
-                  child: Icon(
-                    Icons.error_outline,
-                    color: Colors.red,
-                    size: isMiniMode ? 16 : 32,
-                  ),
-                ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
-
   Widget _buildChannelSelector(
       BuildContext context, MultiScreenProvider multiScreenProvider) {
     final channelProvider = context.watch<ChannelProvider>();
@@ -349,7 +626,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
       color: Colors.black.withOpacity(0.95),
       child: Row(
         children: [
-          // 左侧分类列表
+          // 宸︿晶鍒嗙被鍒楄〃
           Container(
             width: 200,
             decoration: BoxDecoration(
@@ -379,7 +656,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 标题栏
+                // 鏍囬鏍?
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -425,7 +702,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                     ],
                   ),
                 ),
-                // 全部频道选项
+                // 鍏ㄩ儴棰戦亾閫夐」
                 _buildCategoryItem(
                   context,
                   name: AppStrings.of(context)?.allChannels ?? 'All Channels',
@@ -434,7 +711,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                   onTap: () => setState(() => _selectedCategory = null),
                 ),
                 Divider(color: AppTheme.getCardColor(context), height: 1),
-                // 分类列表
+                // 鍒嗙被鍒楄〃
                 Expanded(
                   child: ListView.builder(
                     padding: const EdgeInsets.symmetric(vertical: 8),
@@ -455,7 +732,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
               ],
             ),
           ),
-          // 右侧频道网格
+          // 鍙充晶棰戦亾缃戞牸
           Expanded(
             child: Container(
               decoration: BoxDecoration(
@@ -572,7 +849,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
       BuildContext context,
       ChannelProvider channelProvider,
       MultiScreenProvider multiScreenProvider) {
-    // ✅ 使用 allChannels 获取全部频道，而不是分页的 channels
+    // 鉁?浣跨敤 allChannels 鑾峰彇鍏ㄩ儴棰戦亾锛岃€屼笉鏄垎椤电殑 channels
     List channels;
     if (_selectedCategory == null) {
       channels = channelProvider.allChannels;
@@ -585,7 +862,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 顶部标题
+        // 椤堕儴鏍囬
         Container(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -618,7 +895,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
             ],
           ),
         ),
-        // 频道网格
+        // 棰戦亾缃戞牸
         Expanded(
           child: GridView.builder(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -659,7 +936,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Logo区域 - 固定高度
+              // Logo鍖哄煙 - 鍥哄畾楂樺害
               Expanded(
                 flex: 3,
                 child: ClipRRect(
@@ -683,7 +960,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                   ),
                 ),
               ),
-              // 频道名区域
+              // 棰戦亾鍚嶅尯鍩?
               Expanded(
                 flex: 1,
                 child: Container(
@@ -771,12 +1048,12 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
         ? 110.0
         : 60.0;
 
-    // 如果设置为不显示频道名称，则返回空组件
+    // 濡傛灉璁剧疆涓轰笉鏄剧ず棰戦亾鍚嶇О锛屽垯杩斿洖绌虹粍浠?
     if (!settingsProvider.showMultiScreenChannelName) {
       return const SizedBox.shrink();
     }
 
-    // ✅ 使用 select 只监听当前屏幕频道的 EPG 数据
+    // 鉁?浣跨敤 select 鍙洃鍚綋鍓嶅睆骞曢閬撶殑 EPG 鏁版嵁
     final currentProgram = screen.channel != null
         ? context.select<EpgProvider, EpgProgram?>(
             (provider) => provider.getCurrentProgram(
@@ -893,3 +1170,5 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
     );
   }
 }
+
+
