@@ -1,0 +1,91 @@
+name: Build Windows Only
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'android/**'
+      - '.github/workflows/build-release.yml'
+
+env:
+  FLUTTER_VERSION: '3.38.5'
+
+jobs:
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+      
+      - name: Get dependencies
+        run: flutter pub get
+      
+      - name: Build Windows Release
+        run: flutter build windows --release
+      
+      - name: Download SQLite3 DLL
+        run: |
+          $urls = @(
+            "https://www.sqlite.org/2025/sqlite-dll-win-x64-3510100.zip",
+            "https://www.sqlite.org/2024/sqlite-dll-win-x64-3470200.zip"
+          )
+          foreach ($url in $urls) {
+            try {
+              Invoke-WebRequest -Uri $url -OutFile "sqlite3.zip" -TimeoutSec 30
+              Expand-Archive -Path "sqlite3.zip" -DestinationPath "sqlite3_temp" -Force
+              if (Test-Path "sqlite3_temp/sqlite3.dll") {
+                Copy-Item "sqlite3_temp/sqlite3.dll" "build/windows/x64/runner/Release/" -Force
+                break
+              }
+            } catch { continue }
+          }
+        shell: pwsh
+      
+      - name: Create Installer
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          if (!$version -or $version -eq "main") { $version = "1.0.0" }
+          @"
+          [Setup]
+          AppName=FlutterIPTV
+          AppVersion=$version
+          AppPublisher=FlutterIPTV
+          DefaultDirName={autopf}\FlutterIPTV
+          DefaultGroupName=FlutterIPTV
+          OutputDir=.
+          OutputBaseFilename=flutteriptv-Windows-x64-Setup
+          Compression=lzma2
+          SolidCompression=yes
+          ArchitecturesInstallIn64BitMode=x64
+          PrivilegesRequired=lowest
+          [Files]
+          Source: "build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
+          [Icons]
+          Name: "{group}\FlutterIPTV"; Filename: "{app}\flutter_iptv.exe"
+          Name: "{autodesktop}\FlutterIPTV"; Filename: "{app}\flutter_iptv.exe"; Tasks: desktopicon
+          [Tasks]
+          Name: "desktopicon"; Description: "Create desktop shortcut"; GroupDescription: "Additional icons:"
+          [Run]
+          Filename: "{app}\flutter_iptv.exe"; Description: "Launch FlutterIPTV"; Flags: nowait postinstall skipifsilent
+          "@ | Out-File "installer.iss" -Encoding UTF8
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+        shell: pwsh
+      
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: flutteriptv-Windows-x64-Setup.exe
+          retention-days: 5
