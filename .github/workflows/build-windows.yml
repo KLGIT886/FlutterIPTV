@@ -2,6 +2,11 @@ name: Build Windows Only
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
   push:
     branches: [ "main" ]
     paths-ignore:
@@ -89,3 +94,105 @@ jobs:
           name: windows-release
           path: flutteriptv-Windows-x64-Setup.exe
           retention-days: 5
+
+  # ============================================
+  # Create GitHub Release
+  # ============================================
+  create-release:
+    name: Create Release
+    needs: [build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./release-assets/
+      
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "TAG=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "CREATE_RELEASE=true" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+            echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            echo "CREATE_RELEASE=true" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=dev-build" >> $GITHUB_OUTPUT
+            echo "TAG=dev-build" >> $GITHUB_OUTPUT
+            echo "CREATE_RELEASE=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Generate Release Notes
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          TAG="${{ steps.version.outputs.TAG }}"
+          BASE_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}"
+          
+          # Read changelog from version.json
+          if [ -f "docs/version.json" ]; then
+            CHANGELOG_ZH=$(jq -r '.changelog.zh' docs/version.json | sed 's/\\n/\n/g')
+            CHANGELOG_EN=$(jq -r '.changelog.en' docs/version.json | sed 's/\\n/\n/g')
+          else
+            # Fallback to git commits if version.json not found
+            PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -v "^${TAG}$" | head -1)
+            if [ -n "$PREV_TAG" ]; then
+              CHANGELOG_ZH=$(git log --pretty=format:"- %s" ${PREV_TAG}..${TAG} 2>/dev/null | grep -v "^- Merge" || echo "- Bug fixes and improvements")
+              CHANGELOG_EN="${CHANGELOG_ZH}"
+            else
+              CHANGELOG_ZH="- 初始版本"
+              CHANGELOG_EN="- Initial release"
+            fi
+          fi
+          
+          cat > release_notes.md << EOF
+          ## 📺 FlutterIPTV ${VERSION}
+          
+          ### 📝 更新内容 What's New
+          
+          **中文 Chinese:**
+          ${CHANGELOG_ZH}
+          
+          **English:**
+          ${CHANGELOG_EN}
+          
+          ---
+          
+          ### 📥 下载 Downloads
+          
+          #### 🖥️ Windows
+          | 文件 | 说明 |
+          |------|------|
+          | [flutteriptv-Windows-x64-Setup.exe](${BASE_URL}/flutteriptv-Windows-x64-Setup.exe) | Windows 64位安装包 |
+          EOF
+      
+      - name: Create Release
+        if: steps.version.outputs.CREATE_RELEASE == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.TAG }}
+          name: flutteriptv ${{ steps.version.outputs.VERSION }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          files: |
+            release-assets/windows-release/flutteriptv-Windows-x64-Setup.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Complete (No Release)
+        if: steps.version.outputs.CREATE_RELEASE == 'false'
+        run: |
+          echo "✅ Build completed successfully!"
+          echo "📦 Artifacts created but no release published (branch push)"
+          echo "🏷️ To create a release, push a tag (v1.0.0) or use workflow_dispatch"
