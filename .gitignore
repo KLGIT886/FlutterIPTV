@@ -90,3 +90,7 @@ android/app/*.jks
 android/app/*.keystore
 *.jks
 *.keystore
+
+# Local documentation folder (not synced to GitHub)
+/local-docs/
+local-docs/
