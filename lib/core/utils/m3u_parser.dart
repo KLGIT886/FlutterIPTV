@@ -27,7 +27,8 @@ class M3UParser {
   static M3UParseResult? get lastParseResult => _lastParseResult;
 
   /// Parse M3U content from a URL
-  static Future<List<Channel>> parseFromUrl(String url, int playlistId, {String? mergeRule}) async {
+  static Future<List<Channel>> parseFromUrl(String url, int playlistId,
+      {String? mergeRule}) async {
     try {
       ServiceLocator.log.d('DEBUG: 开始从URL获取播放列表内容: $url');
 
@@ -51,16 +52,19 @@ class M3UParser {
 
       // Only use isolate for large files (>500KB) to avoid overhead
       final useIsolate = contentLength > 500 * 1024;
-      ServiceLocator.log.d('DEBUG: ${useIsolate ? "使用" : "不使用"} isolate 解析 (大小: ${(contentLength / 1024).toStringAsFixed(1)}KB)');
+      ServiceLocator.log.d(
+          'DEBUG: ${useIsolate ? "使用" : "不使用"} isolate 解析 (大小: ${(contentLength / 1024).toStringAsFixed(1)}KB)');
 
       final M3UParseResult result;
       if (useIsolate) {
-        result = await compute(
-            _parseInIsolate, _ParseParams(response.data.toString(), playlistId, mergeRule));
+        result = await compute(_parseInIsolate,
+            _ParseParams(response.data.toString(), playlistId, mergeRule));
       } else {
         // Parse directly in main thread for small files
-        final channels = parse(response.data.toString(), playlistId, mergeRule: mergeRule);
-        result = _lastParseResult ?? M3UParseResult(channels: channels, epgUrl: null);
+        final channels =
+            parse(response.data.toString(), playlistId, mergeRule: mergeRule);
+        result = _lastParseResult ??
+            M3UParseResult(channels: channels, epgUrl: null);
       }
 
       // 保存解析结果（包括 EPG URL）到主线程的静态变量
@@ -93,8 +97,8 @@ class M3UParser {
   }
 
   /// Parse M3U content from a local file
-  static Future<List<Channel>> parseFromFile(
-      String filePath, int playlistId, {String? mergeRule}) async {
+  static Future<List<Channel>> parseFromFile(String filePath, int playlistId,
+      {String? mergeRule}) async {
     try {
       ServiceLocator.log.d('DEBUG: 开始从本地文件读取播放列表: $filePath');
       final file = File(filePath);
@@ -110,15 +114,18 @@ class M3UParser {
 
       // Only use isolate for large files (>500KB)
       final useIsolate = contentLength > 500 * 1024;
-      ServiceLocator.log.d('DEBUG: ${useIsolate ? "使用" : "不使用"} isolate 解析 (大小: ${(contentLength / 1024).toStringAsFixed(1)}KB)');
+      ServiceLocator.log.d(
+          'DEBUG: ${useIsolate ? "使用" : "不使用"} isolate 解析 (大小: ${(contentLength / 1024).toStringAsFixed(1)}KB)');
 
       final M3UParseResult result;
       if (useIsolate) {
-        result = await compute(_parseInIsolate, _ParseParams(content, playlistId, mergeRule));
+        result = await compute(
+            _parseInIsolate, _ParseParams(content, playlistId, mergeRule));
       } else {
         // Parse directly in main thread for small files
         final channels = parse(content, playlistId, mergeRule: mergeRule);
-        result = _lastParseResult ?? M3UParseResult(channels: channels, epgUrl: null);
+        result = _lastParseResult ??
+            M3UParseResult(channels: channels, epgUrl: null);
       }
 
       // 保存解析结果（包括 EPG URL）到主线程的静态变量
@@ -137,7 +144,8 @@ class M3UParser {
   /// Isolate 中执行的解析函数（必须是顶层函数或静态函数）
   /// 返回完整的解析结果，包括频道列表和 EPG URL
   static M3UParseResult _parseInIsolate(_ParseParams params) {
-    final channels = parse(params.content, params.playlistId, mergeRule: params.mergeRule);
+    final channels =
+        parse(params.content, params.playlistId, mergeRule: params.mergeRule);
     // parse 方法会设置 _lastParseResult，但那是在 isolate 中
     // 我们需要返回结果到主线程
     // 注意：_lastParseResult 在 isolate 中被设置，但我们需要返回它
@@ -146,10 +154,12 @@ class M3UParser {
 
   /// Parse M3U content string
   /// Merges channels with same tvg-name/epgId into single channel with multiple sources
-  static List<Channel> parse(String content, int playlistId, {String? mergeRule}) {
+  static List<Channel> parse(String content, int playlistId,
+      {String? mergeRule}) {
     // 注意：此方法可能在 isolate 中运行，不能使用 ServiceLocator.log
     // 但我们可以使用 print 来调试（会输出到控制台）
-    print('M3U Parser: 开始解析，播放列表ID: $playlistId, 合并规则: ${mergeRule ?? "name_group"}');
+    print(
+        'M3U Parser: 开始解析，播放列表ID: $playlistId, 合并规则: ${mergeRule ?? "name_group"}');
 
     final List<Channel> rawChannels = [];
     final lines = LineSplitter.split(content).toList();
@@ -195,6 +205,9 @@ class M3UParser {
     String? currentLogo;
     String? currentGroup;
     String? currentEpgId;
+    String? currentCatchup;
+    String? currentCatchupSource;
+    int? currentCatchupDays;
     int invalidUrlCount = 0;
     int validChannelCount = 0;
 
@@ -210,6 +223,10 @@ class M3UParser {
         currentLogo = parsed['logo'];
         currentGroup = parsed['group'];
         currentEpgId = parsed['epgId'];
+        currentCatchup = parsed['catchup'];
+        currentCatchupSource = parsed['catchupSource'];
+        final daysStr = parsed['catchupDays'];
+        currentCatchupDays = daysStr != null ? int.tryParse(daysStr) : null;
       } else if (line.startsWith(_extGrp)) {
         // Parse EXTGRP line (alternative group format)
         currentGroup = line.substring(_extGrp.length).trim();
@@ -228,6 +245,9 @@ class M3UParser {
               logoUrl: currentLogo,
               groupName: currentGroup ?? 'Uncategorized',
               epgId: currentEpgId,
+              catchup: currentCatchup,
+              catchupSource: currentCatchupSource,
+              catchupDays: currentCatchupDays,
             );
 
             rawChannels.add(channel);
@@ -245,6 +265,9 @@ class M3UParser {
         currentLogo = null;
         currentGroup = null;
         currentEpgId = null;
+        currentCatchup = null;
+        currentCatchupSource = null;
+        currentCatchupDays = null;
       }
     }
 
@@ -253,7 +276,8 @@ class M3UParser {
         'M3U Parser: 原始解析完成 - 有效频道: $validChannelCount, 无效URL: $invalidUrlCount');
 
     // Merge channels with same epgId (tvg-name) into single channel with multiple sources
-    final List<Channel> mergedChannels = _mergeChannelSources(rawChannels, mergeRule: mergeRule);
+    final List<Channel> mergedChannels =
+        _mergeChannelSources(rawChannels, mergeRule: mergeRule);
 
     // ServiceLocator.log.d('DEBUG: 合并后频道数: ${mergedChannels.length} (原始: ${rawChannels.length})');
     print(
@@ -269,7 +293,8 @@ class M3UParser {
   /// Merge channels with same name AND group into single channel with multiple sources
   /// Preserves the order of first occurrence, but prefers non-special groups
   /// Optimized using LinkedHashMap for better performance
-  static List<Channel> _mergeChannelSources(List<Channel> channels, {String? mergeRule}) {
+  static List<Channel> _mergeChannelSources(List<Channel> channels,
+      {String? mergeRule}) {
     // Use Map to maintain insertion order while providing O(1) lookup
     final Map<String, Channel> mergedMap = {};
 
@@ -389,6 +414,9 @@ class M3UParser {
     logo = attributes['tvg-logo'] ?? attributes['logo'];
     group = attributes['group-title'] ?? attributes['tvg-group'];
     epgId = attributes['tvg-id'] ?? attributes['tvg-name'];
+    final catchup = attributes['catchup'];
+    final catchupSource = attributes['catchup-source'];
+    final catchupDays = attributes['catchup-days'];
 
     // Debug logging for logo parsing
     if (logo != null && logo.isNotEmpty) {
@@ -400,6 +428,9 @@ class M3UParser {
       'logo': logo,
       'group': group,
       'epgId': epgId,
+      'catchup': catchup,
+      'catchupSource': catchupSource,
+      'catchupDays': catchupDays,
     };
   }
 

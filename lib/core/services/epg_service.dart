@@ -106,16 +106,27 @@ class EpgService {
 
   /// 获取频道今日节目列表
   List<EpgProgram> getTodayPrograms(String? channelId, String? channelName) {
+    return getProgramsForDate(channelId, channelName, DateTime.now());
+  }
+
+  /// 获取指定日期的节目列表
+  List<EpgProgram> getProgramsForDate(
+      String? channelId, String? channelName, DateTime date) {
     final programs = _findPrograms(channelId, channelName);
     if (programs == null) return [];
 
-    final today = DateTime.now();
-    final startOfDay = DateTime(today.year, today.month, today.day);
+    final startOfDay = DateTime(date.year, date.month, date.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
 
-    return programs
-        .where((p) => p.start.isAfter(startOfDay) && p.start.isBefore(endOfDay))
-        .toList();
+    return programs.where((p) {
+      // Include programs that start today
+      // OR programs that are currently running (start < endOfDay AND end > startOfDay)
+      // Actually simpler: Overlap logic
+      // Program interval: [start, end]
+      // Day interval: [startOfDay, endOfDay]
+      // Overlap if start < endOfDay AND end > startOfDay
+      return p.start.isBefore(endOfDay) && p.end.isAfter(startOfDay);
+    }).toList();
   }
 
   List<EpgProgram>? _findPrograms(String? channelId, String? channelName) {
@@ -405,18 +416,36 @@ class EpgService {
 
   static DateTime? _parseDateTimeStatic(String str) {
     try {
-      final match = RegExp(r'(\d{14})').firstMatch(str);
+      // Match 14 digits, optional space, optional timezone (+/-HHMM)
+      final match = RegExp(r'(\d{14})\s*([+-]\d{4})?').firstMatch(str);
       if (match == null) return null;
 
       final dateStr = match.group(1)!;
-      return DateTime(
-        int.parse(dateStr.substring(0, 4)),
-        int.parse(dateStr.substring(4, 6)),
-        int.parse(dateStr.substring(6, 8)),
-        int.parse(dateStr.substring(8, 10)),
-        int.parse(dateStr.substring(10, 12)),
-        int.parse(dateStr.substring(12, 14)),
-      );
+      final tzStr = match.group(2);
+
+      int year = int.parse(dateStr.substring(0, 4));
+      int month = int.parse(dateStr.substring(4, 6));
+      int day = int.parse(dateStr.substring(6, 8));
+      int hour = int.parse(dateStr.substring(8, 10));
+      int minute = int.parse(dateStr.substring(10, 12));
+      int second = int.parse(dateStr.substring(12, 14));
+
+      // Create UTC time first
+      DateTime dt = DateTime.utc(year, month, day, hour, minute, second);
+
+      if (tzStr != null) {
+        // Parse timezone offset
+        final sign = tzStr.startsWith('+') ? 1 : -1;
+        final tzHour = int.parse(tzStr.substring(1, 3));
+        final tzMinute = int.parse(tzStr.substring(3, 5));
+        final offset = Duration(hours: tzHour, minutes: tzMinute) * sign;
+
+        // Apply offset to get true UTC
+        dt = dt.subtract(offset);
+      }
+
+      // Convert to local time
+      return dt.toLocal();
     } catch (e) {
       return null;
     }

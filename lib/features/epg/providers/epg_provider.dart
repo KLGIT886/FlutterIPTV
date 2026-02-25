@@ -35,7 +35,8 @@ class EpgProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> loadEpg(String url, {String? fallbackUrl, bool silent = true}) async {
+  Future<bool> loadEpg(String url,
+      {String? fallbackUrl, bool silent = true}) async {
     // Don't block if already loading
     if (_isLoading) {
       ServiceLocator.log.d('EPG: Already loading, skipping');
@@ -44,33 +45,36 @@ class EpgProvider extends ChangeNotifier {
 
     _isLoading = true;
     _error = null;
-    
+
     // Only notify if not silent (user-initiated refresh)
     if (!silent) {
       notifyListeners();
     }
 
     bool success = false;
-    
+
     try {
       // Try primary URL first
       ServiceLocator.log.d('EPG: Attempting to load from primary URL: $url');
       success = await _epgService.loadFromUrl(url);
-      
+
       if (success) {
         _lastUpdate = DateTime.now();
         ServiceLocator.log.d('EPG: Successfully loaded from primary URL');
-      } else if (fallbackUrl != null && fallbackUrl.isNotEmpty && fallbackUrl != url) {
+      } else if (fallbackUrl != null &&
+          fallbackUrl.isNotEmpty &&
+          fallbackUrl != url) {
         // If primary failed and fallback is available, try fallback
-        ServiceLocator.log.d('EPG: Primary URL failed, trying fallback URL: $fallbackUrl');
+        ServiceLocator.log
+            .d('EPG: Primary URL failed, trying fallback URL: $fallbackUrl');
         success = await _epgService.loadFromUrl(fallbackUrl);
-        
+
         if (success) {
           _lastUpdate = DateTime.now();
           ServiceLocator.log.d('EPG: Successfully loaded from fallback URL');
         }
       }
-      
+
       if (!success) {
         _error = 'Failed to load EPG data from all sources';
       }
@@ -85,7 +89,7 @@ class EpgProvider extends ChangeNotifier {
         notifyListeners();
       }
     }
-    
+
     return success;
   }
 
@@ -97,6 +101,12 @@ class EpgProvider extends ChangeNotifier {
   /// 获取频道下一个节目
   EpgProgram? getNextProgram(String? channelId, String? channelName) {
     return _epgService.getNextProgram(channelId, channelName);
+  }
+
+  /// 获取指定日期的节目列表
+  List<EpgProgram> getProgramsForDate(
+      String? channelId, String? channelName, DateTime date) {
+    return _epgService.getProgramsForDate(channelId, channelName, date);
   }
 
   /// 获取频道今日节目列表

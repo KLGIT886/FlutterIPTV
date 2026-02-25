@@ -24,6 +24,8 @@ import '../../epg/providers/epg_provider.dart';
 import '../../multi_screen/providers/multi_screen_provider.dart';
 import '../../multi_screen/widgets/multi_screen_player.dart';
 import '../../../core/services/service_locator.dart';
+import '../widgets/interactive_epg_widget.dart';
+import '../../../core/services/epg_service.dart';
 
 class PlayerScreen extends StatefulWidget {
   final String channelUrl;
@@ -89,6 +91,11 @@ class _PlayerScreenState extends State<PlayerScreen>
   DateTime? _lastFullScreenToggle; // 记录上次切换时间
   bool _mouseOver = false;
 
+  // EPG / Catchup State
+  bool _showEpgPanel = false;
+  Channel? _originalChannel; // Original live channel when playing catchup
+  EpgProgram? _currentCatchupProgram; // Currently playing catchup program
+
   // 检查是否处于分屏模式（使用本地状态）
   bool _isMultiScreenMode() {
     return _localMultiScreenMode && PlatformDetector.isDesktop;
@@ -115,7 +122,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     } else {
       // 其他平台使用wakelock_plus
       try {
-      // 添加短暂的延迟，确保 Flutter 引擎完全初始化
+        // 添加短暂的延迟，确保 Flutter 引擎完全初始化
         await Future.delayed(const Duration(milliseconds: 100));
         await WakelockPlus.enable();
         final enabled = await WakelockPlus.enabled;
@@ -288,11 +295,15 @@ class _PlayerScreenState extends State<PlayerScreen>
             'PlayerScreen: Launching native player for ${widget.channelName} (isDlna=$isDlnaMode, index $currentIndex of ${urls.length})');
 
         // TV端原生播放器也需要记录频道遍历
-        if (!isDlnaMode && currentIndex >= 0 && currentIndex < channels.length) {
+        if (!isDlnaMode &&
+            currentIndex >= 0 &&
+            currentIndex < channels.length) {
           final channel = channels[currentIndex];
           if (channel.id != null && channel.playlistId != null) {
-            await ServiceLocator.watchHistory.addWatchHistory(channel.id!, channel.playlistId!);
-            ServiceLocator.log.d('PlayerScreen: Recorded watch history for channel ${channel.name}');
+            await ServiceLocator.watchHistory
+                .addWatchHistory(channel.id!, channel.playlistId!);
+            ServiceLocator.log.d(
+                'PlayerScreen: Recorded watch history for channel ${channel.name}');
           }
         }
 
@@ -616,11 +627,17 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (!_usingNativePlayer && _playerProvider != null) {
       ServiceLocator.log
           .d('PlayerScreen: calling _playerProvider.stop() in silent mode');
+      // 如果正在回放，先恢复到直播频道对象（虽然即将销毁，但保持状态一致性）
+      if (_originalChannel != null) {
+        // We don't need to actually play it, just ensure we don't leave mess
+        _originalChannel = null;
+        _currentCatchupProgram = null;
+      }
       unawaited(_playerProvider!.stop(silent: true));
     }
     if (PlatformDetector.isDesktop && _multiScreenProvider != null) {
-      ServiceLocator.log
-          .d('PlayerScreen: calling _multiScreenProvider.clearAllScreens() in dispose');
+      ServiceLocator.log.d(
+          'PlayerScreen: calling _multiScreenProvider.clearAllScreens() in dispose');
       unawaited(_multiScreenProvider!.clearAllScreens());
     }
 
@@ -694,6 +711,9 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   void _saveLastChannelId(Channel? channel) {
+    // Don't save if it's a catchup channel (temporary)
+    if (_originalChannel != null) return;
+
     if (channel == null || channel.id == null) return;
     if (_settingsProvider != null && _settingsProvider!.rememberLastChannel) {
       // 保存单频道播放状态
@@ -833,22 +853,152 @@ class _PlayerScreenState extends State<PlayerScreen>
     // 处理水平滑动 - 显示/隐藏分类菜单
     if (_currentGestureType == 'horizontal') {
       final threshold = screenWidth * 0.15; // 婊戝姩瓒呰繃屏箷15%
-      if (dx < -threshold && !_showCategoryPanel) {
+      if (dx < -threshold && !_showCategoryPanel && !_showEpgPanel) {
         // 宸︽粦显示切嗙被鑿滃崟
         setState(() {
           _showCategoryPanel = true;
           _showControls = false;
         });
-      } else if (dx > threshold && _showCategoryPanel) {
-        // 只虫粦全抽棴切嗙被鑿滃崟
-        setState(() {
-          _showCategoryPanel = false;
-          _selectedCategory = null;
-        });
+      } else if (dx > threshold) {
+        if (_showCategoryPanel) {
+          // Close category panel
+          setState(() {
+            _showCategoryPanel = false;
+            _selectedCategory = null;
+          });
+        } else if (_showEpgPanel) {
+          // Close EPG panel (swipe right)
+          setState(() {
+            _showEpgPanel = false;
+          });
+        }
+      } else if (dx < -threshold && !_showCategoryPanel && _showEpgPanel) {
+        // Swipe left when EPG is open? Maybe nothing or keep open.
+      } else if (dx < -threshold && !_showCategoryPanel && !_showEpgPanel) {
+        // Open EPG? No, left swipe opens Category (left panel).
+        // Right swipe could open EPG (right panel)?
+        // Current logic: Left Swipe (dx < 0) -> Open Left Panel (Category)
+        // Right Swipe (dx > 0) -> Close Left Panel
+
+        // Let's add: Right Swipe from right edge -> Open EPG?
+        // Or just use button for EPG.
       }
     }
 
     _resetGestureState();
+  }
+
+  // EPG Playback Logic
+  void _playCatchup(EpgProgram program) {
+    final currentChannel = _playerProvider?.currentChannel;
+    if (currentChannel == null) return;
+
+    // Store original channel if not already playing catchup
+    if (_originalChannel == null) {
+      _originalChannel = currentChannel;
+    }
+
+    // Determine the source channel (should be the original one)
+    final sourceChannel = _originalChannel!;
+
+    // Generate catchup URL
+    final catchupUrl = _generateCatchupUrl(sourceChannel, program);
+    if (catchupUrl == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to generate playback URL')),
+      );
+      return;
+    }
+
+    // Create temporary channel for playback
+    // Force type to replay by setting group name to include "replay" or "catchup"
+    // Or just rely on isSeekable override (not possible easily)
+    // But ChannelType logic checks for 'catchup' in group.
+    final playbackChannel = sourceChannel.copyWith(
+      url: catchupUrl,
+      // Important: Must update sources list to contain the catchup URL!
+      // Otherwise PlayerProvider will use the original source (live stream)
+      sources: [catchupUrl],
+      // Append catchup to group to ensure it's treated as replay
+      groupName: '${sourceChannel.groupName} [Catchup]',
+      catchup: 'active', // Mark as active catchup
+    );
+
+    // Play it
+    _currentCatchupProgram = program;
+    // Calculate and set override duration
+    final duration = program.end.difference(program.start);
+    _playerProvider?.setOverrideDuration(duration);
+
+    _playerProvider?.playChannel(playbackChannel);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Playing catchup: ${program.title}'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _backToLive() {
+    if (_originalChannel != null) {
+      _playerProvider?.playChannel(_originalChannel!);
+      _originalChannel = null;
+      _currentCatchupProgram = null;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Returned to live stream'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  String? _generateCatchupUrl(Channel channel, EpgProgram program) {
+    if (channel.catchupSource == null) return null;
+
+    // Unix timestamp (seconds)
+    final startUnix = program.start.millisecondsSinceEpoch ~/ 1000;
+    final endUnix = program.end.millisecondsSinceEpoch ~/ 1000;
+
+    // ISO 8601 format (UTC): yyyy-MM-ddTHH:mm:ssZ
+    final startIso = program.start
+        .toUtc()
+        .toIso8601String(); // e.g. 2026-02-25T02:14:00.000Z
+    // Remove milliseconds if present (some servers are picky)
+    final startIsoClean = startIso.replaceAll(RegExp(r'\.\d+Z$'), 'Z');
+
+    final endIso = program.end.toUtc().toIso8601String();
+    final endIsoClean = endIso.replaceAll(RegExp(r'\.\d+Z$'), 'Z');
+
+    var url = channel.catchupSource!;
+
+    // Replace with ISO format (priority) - handling ${start} and {start}
+    // We try ISO first because user provided logs showing ISO is expected
+    // But if the original URL has ${start} intended for unix, we might break it?
+    // Actually, usually ${start} in IPTV means Unix timestamp.
+    // However, the user explicitly said "Correct request... start=2026-02-25T..."
+    // This strongly implies I should use ISO format for this specific backend.
+    // To be safe, I'll check if the URL looks like it expects unix or ISO? No easy way.
+    // I will use ISO format as requested by user feedback.
+
+    // Handle literal ${start} (escaped in regex)
+    url = url.replaceAll(RegExp(r'\$\{start\}'), startIsoClean);
+    url = url.replaceAll(RegExp(r'\$\{stop\}'), endIsoClean);
+    url =
+        url.replaceAll(RegExp(r'\$\{end\}'), endIsoClean); // handle ${end} too
+
+    // Handle {start}
+    url = url.replaceAll(RegExp(r'\{start\}'), startIsoClean);
+    url = url.replaceAll(RegExp(r'\{stop\}'), endIsoClean);
+    url = url.replaceAll(RegExp(r'\{end\}'), endIsoClean);
+
+    // Also try replacing Unix timestamp just in case the server supports both or user config differs?
+    // But replacing twice is dangerous.
+    // Let's stick to the user's "Correct request" format.
+
+    return url;
   }
 
   void _resetGestureState() {
@@ -985,24 +1135,27 @@ class _PlayerScreenState extends State<PlayerScreen>
             final playerProvider = context.read<PlayerProvider>();
             final channelProvider = context.read<ChannelProvider>();
             final currentChannel = playerProvider.currentChannel;
-            
+
             setState(() {
               _showCategoryPanel = true;
               // 如果有当前频道，自动选中其所属分类
               if (currentChannel != null && currentChannel.groupName != null) {
                 _selectedCategory = currentChannel.groupName;
-                
+
                 // 延迟滚动到当前频道位置
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (_selectedCategory != null) {
-                    final channels = channelProvider.getChannelsByGroup(_selectedCategory!);
-                    final currentIndex = channels.indexWhere((ch) => ch.id == currentChannel.id);
-                    
-                    if (currentIndex >= 0 && _channelScrollController.hasClients) {
+                    final channels =
+                        channelProvider.getChannelsByGroup(_selectedCategory!);
+                    final currentIndex =
+                        channels.indexWhere((ch) => ch.id == currentChannel.id);
+
+                    if (currentIndex >= 0 &&
+                        _channelScrollController.hasClients) {
                       // 计算滚动位置（每个频道项高 44 像素高）
                       final itemHeight = 44.0;
                       final scrollOffset = currentIndex * itemHeight;
-                      
+
                       _channelScrollController.animateTo(
                         scrollOffset,
                         duration: const Duration(milliseconds: 300),
@@ -1041,6 +1194,11 @@ class _PlayerScreenState extends State<PlayerScreen>
             return KeyEventResult.handled;
           }
 
+          if (_showEpgPanel) {
+            setState(() => _showEpgPanel = false);
+            return KeyEventResult.handled;
+          }
+
           // 切囨崲切颁笂个€个簮
           final channel = playerProvider.currentChannel;
           if (channel != null && channel.hasMultipleSources) {
@@ -1057,6 +1215,11 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (key == LogicalKeyboardKey.arrowRight) {
       if (_showCategoryPanel) {
         // 如果在分类面板，按键不做任何事
+        return KeyEventResult.handled;
+      }
+
+      if (_showEpgPanel) {
+        // EPG panel is focused/active
         return KeyEventResult.handled;
       }
 
@@ -1242,6 +1405,8 @@ class _PlayerScreenState extends State<PlayerScreen>
                     _showCategoryPanel = false;
                     _selectedCategory = null;
                   });
+                } else if (_showEpgPanel) {
+                  setState(() => _showEpgPanel = false);
                 } else {
                   _showControlsTemporarily();
                 }
@@ -1281,6 +1446,36 @@ class _PlayerScreenState extends State<PlayerScreen>
                       !WindowsPipChannel.isInPipMode &&
                       !_isMultiScreenMode())
                     _buildCategoryPanel(),
+
+                  // EPG Panel (Right side)
+                  if (_showEpgPanel &&
+                      !WindowsPipChannel.isInPipMode &&
+                      !_isMultiScreenMode())
+                    Positioned(
+                      top: 0,
+                      bottom: 0,
+                      right: 0,
+                      child: InteractiveEpgWidget(
+                        channel: _originalChannel ??
+                            (_playerProvider?.currentChannel ??
+                                Channel(
+                                    playlistId: 0, name: 'Unknown', url: '')),
+                        isPlayingCatchup: _originalChannel != null,
+                        onProgramSelected: (program) {
+                          // Handle playback
+                          _playCatchup(program);
+                          // Close EPG? Maybe keep it open or close.
+                          // Usually better to keep open or close depending on UX.
+                          // User said "interactive epg program list... provide playback option... return to live"
+                          // I'll close EPG after selection to show video.
+                          setState(() => _showEpgPanel = false);
+                        },
+                        onBackToLive: () {
+                          _backToLive();
+                          setState(() => _showEpgPanel = false);
+                        },
+                      ),
+                    ),
 
                   // 手前娍鎸囩ず器?手嬫満绔?
                   if (_showGestureIndicator) _buildGestureIndicator(),
@@ -1339,7 +1534,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                     },
                   ),
 
-                      // Windows 播放器信息显示 - 右上角（网速、时间、FPS、分辨率等）
+                  // Windows 播放器信息显示 - 右上角（网速、时间、FPS、分辨率等）
                   // 分屏模式下不显示全局信息（每个分屏有自己的信息显示）
                   Builder(
                     builder: (context) {
@@ -1541,13 +1736,14 @@ class _PlayerScreenState extends State<PlayerScreen>
     final channelProvider = context.read<ChannelProvider>();
 
     // Prefer channel object from ChannelProvider to keep original source list/count.
-    final matchedChannel = channelProvider.allChannels.cast<Channel?>().firstWhere(
-          (c) =>
-              c != null &&
-              ((activeChannel.id != null && c.id == activeChannel.id) ||
-                  c.name == activeChannel.name),
-          orElse: () => null,
-        );
+    final matchedChannel =
+        channelProvider.allChannels.cast<Channel?>().firstWhere(
+              (c) =>
+                  c != null &&
+                  ((activeChannel.id != null && c.id == activeChannel.id) ||
+                      c.name == activeChannel.name),
+              orElse: () => null,
+            );
 
     final baseChannel = matchedChannel ?? activeChannel;
     final targetSourceIndex = activeChannel.currentSourceIndex.clamp(
@@ -2331,6 +2527,63 @@ class _PlayerScreenState extends State<PlayerScreen>
 
                   const SizedBox(width: 16),
 
+                  // EPG Button
+                  if (provider.currentChannel?.epgId != null ||
+                      provider.currentChannel?.hasCatchup == true)
+                    TVFocusable(
+                      onSelect: () {
+                        setState(() {
+                          _showEpgPanel = !_showEpgPanel;
+                          if (_showEpgPanel) {
+                            _showControls =
+                                false; // Hide controls when EPG opens
+                          }
+                        });
+                      },
+                      focusScale: 1.0,
+                      showFocusBorder: false,
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.list_alt,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            AppStrings.of(context)?.epg ?? 'EPG',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      builder: (context, isFocused, child) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isFocused
+                                ? AppTheme.getPrimaryColor(context)
+                                : const Color(0x33FFFFFF),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isFocused
+                                  ? AppTheme.getPrimaryColor(context)
+                                  : const Color(0x1AFFFFFF),
+                              width: isFocused ? 2 : 1,
+                            ),
+                          ),
+                          child: child,
+                        );
+                      },
+                    ),
+
+                  if (provider.currentChannel?.epgId != null ||
+                      provider.currentChannel?.hasCatchup == true)
+                    const SizedBox(width: 16),
+
                   // 手嬫満绔簮切囨崲按挳 - 个婁竴个簮
                   if (PlatformDetector.isMobile &&
                       provider.currentChannel != null &&
@@ -2526,25 +2779,31 @@ class _PlayerScreenState extends State<PlayerScreen>
                         } else {
                           // 如果没显示，则显示并定位到当前频道
                           final playerProvider = context.read<PlayerProvider>();
-                          final channelProvider = context.read<ChannelProvider>();
+                          final channelProvider =
+                              context.read<ChannelProvider>();
                           final currentChannel = playerProvider.currentChannel;
-                          
+
                           _showCategoryPanel = true;
                           // 如果有当前频道，自动选中其所属分类
-                          if (currentChannel != null && currentChannel.groupName != null) {
+                          if (currentChannel != null &&
+                              currentChannel.groupName != null) {
                             _selectedCategory = currentChannel.groupName;
-                            
+
                             // 延迟滚动到当前频道位置
                             WidgetsBinding.instance.addPostFrameCallback((_) {
                               if (_selectedCategory != null) {
-                                final channels = channelProvider.getChannelsByGroup(_selectedCategory!);
-                                final currentIndex = channels.indexWhere((ch) => ch.id == currentChannel.id);
-                                
-                                if (currentIndex >= 0 && _channelScrollController.hasClients) {
+                                final channels = channelProvider
+                                    .getChannelsByGroup(_selectedCategory!);
+                                final currentIndex = channels.indexWhere(
+                                    (ch) => ch.id == currentChannel.id);
+
+                                if (currentIndex >= 0 &&
+                                    _channelScrollController.hasClients) {
                                   // 计算滚动位置（每个频道项高 44 像素高）
                                   final itemHeight = 44.0;
-                                  final scrollOffset = currentIndex * itemHeight;
-                                  
+                                  final scrollOffset =
+                                      currentIndex * itemHeight;
+
                                   _channelScrollController.animateTo(
                                     scrollOffset,
                                     duration: const Duration(milliseconds: 300),
@@ -3059,4 +3318,3 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
   }
 }
-

@@ -1,9 +1,9 @@
 /// Channel type enum
 enum ChannelType {
-  live,      // 直播
-  vod,       // 点播
-  replay,    // 回放
-  unknown,   // 未知
+  live, // 直播
+  vod, // 点播
+  replay, // 回放
+  unknown, // 未知
 }
 
 /// Represents an IPTV channel with multiple sources
@@ -18,6 +18,11 @@ class Channel {
   final String? epgId;
   final bool isActive;
   final DateTime createdAt;
+
+  // Catchup/Playback properties
+  final String? catchup; // e.g., "default", "append", "shift"
+  final String? catchupSource; // Source URL template
+  final int? catchupDays; // Number of days for catchup
 
   // Runtime properties (not stored in database)
   bool isFavorite;
@@ -37,16 +42,19 @@ class Channel {
     this.epgId,
     this.isActive = true,
     DateTime? createdAt,
+    this.catchup,
+    this.catchupSource,
+    this.catchupDays,
     this.isFavorite = false,
     this.isCurrentlyPlaying = false,
     this.currentSourceIndex = 0,
     this.fallbackLogoUrl,
-  }) : sources = sources ?? [url],
-       createdAt = createdAt ?? DateTime.now();
+  })  : sources = sources ?? [url],
+        createdAt = createdAt ?? DateTime.now();
 
   /// Get current source URL
-  String get currentUrl => sources.isNotEmpty 
-      ? sources[currentSourceIndex.clamp(0, sources.length - 1)] 
+  String get currentUrl => sources.isNotEmpty
+      ? sources[currentSourceIndex.clamp(0, sources.length - 1)]
       : url;
 
   /// Check if channel has multiple sources
@@ -59,54 +67,84 @@ class Channel {
   ChannelType get type {
     final group = groupName?.toLowerCase() ?? '';
     final urlLower = currentUrl.toLowerCase();
-    
+
     // 回放关键词（优先级最高，因为回放也可能是 .mp4 文件）
-    if (group.contains('回放') || group.contains('replay') ||
-        group.contains('时移') || group.contains('catchup') ||
+    if (group.contains('回放') ||
+        group.contains('replay') ||
+        group.contains('时移') ||
+        group.contains('catchup') ||
         group.contains('回看')) {
       return ChannelType.replay;
     }
-    
+
     // 点播关键词
-    if (group.contains('电影') || group.contains('movie') ||
-        group.contains('电视剧') || group.contains('series') || group.contains('剧集') ||
-        group.contains('音乐') || group.contains('music') || group.contains('mv') ||
-        group.contains('舞曲') || group.contains('dance') ||
-        group.contains('点播') || group.contains('vod') ||
-        group.contains('综艺') || group.contains('variety') ||
-        group.contains('动漫') || group.contains('anime') ||
-        group.contains('纪录片') || group.contains('documentary')) {
+    if (group.contains('电影') ||
+        group.contains('movie') ||
+        group.contains('电视剧') ||
+        group.contains('series') ||
+        group.contains('剧集') ||
+        group.contains('音乐') ||
+        group.contains('music') ||
+        group.contains('mv') ||
+        group.contains('舞曲') ||
+        group.contains('dance') ||
+        group.contains('点播') ||
+        group.contains('vod') ||
+        group.contains('综艺') ||
+        group.contains('variety') ||
+        group.contains('动漫') ||
+        group.contains('anime') ||
+        group.contains('纪录片') ||
+        group.contains('documentary')) {
       return ChannelType.vod;
     }
-    
+
     // URL 扩展名判断（点播文件）
-    if (urlLower.endsWith('.mp4') || urlLower.endsWith('.mkv') ||
-        urlLower.endsWith('.avi') || urlLower.endsWith('.mov') ||
-        urlLower.endsWith('.flv') || urlLower.endsWith('.wmv') ||
-        urlLower.endsWith('.m4v') || urlLower.endsWith('.3gp')) {
+    if (urlLower.endsWith('.mp4') ||
+        urlLower.endsWith('.mkv') ||
+        urlLower.endsWith('.avi') ||
+        urlLower.endsWith('.mov') ||
+        urlLower.endsWith('.flv') ||
+        urlLower.endsWith('.wmv') ||
+        urlLower.endsWith('.m4v') ||
+        urlLower.endsWith('.3gp')) {
       return ChannelType.vod;
     }
-    
+
     // 直播关键词
-    if (group.contains('直播') || group.contains('live') ||
-        group.contains('央视') || group.contains('cctv') ||
-        group.contains('卫视') || group.contains('频道') || 
-        group.contains('channel') || group.contains('tv')) {
+    if (group.contains('直播') ||
+        group.contains('live') ||
+        group.contains('央视') ||
+        group.contains('cctv') ||
+        group.contains('卫视') ||
+        group.contains('频道') ||
+        group.contains('channel') ||
+        group.contains('tv')) {
       return ChannelType.live;
     }
-    
+
     // URL 特征判断（直播流）
-    if (urlLower.contains('/live/') || urlLower.contains('live.') ||
-        urlLower.endsWith('.m3u8') || urlLower.contains('.m3u8?')) {
+    if (urlLower.contains('/live/') ||
+        urlLower.contains('live.') ||
+        urlLower.endsWith('.m3u8') ||
+        urlLower.contains('.m3u8?')) {
       return ChannelType.live;
     }
-    
+
+    // 如果有 catchup 属性，也视为支持回放的直播
+    if (catchup != null || catchupSource != null) {
+      return ChannelType.live;
+    }
+
     return ChannelType.unknown;
   }
-  
+
+  /// Check if channel supports catchup/playback
+  bool get hasCatchup => catchup != null || catchupSource != null;
+
   /// Check if channel is seekable (can use progress bar)
   bool get isSeekable => type == ChannelType.vod || type == ChannelType.replay;
-  
+
   /// Check if channel is live stream
   bool get isLive => type == ChannelType.live;
 
@@ -114,7 +152,7 @@ class Channel {
     final logoUrl = map['logo_url'] as String?;
     final fallbackLogoUrl = map['fallback_logo_url'] as String?;
     final url = map['url'] as String;
-    
+
     // Parse sources from JSON string or use single URL
     List<String> sources = [url];
     if (map['sources'] != null) {
@@ -139,7 +177,12 @@ class Channel {
       groupName: map['group_name'] as String?,
       epgId: map['epg_id'] as String?,
       isActive: (map['is_active'] as int?) == 1,
-      createdAt: map['created_at'] != null ? DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int) : DateTime.now(),
+      createdAt: map['created_at'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int)
+          : DateTime.now(),
+      catchup: map['catchup'] as String?,
+      catchupSource: map['catchup_source'] as String?,
+      catchupDays: map['catchup_days'] as int?,
     );
   }
 
@@ -156,9 +199,13 @@ class Channel {
       'epg_id': epgId,
       'is_active': isActive ? 1 : 0,
       'created_at': createdAt.millisecondsSinceEpoch,
+      'catchup': catchup,
+      'catchup_source': catchupSource,
+      'catchup_days': catchupDays,
     };
   }
 
+  /// Copy with new values
   Channel copyWith({
     int? id,
     int? playlistId,
@@ -170,6 +217,9 @@ class Channel {
     String? epgId,
     bool? isActive,
     DateTime? createdAt,
+    String? catchup,
+    String? catchupSource,
+    int? catchupDays,
     bool? isFavorite,
     bool? isCurrentlyPlaying,
     int? currentSourceIndex,
@@ -186,6 +236,9 @@ class Channel {
       epgId: epgId ?? this.epgId,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
+      catchup: catchup ?? this.catchup,
+      catchupSource: catchupSource ?? this.catchupSource,
+      catchupDays: catchupDays ?? this.catchupDays,
       isFavorite: isFavorite ?? this.isFavorite,
       isCurrentlyPlaying: isCurrentlyPlaying ?? this.isCurrentlyPlaying,
       currentSourceIndex: currentSourceIndex ?? this.currentSourceIndex,

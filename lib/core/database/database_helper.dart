@@ -9,7 +9,7 @@ import '../services/service_locator.dart';
 class DatabaseHelper {
   static Database? _database;
   static const String _databaseName = 'flutter_iptv.db';
-  static const int _databaseVersion = 8; // Added backup_path and last_backup_time to playlists
+  static const int _databaseVersion = 9; // Added catchup support to channels
 
   Future<void> initialize() async {
     ServiceLocator.log.d('DatabaseHelper: 开始初始化数据库');
@@ -95,6 +95,9 @@ class DatabaseHelper {
         epg_id TEXT,
         is_active INTEGER DEFAULT 1,
         created_at INTEGER NOT NULL,
+        catchup TEXT,
+        catchup_source TEXT,
+        catchup_days INTEGER,
         FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
       )
     ''');
@@ -293,8 +296,8 @@ class DatabaseHelper {
     if (oldVersion < 7) {
       // Add fallback_logo_url column to channels table
       try {
-        await db.execute(
-            'ALTER TABLE channels ADD COLUMN fallback_logo_url TEXT');
+        await db
+            .execute('ALTER TABLE channels ADD COLUMN fallback_logo_url TEXT');
         ServiceLocator.log.i('数据库迁移: 添加 fallback_logo_url 字段到 channels 表');
       } catch (e) {
         ServiceLocator.log.d('Migration error (ignored): $e');
@@ -303,17 +306,28 @@ class DatabaseHelper {
     if (oldVersion < 8) {
       // Add backup_path and last_backup_time columns to playlists table
       try {
-        await db.execute(
-            'ALTER TABLE playlists ADD COLUMN backup_path TEXT');
+        await db.execute('ALTER TABLE playlists ADD COLUMN backup_path TEXT');
         ServiceLocator.log.i('数据库迁移: 添加 backup_path 字段到 playlists 表');
       } catch (e) {
         ServiceLocator.log.d('Migration error (ignored): $e');
       }
-      
+
       try {
         await db.execute(
             'ALTER TABLE playlists ADD COLUMN last_backup_time INTEGER');
         ServiceLocator.log.i('数据库迁移: 添加 last_backup_time 字段到 playlists 表');
+      } catch (e) {
+        ServiceLocator.log.d('Migration error (ignored): $e');
+      }
+    }
+    if (oldVersion < 9) {
+      // Add catchup columns to channels table
+      try {
+        await db.execute('ALTER TABLE channels ADD COLUMN catchup TEXT');
+        await db.execute('ALTER TABLE channels ADD COLUMN catchup_source TEXT');
+        await db
+            .execute('ALTER TABLE channels ADD COLUMN catchup_days INTEGER');
+        ServiceLocator.log.i('数据库迁移: 添加 catchup 相关字段到 channels 表');
       } catch (e) {
         ServiceLocator.log.d('Migration error (ignored): $e');
       }
@@ -336,9 +350,10 @@ class DatabaseHelper {
         await _database!.execute('PRAGMA wal_checkpoint(TRUNCATE)');
         ServiceLocator.log.d('WAL checkpoint 完成', tag: 'DatabaseHelper');
       } catch (e) {
-        ServiceLocator.log.w('WAL checkpoint 失败（可能不是 WAL 模式）', tag: 'DatabaseHelper', error: e);
+        ServiceLocator.log.w('WAL checkpoint 失败（可能不是 WAL 模式）',
+            tag: 'DatabaseHelper', error: e);
       }
-      
+
       await _database!.close();
       _database = null;
       ServiceLocator.log.i('数据库连接已关闭', tag: 'DatabaseHelper');
