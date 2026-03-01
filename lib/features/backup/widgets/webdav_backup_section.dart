@@ -5,7 +5,9 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/platform/platform_detector.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/utils/app_restart_helper.dart';
+import '../../../core/widgets/tv_focusable.dart';
 import '../providers/backup_provider.dart';
+import 'qr_webdav_config_dialog.dart';
 
 /// WebDAV 备份区域组件
 class WebDAVBackupSection extends StatefulWidget {
@@ -219,6 +221,27 @@ class _WebDAVBackupSectionState extends State<WebDAVBackupSection> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                    const Spacer(),
+                    // 扫码配置按钮（所有平台都显示，方便测试）
+                    TVFocusable(
+                      onSelect: _showRemoteConfig,
+                      child: OutlinedButton.icon(
+                        onPressed: _showRemoteConfig,
+                        icon: Icon(Icons.qr_code_scanner_rounded, size: style['iconSize']),
+                        label: Text(
+                          strings.scanToConfig,
+                          style: TextStyle(fontSize: style['bodyFontSize']),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: primaryColor,
+                          side: BorderSide(color: primaryColor),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: style['isLandscape'] ? 8.0 : 16.0,
+                            vertical: style['isLandscape'] ? 6.0 : 12.0,
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
                 SizedBox(height: style['spacing'] * 1.25),
@@ -299,44 +322,50 @@ class _WebDAVBackupSectionState extends State<WebDAVBackupSection> {
                   Row(
                     children: [
                       Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _isTestingConnection ? null : _testConnection,
-                          icon: _isTestingConnection
-                              ? SizedBox(
-                                  width: style['iconSize'],
-                                  height: style['iconSize'],
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : Icon(Icons.wifi_find_rounded, size: style['iconSize']),
-                          label: Text(
-                            strings.testConnection,
-                            style: TextStyle(fontSize: style['bodyFontSize']),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: textPrimary,
-                            side: BorderSide(color: textSecondary.withOpacity(0.3)),
-                            padding: EdgeInsets.symmetric(
-                              horizontal: style['isLandscape'] ? 10.0 : 20.0,
-                              vertical: style['isLandscape'] ? 5.0 : 14.0,
+                        child: TVFocusable(
+                          onSelect: _isTestingConnection ? null : _testConnection,
+                          child: OutlinedButton.icon(
+                            onPressed: _isTestingConnection ? null : _testConnection,
+                            icon: _isTestingConnection
+                                ? SizedBox(
+                                    width: style['iconSize'],
+                                    height: style['iconSize'],
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : Icon(Icons.wifi_find_rounded, size: style['iconSize']),
+                            label: Text(
+                              strings.testConnection,
+                              style: TextStyle(fontSize: style['bodyFontSize']),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: textPrimary,
+                              side: BorderSide(color: textSecondary.withOpacity(0.3)),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: style['isLandscape'] ? 10.0 : 20.0,
+                                vertical: style['isLandscape'] ? 5.0 : 14.0,
+                              ),
                             ),
                           ),
                         ),
                       ),
                       SizedBox(width: style['spacing'] * 0.75),
                       Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _saveConfig,
-                          icon: Icon(Icons.save_rounded, size: style['iconSize']),
-                          label: Text(
-                            '保存配置',
-                            style: TextStyle(fontSize: style['bodyFontSize']),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: primaryColor,
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(
-                              horizontal: style['isLandscape'] ? 10.0 : 20.0,
-                              vertical: style['isLandscape'] ? 5.0 : 14.0,
+                        child: TVFocusable(
+                          onSelect: _saveConfig,
+                          child: ElevatedButton.icon(
+                            onPressed: _saveConfig,
+                            icon: Icon(Icons.save_rounded, size: style['iconSize']),
+                            label: Text(
+                              '保存配置',
+                              style: TextStyle(fontSize: style['bodyFontSize']),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryColor,
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: style['isLandscape'] ? 10.0 : 20.0,
+                                vertical: style['isLandscape'] ? 5.0 : 14.0,
+                              ),
                             ),
                           ),
                         ),
@@ -344,17 +373,121 @@ class _WebDAVBackupSectionState extends State<WebDAVBackupSection> {
                     ],
                   ),
                 ] else ...[
-                  // TV 端使用远程配
-                  Center(
-                    child: ElevatedButton.icon(
-                      onPressed: _showRemoteConfig,
-                      icon: const Icon(Icons.qr_code_rounded),
-                      label: Text(strings.scanToConfig),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryColor,
-                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  // TV 端显示只读配置信息
+                  _buildReadOnlyField(
+                    label: strings.serverUrl,
+                    value: _urlController.text.isEmpty ? '未配置' : _urlController.text,
+                    icon: Icons.link_rounded,
+                    style: style,
+                  ),
+                  SizedBox(height: style['spacing']),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildReadOnlyField(
+                          label: strings.username,
+                          value: _usernameController.text.isEmpty ? '未配置' : _usernameController.text,
+                          icon: Icons.person_rounded,
+                          style: style,
+                        ),
+                      ),
+                      SizedBox(width: style['spacing']),
+                      Expanded(
+                        child: _buildReadOnlyField(
+                          label: strings.password,
+                          value: _passwordController.text.isEmpty ? '未配置' : '******',
+                          icon: Icons.lock_rounded,
+                          style: style,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // 显示固定的远程路径
+                  Container(
+                    padding: EdgeInsets.all(style['isLandscape'] ? 8.0 : 16.0),
+                    decoration: BoxDecoration(
+                      color: AppTheme.getGlassColor(context),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                      border: Border.all(
+                        color: AppTheme.getGlassBorderColor(context),
                       ),
                     ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.folder_rounded, size: style['iconSize'], color: textSecondary),
+                        SizedBox(width: style['spacing'] * 0.75),
+                        Text(
+                          '${strings.remotePath}: ',
+                          style: TextStyle(
+                            color: textSecondary,
+                            fontSize: style['bodyFontSize'],
+                          ),
+                        ),
+                        Text(
+                          _fixedRemotePath,
+                          style: TextStyle(
+                            color: primaryColor,
+                            fontSize: style['bodyFontSize'],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TVFocusable(
+                          onSelect: _isTestingConnection ? null : _testConnection,
+                          child: OutlinedButton.icon(
+                            onPressed: _isTestingConnection ? null : _testConnection,
+                            icon: _isTestingConnection
+                                ? SizedBox(
+                                    width: style['iconSize'],
+                                    height: style['iconSize'],
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : Icon(Icons.wifi_find_rounded, size: style['iconSize']),
+                            label: Text(
+                              strings.testConnection,
+                              style: TextStyle(fontSize: style['bodyFontSize']),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: textPrimary,
+                              side: BorderSide(color: textSecondary.withOpacity(0.3)),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: style['isLandscape'] ? 10.0 : 20.0,
+                                vertical: style['isLandscape'] ? 5.0 : 14.0,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: style['spacing'] * 0.75),
+                      Expanded(
+                        child: TVFocusable(
+                          onSelect: _saveConfig,
+                          child: ElevatedButton.icon(
+                            onPressed: _saveConfig,
+                            icon: Icon(Icons.save_rounded, size: style['iconSize']),
+                            label: Text(
+                              '保存配置',
+                              style: TextStyle(fontSize: style['bodyFontSize']),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryColor,
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: style['isLandscape'] ? 10.0 : 20.0,
+                                vertical: style['isLandscape'] ? 5.0 : 14.0,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ],
@@ -375,42 +508,48 @@ class _WebDAVBackupSectionState extends State<WebDAVBackupSection> {
                 ),
               ),
               const Spacer(),
-              OutlinedButton.icon(
-                onPressed: _isRefreshing ? null : _loadWebDAVBackups,
-                icon: _isRefreshing
-                    ? SizedBox(
-                        width: style['iconSize'],
-                        height: style['iconSize'],
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(Icons.refresh_rounded, size: style['iconSize']),
-                label: Text(
-                  strings.refresh,
-                  style: TextStyle(fontSize: style['bodyFontSize']),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: textPrimary,
-                  side: BorderSide(color: textPrimary.withOpacity(0.3)),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: style['isLandscape'] ? 8.0 : 16.0,
-                    vertical: style['isLandscape'] ? 5.0 : 12.0,
+              TVFocusable(
+                onSelect: _isRefreshing ? null : _loadWebDAVBackups,
+                child: OutlinedButton.icon(
+                  onPressed: _isRefreshing ? null : _loadWebDAVBackups,
+                  icon: _isRefreshing
+                      ? SizedBox(
+                          width: style['iconSize'],
+                          height: style['iconSize'],
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(Icons.refresh_rounded, size: style['iconSize']),
+                  label: Text(
+                    strings.refresh,
+                    style: TextStyle(fontSize: style['bodyFontSize']),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: textPrimary,
+                    side: BorderSide(color: textPrimary.withOpacity(0.3)),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: style['isLandscape'] ? 8.0 : 16.0,
+                      vertical: style['isLandscape'] ? 5.0 : 12.0,
+                    ),
                   ),
                 ),
               ),
               SizedBox(width: style['spacing'] * 0.75),
-              ElevatedButton.icon(
-                onPressed: _backupToWebDAV,
-                icon: Icon(Icons.cloud_upload_rounded, size: style['iconSize']),
-                label: Text(
-                  strings.uploadToWebdav,
-                  style: TextStyle(fontSize: style['bodyFontSize']),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryColor,
-                  foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: style['isLandscape'] ? 8.0 : 16.0,
-                    vertical: style['isLandscape'] ? 5.0 : 12.0,
+              TVFocusable(
+                onSelect: _backupToWebDAV,
+                child: ElevatedButton.icon(
+                  onPressed: _backupToWebDAV,
+                  icon: Icon(Icons.cloud_upload_rounded, size: style['iconSize']),
+                  label: Text(
+                    strings.uploadToWebdav,
+                    style: TextStyle(fontSize: style['bodyFontSize']),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: style['isLandscape'] ? 8.0 : 16.0,
+                      vertical: style['isLandscape'] ? 5.0 : 12.0,
+                    ),
                   ),
                 ),
               ),
@@ -445,7 +584,9 @@ class _WebDAVBackupSectionState extends State<WebDAVBackupSection> {
               ),
             )
           else
-            ...provider.webdavBackups.map((backup) => _buildBackupItem(context, backup)).toList(),
+            ...provider.webdavBackups.asMap().entries.map((entry) => 
+              _buildBackupItem(context, entry.value, entry.key)
+            ).toList(),
         ],
       ),
     );
@@ -497,7 +638,60 @@ class _WebDAVBackupSectionState extends State<WebDAVBackupSection> {
     );
   }
 
-  Widget _buildBackupItem(BuildContext context, dynamic backup) {
+  Widget _buildReadOnlyField({
+    required String label,
+    required String value,
+    IconData? icon,
+    required Map<String, dynamic> style,
+  }) {
+    final textPrimary = AppTheme.getTextPrimary(context);
+    final textSecondary = AppTheme.getTextSecondary(context);
+    
+    return Container(
+      padding: EdgeInsets.all(style['isLandscape'] ? 10.0 : 16.0),
+      decoration: BoxDecoration(
+        color: AppTheme.getGlassColor(context),
+        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+        border: Border.all(
+          color: AppTheme.getGlassBorderColor(context),
+        ),
+      ),
+      child: Row(
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: style['iconSize'], color: textSecondary),
+            SizedBox(width: style['spacing'] * 0.75),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: textSecondary,
+                    fontSize: style['smallFontSize'],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: textPrimary,
+                    fontSize: style['bodyFontSize'],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBackupItem(BuildContext context, dynamic backup, int index) {
     final cardColor = AppTheme.getCardColor(context);
     final textPrimary = AppTheme.getTextPrimary(context);
     final textSecondary = AppTheme.getTextSecondary(context);
@@ -577,25 +771,54 @@ class _WebDAVBackupSectionState extends State<WebDAVBackupSection> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                OutlinedButton.icon(
-                  onPressed: () => _restoreFromWebDAV(backup.path),
-                  icon: Icon(Icons.cloud_download_rounded, size: style['iconSize']),
-                  label: Text(strings.restoreBackup),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: primaryColor,
-                    side: BorderSide(color: primaryColor),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: style['isLandscape'] ? 10.0 : 16.0,
-                      vertical: style['isLandscape'] ? 6.0 : 10.0,
+                TVFocusable(
+                  autofocus: index == 0,
+                  focusScale: 1.0,
+                  showFocusBorder: false,
+                  onSelect: () => _restoreFromWebDAV(backup.path),
+                  builder: (context, isFocused, child) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: isFocused ? primaryColor.withOpacity(0.1) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                      ),
+                      child: child,
+                    );
+                  },
+                  child: OutlinedButton.icon(
+                    onPressed: () => _restoreFromWebDAV(backup.path),
+                    icon: Icon(Icons.cloud_download_rounded, size: style['iconSize']),
+                    label: Text(strings.restoreBackup),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: primaryColor,
+                      side: BorderSide(color: primaryColor),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: style['isLandscape'] ? 10.0 : 16.0,
+                        vertical: style['isLandscape'] ? 6.0 : 10.0,
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
-                IconButton(
-                  onPressed: () => _deleteWebDAVBackup(backup.path),
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  color: AppTheme.errorColor,
-                  tooltip: strings.delete,
+                TVFocusable(
+                  focusScale: 1.0,
+                  showFocusBorder: false,
+                  onSelect: () => _deleteWebDAVBackup(backup.path),
+                  builder: (context, isFocused, child) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: isFocused ? AppTheme.errorColor.withOpacity(0.1) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                      ),
+                      child: child,
+                    );
+                  },
+                  child: IconButton(
+                    onPressed: () => _deleteWebDAVBackup(backup.path),
+                    icon: const Icon(Icons.delete_outline_rounded),
+                    color: AppTheme.errorColor,
+                    tooltip: strings.delete,
+                  ),
                 ),
               ],
             ),
@@ -631,6 +854,9 @@ class _WebDAVBackupSectionState extends State<WebDAVBackupSection> {
       }
       return;
     }
+
+    // 设置测试状态
+    setState(() => _isTestingConnection = true);
 
     ServiceLocator.log.i('开始测WebDAV 连接', tag: 'WebDAVBackupSection');
     ServiceLocator.log.d('URL: ${_urlController.text}', tag: 'WebDAVBackupSection');
@@ -1075,10 +1301,53 @@ class _WebDAVBackupSectionState extends State<WebDAVBackupSection> {
   }
 
   void _showRemoteConfig() {
-    // TODO: 实现 TV 端远程配置（显示二维码）
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('TV 端远程配置功能待实现'),
+    showDialog(
+      context: context,
+      builder: (context) => QrWebdavConfigDialog(
+        onConfigReceived: (serverUrl, username, password) {
+          ServiceLocator.log.i('接收到 WebDAV 配置', tag: 'WebDAVBackupSection');
+          
+          // 更新输入框
+          setState(() {
+            _urlController.text = serverUrl;
+            _usernameController.text = username;
+            _passwordController.text = password;
+          });
+          
+          // 保存配置
+          ServiceLocator.prefs.setString('webdav_url', serverUrl);
+          ServiceLocator.prefs.setString('webdav_username', username);
+          ServiceLocator.prefs.setString('webdav_password', password);
+          
+          // 配置 Provider
+          final provider = context.read<BackupProvider>();
+          provider.configureWebDAV(
+            serverUrl: serverUrl,
+            username: username,
+            password: password,
+            remotePath: _fixedRemotePath,
+          );
+          
+          // 显示成功提示
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.check_circle_rounded, color: Colors.white),
+                    const SizedBox(width: 12),
+                    Text(AppStrings.of(context)!.configReceived),
+                  ],
+                ),
+                backgroundColor: AppTheme.successColor,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                ),
+              ),
+            );
+          }
+        },
       ),
     );
   }

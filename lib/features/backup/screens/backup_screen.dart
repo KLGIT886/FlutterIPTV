@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../core/i18n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/platform/platform_detector.dart';
+import '../../../core/widgets/tv_focusable.dart';
 import '../providers/backup_provider.dart';
 import '../widgets/local_backup_section.dart';
 import '../widgets/webdav_backup_section.dart';
@@ -118,39 +119,52 @@ class _BackupScreenState extends State<BackupScreen> {
     final textSecondary = AppTheme.getTextSecondary(context);
     final primaryColor = AppTheme.getPrimaryColor(context);
     
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: isLandscape ? 8.0 : 20.0,
-          vertical: isLandscape ? 3.0 : 12.0,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected ? primaryColor.withOpacity(0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-          border: isSelected
-              ? Border.all(color: primaryColor, width: isLandscape ? 1.5 : 2.0)
-              : Border.all(color: Colors.transparent, width: isLandscape ? 1.5 : 2.0),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? primaryColor : textSecondary,
-              size: isLandscape ? 14.0 : 20.0,
-            ),
-            SizedBox(width: isLandscape ? 4.0 : 8.0),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? primaryColor : textPrimary,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                fontSize: isLandscape ? 11.0 : 16.0,
+    return TVFocusable(
+      autofocus: isSelected,
+      focusScale: 1.0,
+      showFocusBorder: false,
+      onSelect: onTap,
+      builder: (context, isFocused, child) {
+        return Container(
+          decoration: BoxDecoration(
+            color: isFocused 
+                ? primaryColor.withOpacity(0.2)
+                : (isSelected ? primaryColor.withOpacity(0.1) : Colors.transparent),
+            borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+            border: isSelected
+                ? Border.all(color: primaryColor, width: isLandscape ? 1.5 : 2.0)
+                : (isFocused ? Border.all(color: primaryColor, width: isLandscape ? 1.5 : 2.0) : null),
+          ),
+          child: child,
+        );
+      },
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: isLandscape ? 8.0 : 20.0,
+            vertical: isLandscape ? 3.0 : 12.0,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                color: isSelected ? primaryColor : textSecondary,
+                size: isLandscape ? 14.0 : 20.0,
               ),
-            ),
-          ],
+              SizedBox(width: isLandscape ? 4.0 : 8.0),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? primaryColor : textPrimary,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  fontSize: isLandscape ? 11.0 : 16.0,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

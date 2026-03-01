@@ -6,6 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/platform/platform_detector.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/utils/app_restart_helper.dart';
+import '../../../core/widgets/tv_focusable.dart';
 import '../providers/backup_provider.dart';
 
 /// 本地备份区域组件
@@ -235,38 +236,66 @@ class _LocalBackupSectionState extends State<LocalBackupSection> {
                 Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _selectBackupDirectory(context),
-                        icon: Icon(Icons.folder_open_rounded, size: style['iconSize']),
-                        label: Text(
-                          strings.browse,
-                          style: TextStyle(fontSize: style['bodyFontSize']),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: textPrimary,
-                          side: BorderSide(color: textPrimary.withOpacity(0.3)),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: style['isLandscape'] ? 10.0 : 20.0,
-                            vertical: style['isLandscape'] ? 5.0 : 14.0,
+                      child: TVFocusable(
+                        focusScale: 1.0,
+                        showFocusBorder: false,
+                        onSelect: () => _selectBackupDirectory(context),
+                        builder: (context, isFocused, child) {
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: isFocused ? primaryColor.withOpacity(0.1) : Colors.transparent,
+                              borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                            ),
+                            child: child,
+                          );
+                        },
+                        child: OutlinedButton.icon(
+                          onPressed: () => _selectBackupDirectory(context),
+                          icon: Icon(Icons.folder_open_rounded, size: style['iconSize']),
+                          label: Text(
+                            strings.browse,
+                            style: TextStyle(fontSize: style['bodyFontSize']),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: textPrimary,
+                            side: BorderSide(color: textPrimary.withOpacity(0.3)),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: style['isLandscape'] ? 10.0 : 20.0,
+                              vertical: style['isLandscape'] ? 5.0 : 14.0,
+                            ),
                           ),
                         ),
                       ),
                     ),
                     SizedBox(width: style['spacing'] * 0.75),
                     Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _createBackup(context),
-                        icon: Icon(Icons.add_rounded, size: style['iconSize']),
-                        label: Text(
-                          strings.createBackup,
-                          style: TextStyle(fontSize: style['bodyFontSize']),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryColor,
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(
-                            horizontal: style['isLandscape'] ? 10.0 : 20.0,
-                            vertical: style['isLandscape'] ? 5.0 : 14.0,
+                      child: TVFocusable(
+                        focusScale: 1.0,
+                        showFocusBorder: false,
+                        onSelect: () => _createBackup(context),
+                        builder: (context, isFocused, child) {
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: isFocused ? primaryColor.withOpacity(0.2) : Colors.transparent,
+                              borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                            ),
+                            child: child,
+                          );
+                        },
+                        child: ElevatedButton.icon(
+                          onPressed: () => _createBackup(context),
+                          icon: Icon(Icons.add_rounded, size: style['iconSize']),
+                          label: Text(
+                            strings.createBackup,
+                            style: TextStyle(fontSize: style['bodyFontSize']),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryColor,
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: style['isLandscape'] ? 10.0 : 20.0,
+                              vertical: style['isLandscape'] ? 5.0 : 14.0,
+                            ),
                           ),
                         ),
                       ),
@@ -291,25 +320,39 @@ class _LocalBackupSectionState extends State<LocalBackupSection> {
                 ),
               ),
               const Spacer(),
-              OutlinedButton.icon(
-                onPressed: _isRefreshing ? null : () => _refreshLocalBackups(context),
-                icon: _isRefreshing
-                    ? SizedBox(
-                        width: style['iconSize'],
-                        height: style['iconSize'],
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(Icons.refresh_rounded, size: style['iconSize']),
-                label: Text(
-                  strings.refresh,
-                  style: TextStyle(fontSize: style['bodyFontSize']),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: textPrimary,
-                  side: BorderSide(color: textPrimary.withOpacity(0.3)),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: style['isLandscape'] ? 8.0 : 16.0,
-                    vertical: style['isLandscape'] ? 5.0 : 12.0,
+              TVFocusable(
+                focusScale: 1.0,
+                showFocusBorder: false,
+                onSelect: _isRefreshing ? null : () => _refreshLocalBackups(context),
+                builder: (context, isFocused, child) {
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: isFocused && !_isRefreshing ? primaryColor.withOpacity(0.1) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                    ),
+                    child: child,
+                  );
+                },
+                child: OutlinedButton.icon(
+                  onPressed: _isRefreshing ? null : () => _refreshLocalBackups(context),
+                  icon: _isRefreshing
+                      ? SizedBox(
+                          width: style['iconSize'],
+                          height: style['iconSize'],
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(Icons.refresh_rounded, size: style['iconSize']),
+                  label: Text(
+                    strings.refresh,
+                    style: TextStyle(fontSize: style['bodyFontSize']),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: textPrimary,
+                    side: BorderSide(color: textPrimary.withOpacity(0.3)),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: style['isLandscape'] ? 8.0 : 16.0,
+                      vertical: style['isLandscape'] ? 5.0 : 12.0,
+                    ),
                   ),
                 ),
               ),
@@ -344,13 +387,15 @@ class _LocalBackupSectionState extends State<LocalBackupSection> {
               ),
             )
           else
-            ...provider.localBackups.map((backup) => _buildBackupItem(context, backup)).toList(),
+            ...provider.localBackups.asMap().entries.map((entry) => 
+              _buildBackupItem(context, entry.value, entry.key)
+            ).toList(),
         ],
       ),
     );
   }
 
-  Widget _buildBackupItem(BuildContext context, dynamic backup) {
+  Widget _buildBackupItem(BuildContext context, dynamic backup, int index) {
     final cardColor = AppTheme.getCardColor(context);
     final textPrimary = AppTheme.getTextPrimary(context);
     final textSecondary = AppTheme.getTextSecondary(context);
@@ -430,33 +475,62 @@ class _LocalBackupSectionState extends State<LocalBackupSection> {
                   ),
                 ),
                 SizedBox(width: style['spacing'] * 0.75),
-                OutlinedButton.icon(
-                  onPressed: () => _restoreBackup(context, backup.path),
-                  icon: Icon(Icons.restore_rounded, size: style['iconSize']),
-                  label: Text(
-                    strings.restoreBackup,
-                    style: TextStyle(fontSize: style['bodyFontSize']),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: primaryColor,
-                    side: BorderSide(color: primaryColor),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: style['isLandscape'] ? 8.0 : 16.0,
-                      vertical: style['isLandscape'] ? 4.0 : 10.0,
+                TVFocusable(
+                  autofocus: index == 0,
+                  focusScale: 1.0,
+                  showFocusBorder: false,
+                  onSelect: () => _restoreBackup(context, backup.path),
+                  builder: (context, isFocused, child) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: isFocused ? primaryColor.withOpacity(0.1) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                      ),
+                      child: child,
+                    );
+                  },
+                  child: OutlinedButton.icon(
+                    onPressed: () => _restoreBackup(context, backup.path),
+                    icon: Icon(Icons.restore_rounded, size: style['iconSize']),
+                    label: Text(
+                      strings.restoreBackup,
+                      style: TextStyle(fontSize: style['bodyFontSize']),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: primaryColor,
+                      side: BorderSide(color: primaryColor),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: style['isLandscape'] ? 8.0 : 16.0,
+                        vertical: style['isLandscape'] ? 4.0 : 10.0,
+                      ),
                     ),
                   ),
                 ),
                 SizedBox(width: style['spacing'] / 2),
-                IconButton(
-                  onPressed: () => _deleteBackup(context, backup.path),
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  color: AppTheme.errorColor,
-                  tooltip: strings.delete,
-                  iconSize: style['iconSize'],
-                  padding: EdgeInsets.all(style['isLandscape'] ? 4.0 : 8.0),
-                  constraints: BoxConstraints(
-                    minWidth: style['isLandscape'] ? 28.0 : 48.0,
-                    minHeight: style['isLandscape'] ? 28.0 : 48.0,
+                TVFocusable(
+                  focusScale: 1.0,
+                  showFocusBorder: false,
+                  onSelect: () => _deleteBackup(context, backup.path),
+                  builder: (context, isFocused, child) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: isFocused ? AppTheme.errorColor.withOpacity(0.1) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                      ),
+                      child: child,
+                    );
+                  },
+                  child: IconButton(
+                    onPressed: () => _deleteBackup(context, backup.path),
+                    icon: const Icon(Icons.delete_outline_rounded),
+                    color: AppTheme.errorColor,
+                    tooltip: strings.delete,
+                    iconSize: style['iconSize'],
+                    padding: EdgeInsets.all(style['isLandscape'] ? 4.0 : 8.0),
+                    constraints: BoxConstraints(
+                      minWidth: style['isLandscape'] ? 28.0 : 48.0,
+                      minHeight: style['isLandscape'] ? 28.0 : 48.0,
+                    ),
                   ),
                 ),
               ],

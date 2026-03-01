@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:archive/archive_io.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
+import 'package:sqflite/sqflite.dart';
 import '../models/backup_metadata.dart';
 import 'service_locator.dart';
 
@@ -139,6 +140,10 @@ class RestoreService {
       // 8. 恢复播放列表文件 (85%)
       onProgress(0.85, '恢复播放列表...');
       await _restorePlaylistFiles(tempDir);
+
+      // 8.5. 重新映射播放列表路径 (90%)
+      onProgress(0.9, '重新映射播放列表路径...');
+      await _remapPlaylistPaths();
 
       // 9. 清理临时文件 (95%)
       onProgress(0.95, '清理临时文件...');
@@ -380,13 +385,35 @@ class RestoreService {
     }
     await playlistsDir.create(recursive: true);
 
-    // 恢复播放列表文件
-    await for (final entity in playlistsBackupDir.list()) {
+    // 判断当前平台
+    final isWindows = Platform.isWindows;
+    final currentPlatform = isWindows ? 'Windows' : 'Android/Android TV';
+    ServiceLocator.log.d('恢复播放列表文件到 $currentPlatform 平台', tag: 'RestoreService');
+
+    // 递归恢复播放列表文件（包括子目录）
+    int fileCount = 0;
+    await for (final entity in playlistsBackupDir.list(recursive: true)) {
       if (entity is File) {
-        final fileName = path.basename(entity.path);
-        await entity.copy(path.join(playlistsDir.path, fileName));
+        // 计算相对路径（保留子目录结构）
+        final relativePath = path.relative(entity.path, from: playlistsBackupDir.path);
+        
+        // 根据平台调整路径
+        final adjustedPath = _adjustPathForPlatform(relativePath, isWindows);
+        final targetPath = path.join(playlistsDir.path, adjustedPath);
+        
+        // 确保目标目录存在
+        final targetFile = File(targetPath);
+        await targetFile.parent.create(recursive: true);
+        
+        // 复制文件
+        await entity.copy(targetPath);
+        fileCount++;
+        
+        ServiceLocator.log.d('恢复播放列表文件: $relativePath -> $adjustedPath', tag: 'RestoreService');
       }
     }
+    
+    ServiceLocator.log.i('恢复了 $fileCount 个播放列表文件（包括子目录）', tag: 'RestoreService');
   }
 
   Future<void> _rollback(Directory rollbackDir) async {
@@ -422,6 +449,278 @@ class RestoreService {
           final fileName = path.basename(entity.path);
           await entity.copy(path.join(playlistsDir.path, fileName));
         }
+      }
+    }
+  }
+
+  /// 重新映射播放列表路径（跨平台兼容）
+  /// 
+  /// 将备份中的播放列表路径映射到当前设备的应用目录
+  /// 支持 Windows ↔ Android ↔ Android TV 之间的相互恢复
+  /// 
+  /// 平台差异：
+  /// - Windows: 使用 playlists/backups/ 子目录
+  /// - Android/Android TV: 直接使用 playlists/ 目录
+  Future<void> _remapPlaylistPaths() async {
+    ServiceLocator.log.i('开始重新映射播放列表路径', tag: 'RestoreService');
+    
+    try {
+      // 获取当前设备的应用目录
+      final appDir = await getApplicationDocumentsDirectory();
+      final newPlaylistsDir = path.join(appDir.path, 'playlists');
+      final dbPath = path.join(appDir.path, 'flutter_iptv.db');
+      
+      // 判断当前平台
+      final isWindows = Platform.isWindows;
+      final currentPlatform = isWindows ? 'Windows' : 'Android/Android TV';
+      
+      ServiceLocator.log.d('当前平台: $currentPlatform', tag: 'RestoreService');
+      ServiceLocator.log.d('当前设备播放列表目录: $newPlaylistsDir', tag: 'RestoreService');
+      
+      // 直接打开数据库（不通过 ServiceLocator，因为数据库连接已关闭）
+      final db = await openDatabase(dbPath);
+      
+      try {
+        // 查询所有播放列表
+        final playlists = await db.query('playlists');
+        ServiceLocator.log.d('找到 ${playlists.length} 个播放列表需要检查', tag: 'RestoreService');
+        
+        int mappedCount = 0;
+        int skippedCount = 0;
+        
+        for (final playlist in playlists) {
+          final playlistId = playlist['id'];
+          final oldFilePath = playlist['file_path'] as String?;
+          final oldBackupPath = playlist['backup_path'] as String?;
+          
+          String? newFilePath;
+          String? newBackupPath;
+          
+          // 1. 处理 backup_path
+          if (oldBackupPath != null && oldBackupPath.isNotEmpty) {
+            if (_isPlaylistPath(oldBackupPath)) {
+              // 应用内部路径，可以映射
+              final relativePath = _extractRelativePlaylistPath(oldBackupPath);
+              if (relativePath != null) {
+                // 根据当前平台调整路径
+                final adjustedPath = _adjustPathForPlatform(relativePath, isWindows);
+                newBackupPath = path.join(newPlaylistsDir, adjustedPath);
+                
+                // 验证文件是否存在
+                if (await File(newBackupPath).exists()) {
+                  ServiceLocator.log.d(
+                    '播放列表 $playlistId: backup_path 映射成功 - $adjustedPath',
+                    tag: 'RestoreService',
+                  );
+                } else {
+                  ServiceLocator.log.w(
+                    '播放列表 $playlistId: backup_path 文件不存在 - $newBackupPath',
+                    tag: 'RestoreService',
+                  );
+                  newBackupPath = null;
+                }
+              } else {
+                ServiceLocator.log.w(
+                  '播放列表 $playlistId: 无法提取 backup_path 相对路径 - $oldBackupPath',
+                  tag: 'RestoreService',
+                );
+              }
+            } else {
+              ServiceLocator.log.d(
+                '播放列表 $playlistId: backup_path 不是应用内部路径，跳过映射 - $oldBackupPath',
+                tag: 'RestoreService',
+              );
+            }
+          }
+          
+          // 2. 处理 file_path
+          if (oldFilePath != null && oldFilePath.isNotEmpty) {
+            if (_isPlaylistPath(oldFilePath)) {
+              // 应用内部路径，可以映射
+              final relativePath = _extractRelativePlaylistPath(oldFilePath);
+              if (relativePath != null) {
+                // 根据当前平台调整路径
+                final adjustedPath = _adjustPathForPlatform(relativePath, isWindows);
+                newFilePath = path.join(newPlaylistsDir, adjustedPath);
+                
+                // 验证文件是否存在
+                if (await File(newFilePath).exists()) {
+                  ServiceLocator.log.d(
+                    '播放列表 $playlistId: file_path 映射成功 - $adjustedPath',
+                    tag: 'RestoreService',
+                  );
+                } else {
+                  // 文件不存在，尝试使用 backup_path
+                  if (newBackupPath != null) {
+                    newFilePath = newBackupPath;
+                    ServiceLocator.log.d(
+                      '播放列表 $playlistId: file_path 文件不存在，使用 backup_path',
+                      tag: 'RestoreService',
+                    );
+                  } else {
+                    ServiceLocator.log.w(
+                      '播放列表 $playlistId: file_path 和 backup_path 都不可用',
+                      tag: 'RestoreService',
+                    );
+                    newFilePath = null;
+                  }
+                }
+              } else {
+                ServiceLocator.log.w(
+                  '播放列表 $playlistId: 无法提取 file_path 相对路径 - $oldFilePath',
+                  tag: 'RestoreService',
+                );
+              }
+            } else {
+              // 用户选择的文件路径（如 Downloads），无法映射
+              // 尝试使用 backup_path
+              if (newBackupPath != null) {
+                newFilePath = newBackupPath;
+                ServiceLocator.log.d(
+                  '播放列表 $playlistId: file_path 是用户路径，使用 backup_path 替代',
+                  tag: 'RestoreService',
+                );
+              } else {
+                ServiceLocator.log.w(
+                  '播放列表 $playlistId: file_path 是用户路径且无 backup_path，无法恢复 - $oldFilePath',
+                  tag: 'RestoreService',
+                );
+                newFilePath = null;
+              }
+            }
+          }
+          
+          // 3. 更新数据库
+          if (newFilePath != null || newBackupPath != null) {
+            final updates = <String, dynamic>{};
+            if (newFilePath != null) updates['file_path'] = newFilePath;
+            if (newBackupPath != null) updates['backup_path'] = newBackupPath;
+            
+            await db.update(
+              'playlists',
+              updates,
+              where: 'id = ?',
+              whereArgs: [playlistId],
+            );
+            
+            mappedCount++;
+            ServiceLocator.log.i(
+              '播放列表 $playlistId 路径已更新: ${updates.keys.join(", ")}',
+              tag: 'RestoreService',
+            );
+          } else {
+            skippedCount++;
+            ServiceLocator.log.w(
+              '播放列表 $playlistId 无法映射路径，跳过',
+              tag: 'RestoreService',
+            );
+          }
+        }
+        
+        ServiceLocator.log.i(
+          '路径映射完成: 成功 $mappedCount 个，跳过 $skippedCount 个',
+          tag: 'RestoreService',
+        );
+      } finally {
+        await db.close();
+      }
+    } catch (e, stackTrace) {
+      ServiceLocator.log.e(
+        '重新映射播放列表路径失败',
+        tag: 'RestoreService',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      // 不抛出异常，让恢复过程继续
+      // 路径映射失败不应该导致整个恢复失败
+    }
+  }
+
+  /// 判断路径是否是应用内部的播放列表路径
+  /// 
+  /// 检查路径是否包含 /playlists/ 或 \playlists\
+  /// 这样的路径可以通过提取相对路径重建
+  bool _isPlaylistPath(String filePath) {
+    // 标准化路径分隔符（统一使用正斜杠）
+    final normalizedPath = filePath.replaceAll(r'\', '/');
+    
+    // 检查是否包含 /playlists/
+    return normalizedPath.contains('/playlists/');
+  }
+
+  /// 提取播放列表的相对路径
+  /// 
+  /// 从完整路径中提取 /playlists/ 之后的相对路径
+  /// 保留子目录结构（如 backups/）
+  /// 
+  /// 示例：
+  /// - 输入：C:\Users\user\Documents\playlists\backups\playlist_1_backup.txt
+  /// - 输出：backups/playlist_1_backup.txt
+  /// 
+  /// - 输入：/data/user/0/app/playlists/playlist_2.m3u
+  /// - 输出：playlist_2.m3u
+  String? _extractRelativePlaylistPath(String fullPath) {
+    // 标准化路径分隔符（统一使用正斜杠）
+    final normalizedPath = fullPath.replaceAll(r'\', '/');
+    
+    // 查找 /playlists/ 的位置
+    final playlistsIndex = normalizedPath.indexOf('/playlists/');
+    if (playlistsIndex == -1) {
+      return null;
+    }
+    
+    // 提取 /playlists/ 之后的相对路径
+    final relativePath = normalizedPath.substring(playlistsIndex + '/playlists/'.length);
+    
+    ServiceLocator.log.d(
+      '提取相对路径: $fullPath -> $relativePath',
+      tag: 'RestoreService',
+    );
+    
+    return relativePath;
+  }
+
+  /// 根据当前平台调整路径
+  /// 
+  /// Windows: 使用 backups/ 子目录
+  /// Android/Android TV: 直接使用 playlists/ 目录
+  /// 
+  /// 示例：
+  /// - Windows 平台，输入 "playlist_1_backup.txt" -> "backups/playlist_1_backup.txt"
+  /// - Windows 平台，输入 "backups/playlist_1_backup.txt" -> "backups/playlist_1_backup.txt"
+  /// - Android 平台，输入 "backups/playlist_1_backup.txt" -> "playlist_1_backup.txt"
+  /// - Android 平台，输入 "playlist_1_backup.txt" -> "playlist_1_backup.txt"
+  String _adjustPathForPlatform(String relativePath, bool isWindows) {
+    // 标准化路径分隔符
+    final normalizedPath = relativePath.replaceAll(r'\', '/');
+    
+    if (isWindows) {
+      // Windows 平台：确保使用 backups/ 子目录
+      if (normalizedPath.startsWith('backups/')) {
+        // 已经有 backups/ 前缀，直接返回
+        return normalizedPath;
+      } else {
+        // 没有 backups/ 前缀，添加它
+        final adjusted = 'backups/$normalizedPath';
+        ServiceLocator.log.d(
+          '调整路径（Windows）: $relativePath -> $adjusted',
+          tag: 'RestoreService',
+        );
+        return adjusted;
+      }
+    } else {
+      // Android/Android TV 平台：移除 backups/ 子目录
+      if (normalizedPath.startsWith('backups/')) {
+        // 有 backups/ 前缀，移除它
+        final adjusted = normalizedPath.substring('backups/'.length);
+        ServiceLocator.log.d(
+          '调整路径（Android）: $relativePath -> $adjusted',
+          tag: 'RestoreService',
+        );
+        return adjusted;
+      } else {
+        // 没有 backups/ 前缀，直接返回
+        return normalizedPath;
       }
     }
   }

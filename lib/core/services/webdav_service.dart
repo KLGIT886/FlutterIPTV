@@ -1,6 +1,7 @@
 ﻿import 'dart:io';
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import '../models/backup_file.dart';
 import 'service_locator.dart';
 
@@ -35,6 +36,17 @@ class WebDAVService {
         'Authorization': 'Basic ${_encodeBasicAuth(username, password)}',
       },
     ));
+
+    // 添加拦截器以允许自签名证书
+    (_dio!.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
+      final client = HttpClient();
+      client.badCertificateCallback = (X509Certificate cert, String host, int port) {
+        // 允许所有证书（包括自签名证书）
+        ServiceLocator.log.d('允许证书: $host:$port', tag: 'WebDAVService');
+        return true;
+      };
+      return client;
+    };
 
     ServiceLocator.log.i('WebDAV 配置完成: $_serverUrl', tag: 'WebDAVService');
   }

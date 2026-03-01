@@ -216,7 +216,7 @@ class BackupService {
     );
   }
 
-  /// 复制播放列表文件
+  /// 复制播放列表文件（递归复制，包括子目录）
   Future<void> _copyPlaylistFiles(Directory targetDir) async {
     try {
       final appDir = await getApplicationDocumentsDirectory();
@@ -227,19 +227,27 @@ class BackupService {
         return;
       }
 
-      final files = await playlistsDir
-          .list()
-          .where((entity) => entity is File)
-          .cast<File>()
-          .toList();
-
-      for (final file in files) {
-        final fileName = path.basename(file.path);
-        final targetPath = path.join(targetDir.path, fileName);
-        await file.copy(targetPath);
+      // 递归复制所有文件和子目录
+      int fileCount = 0;
+      await for (final entity in playlistsDir.list(recursive: true)) {
+        if (entity is File) {
+          // 计算相对路径（保留子目录结构）
+          final relativePath = path.relative(entity.path, from: playlistsDir.path);
+          final targetPath = path.join(targetDir.path, relativePath);
+          
+          // 确保目标目录存在
+          final targetFile = File(targetPath);
+          await targetFile.parent.create(recursive: true);
+          
+          // 复制文件
+          await entity.copy(targetPath);
+          fileCount++;
+          
+          ServiceLocator.log.d('复制播放列表文件: $relativePath', tag: 'BackupService');
+        }
       }
 
-      ServiceLocator.log.d('复制了 ${files.length} 个播放列表文件', tag: 'BackupService');
+      ServiceLocator.log.d('复制了 $fileCount 个播放列表文件（包括子目录）', tag: 'BackupService');
     } catch (e) {
       ServiceLocator.log.w('复制播放列表文件失败', tag: 'BackupService', error: e);
     }

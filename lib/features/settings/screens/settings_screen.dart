@@ -447,6 +447,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.linear_scale_rounded,
                 onTap: () => _showProgressBarModeDialog(context, settings),
               ),
+              if (PlatformDetector.isTV) ...[
+                _buildDivider(),
+                _buildSelectTile(
+                  context,
+                  title: AppStrings.of(context)?.seekStepSeconds ?? '快进/快退跨度',
+                  subtitle: _getSeekStepLabel(context, settings.seekStepSeconds),
+                  icon: Icons.fast_forward_rounded,
+                  onTap: () => _showSeekStepDialog(context, settings),
+                ),
+              ],
               if (PlatformDetector.isDesktop || PlatformDetector.isTV) ...[
                 _buildDivider(),
                 _buildSwitchTile(
@@ -668,25 +678,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             const SizedBox(height: 24),
 
-            // Backup & Restore Section (只在 Mobile 和 Windows 端显示)
-            if (!PlatformDetector.isTV) ...[
-              _buildSectionHeader(AppStrings.of(context)?.backupAndRestore ?? '备份与恢复'),
-              _buildSettingsCard([
-                _buildActionTile(
-                  context,
-                  title: AppStrings.of(context)?.backupAndRestore ?? '备份与恢复',
-                  subtitle: '备份和恢复应用数据',
-                  icon: Icons.backup_rounded,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => BackupScreen()),
-                    );
-                  },
-                ),
-              ]),
-              const SizedBox(height: 24),
-            ],
+            // Backup & Restore Section (所有平台都显示)
+            _buildSectionHeader(AppStrings.of(context)?.backupAndRestore ?? '备份与恢复'),
+            _buildSettingsCard([
+              _buildActionTile(
+                context,
+                title: AppStrings.of(context)?.backupAndRestore ?? '备份与恢复',
+                subtitle: AppStrings.of(context)?.backupAndRestoreSubtitle ?? '备份和恢复应用数据',
+                icon: Icons.backup_rounded,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => BackupScreen()),
+                  );
+                },
+              ),
+            ]),
+            const SizedBox(height: 24),
 
             // Developer & Debug Settings
             _buildSectionHeader(AppStrings.of(context)?.developerAndDebug ?? 'Developer & Debug'),
@@ -1884,6 +1892,87 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return strings?.progressBarModeNever ?? '不显示';
       default:
         return strings?.progressBarModeAuto ?? '自动检测';
+    }
+  }
+
+  void _showSeekStepDialog(BuildContext context, SettingsProvider settings) {
+    final style = _getDialogStyle(context);
+    final options = [5, 10, 30, 60, 120];
+    final strings = AppStrings.of(context);
+    final labels = {
+      5: strings?.seekStep5s ?? '5秒',
+      10: strings?.seekStep10s ?? '10秒',
+      30: strings?.seekStep30s ?? '30秒',
+      60: strings?.seekStep60s ?? '60秒',
+      120: strings?.seekStep120s ?? '120秒',
+    };
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: style['backgroundColor'],
+          shape: style['shape'],
+          titlePadding: style['titlePadding'],
+          title: Text(
+            strings?.seekStepSeconds ?? '快进/快退跨度',
+            style: TextStyle(
+              color: AppTheme.getTextPrimary(context),
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          contentPadding: style['contentPadding'],
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: options.map((seconds) {
+                return RadioListTile<int>(
+                  title: Text(
+                    labels[seconds] ?? '$seconds秒',
+                    style: TextStyle(
+                      color: AppTheme.getTextPrimary(dialogContext),
+                      fontSize: 14,
+                    ),
+                  ),
+                  value: seconds,
+                  groupValue: settings.seekStepSeconds,
+                  onChanged: (value) {
+                    if (value != null) {
+                      settings.setSeekStepSeconds(value);
+                      Navigator.pop(dialogContext);
+                      final message = (strings?.seekStepSet ?? '快进/快退跨度已设置为：{seconds}秒')
+                          .replaceFirst('{seconds}', value.toString());
+                      _showSuccess(context, message);
+                    }
+                  },
+                  activeColor: AppTheme.getPrimaryColor(dialogContext),
+                  contentPadding: style['itemPadding'],
+                  visualDensity: style['visualDensity'],
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _getSeekStepLabel(BuildContext context, int seconds) {
+    final strings = AppStrings.of(context);
+    switch (seconds) {
+      case 5:
+        return strings?.seekStep5s ?? '5秒';
+      case 10:
+        return strings?.seekStep10s ?? '10秒';
+      case 30:
+        return strings?.seekStep30s ?? '30秒';
+      case 60:
+        return strings?.seekStep60s ?? '60秒';
+      case 120:
+        return strings?.seekStep120s ?? '120秒';
+      default:
+        return '$seconds秒';
     }
   }
 
