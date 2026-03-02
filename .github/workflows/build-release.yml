@@ -202,8 +202,8 @@ jobs:
           
           # Read changelog from version.json
           if [ -f "docs/version.json" ]; then
-            CHANGELOG_ZH=$(jq -r '.changelog.zh' docs/version.json | sed 's/\\n/\n/g')
-            CHANGELOG_EN=$(jq -r '.changelog.en' docs/version.json | sed 's/\\n/\n/g')
+            CHANGELOG_ZH=$(jq -r '.changelog.zh' docs/version.json)
+            CHANGELOG_EN=$(jq -r '.changelog.en' docs/version.json)
           else
             # Fallback to git commits if version.json not found
             PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -v "^${TAG}$" | head -1)
