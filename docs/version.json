@@ -3,10 +3,7 @@
   "build": 181,
   "releaseDate": "2026-03-05",
   "assets": {
-    "windows": {
-      "installer": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.21/flutteriptv-Windows-x64-Setup.exe",
-      "portable": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.21/flutteriptv-Windows-x64-Portable.zip"
-    },
+     "windows": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.21/flutteriptv-Windows-x64-Setup.exe",
     "android_mobile": {
       "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.21/flutteriptv-Android-Mobile-arm64-v8a.apk",
       "armeabi-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.21/flutteriptv-Android-Mobile-armeabi-v7a.apk",
