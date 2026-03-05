@@ -96,6 +96,9 @@ class _PlayerScreenState extends State<PlayerScreen>
   Channel? _originalChannel; // Original live channel when playing catchup
   EpgProgram? _currentCatchupProgram; // Currently playing catchup program
 
+  // 当前屏幕方向状态 (用于手机端横竖屏切换按钮)
+  DeviceOrientation? _currentOrientation;
+
   // 检查是否处于分屏模式（使用本地状态）
   bool _isMultiScreenMode() {
     return _localMultiScreenMode && PlatformDetector.isDesktop;
@@ -145,6 +148,13 @@ class _PlayerScreenState extends State<PlayerScreen>
       // 保存 settings 和 multi-screen provider 引用（用于 dispose 时保存状态）
       _settingsProvider = context.read<SettingsProvider>();
       _multiScreenProvider = context.read<MultiScreenProvider>();
+
+      // 初始化当前屏幕方向 (手机端)
+      if (PlatformDetector.isMobile) {
+        _currentOrientation = MediaQuery.of(context).orientation == Orientation.portrait
+            ? DeviceOrientation.portraitUp
+            : DeviceOrientation.landscapeLeft;
+      }
 
       // 检查是否是 DLNA 投屏模式
       bool isDlnaMode = false;
@@ -661,6 +671,38 @@ class _PlayerScreenState extends State<PlayerScreen>
     // Restore system UI
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
+    // 恢复到应用设置的屏幕方向 (手机端)
+    if (PlatformDetector.isMobile && _settingsProvider != null) {
+      final orientation = _settingsProvider!.mobileOrientation;
+      List<DeviceOrientation> orientations;
+      
+      switch (orientation) {
+        case 'portrait':
+          orientations = [
+            DeviceOrientation.portraitUp,
+            DeviceOrientation.portraitDown,
+          ];
+          break;
+        case 'landscape':
+          orientations = [
+            DeviceOrientation.landscapeLeft,
+            DeviceOrientation.landscapeRight,
+          ];
+          break;
+        case 'auto':
+        default:
+          orientations = [
+            DeviceOrientation.portraitUp,
+            DeviceOrientation.portraitDown,
+            DeviceOrientation.landscapeLeft,
+            DeviceOrientation.landscapeRight,
+          ];
+          break;
+      }
+      
+      SystemChrome.setPreferredOrientations(orientations);
+    }
+
     super.dispose();
   }
 
@@ -720,6 +762,69 @@ class _PlayerScreenState extends State<PlayerScreen>
       // 保存单频道播放状态
       _settingsProvider!.saveLastSingleChannel(channel.id);
     }
+  }
+
+  /// 切换屏幕方向 (横屏 <-> 竖屏) - 仅手机端
+  Future<void> _toggleOrientation() async {
+    if (!PlatformDetector.isMobile) return;
+    
+    // 判断当前方向,切换到相反方向
+    final isPortrait = _currentOrientation == DeviceOrientation.portraitUp;
+    
+    final newOrientation = isPortrait 
+        ? DeviceOrientation.landscapeLeft 
+        : DeviceOrientation.portraitUp;
+    
+    // 应用新方向
+    await SystemChrome.setPreferredOrientations([newOrientation]);
+    
+    // 更新状态
+    setState(() {
+      _currentOrientation = newOrientation;
+    });
+    
+    // 显示简短提示
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isPortrait ? '已切换到横屏' : '已切换到竖屏',
+          ),
+          duration: const Duration(milliseconds: 800),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  /// 构建屏幕方向切换悬浮按钮
+  Widget _buildOrientationFab() {
+    IconData icon;
+    String tooltip;
+
+    // 根据当前方向显示对应图标
+    if (_currentOrientation == DeviceOrientation.portraitUp) {
+      icon = Icons.screen_rotation_rounded;
+      tooltip = '切换到横屏';
+    } else {
+      icon = Icons.stay_current_portrait_rounded;
+      tooltip = '切换到竖屏';
+    }
+
+    return AnimatedOpacity(
+      opacity: _showControls ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 300),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 120), // 向上偏移120像素,避免遮挡底部控制栏
+        child: FloatingActionButton(
+          mini: true,
+          backgroundColor: Colors.black.withOpacity(0.6),
+          onPressed: _toggleOrientation,
+          tooltip: tooltip,
+          child: Icon(icon, color: Colors.white, size: 20),
+        ),
+      ),
+    );
   }
 
   // ============ 手机端手动控制============
@@ -1370,6 +1475,10 @@ class _PlayerScreenState extends State<PlayerScreen>
       },
       child: Scaffold(
         backgroundColor: Colors.black,
+        floatingActionButton: (PlatformDetector.isMobile && _showControls) 
+            ? _buildOrientationFab() 
+            : null,
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
         body: Focus(
           focusNode: _playerFocusNode,
           autofocus: true,
