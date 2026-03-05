@@ -30,6 +30,7 @@ class LocalServerService {
   String get serverUrl => 'http://$_localIp:$_port';
   String get importUrl => 'http://$_localIp:$_port/import';
   String get searchUrl => 'http://$_localIp:$_port/search';
+  String get userAgentUrl => 'http://$_localIp:$_port/user-agent';
   String? get localIp => _localIp;
   int get port => _port;
 

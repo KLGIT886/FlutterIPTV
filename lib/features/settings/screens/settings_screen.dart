@@ -19,6 +19,7 @@ import '../providers/settings_provider.dart';
 import '../providers/dlna_provider.dart';
 import '../widgets/qr_log_export_dialog.dart';
 import '../widgets/user_agent_dialog.dart';
+import '../widgets/collapsible_settings_section.dart';
 import '../../epg/providers/epg_provider.dart';
 import '../../backup/screens/backup_screen.dart';
 
@@ -109,8 +110,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           padding: const EdgeInsets.all(20),
           children: [
             // General Settings
-            _buildSectionHeader(AppStrings.of(context)?.general ?? 'General'),
-            _buildSettingsCard([
+            CollapsibleSettingsSection(
+              title: AppStrings.of(context)?.general ?? 'General',
+              icon: Icons.settings_rounded,
+              initiallyExpanded: false,
+              children: [
               _buildSelectTile(
                 context,
                 title: AppStrings.of(context)?.language ?? 'Language',
@@ -181,13 +185,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _showSuccess(context, value ? (strings?.favoritesOnHomeEnabled ?? 'Favorites on home enabled') : (strings?.favoritesOnHomeDisabled ?? 'Favorites on home disabled'));
                 },
               ),
-            ]),
-
-            const SizedBox(height: 24),
+            ],
+            ),
 
             // Playback Settings
-            _buildSectionHeader(AppStrings.of(context)?.playback ?? 'Playback'),
-            _buildSettingsCard([
+            CollapsibleSettingsSection(
+              title: AppStrings.of(context)?.playback ?? 'Playback',
+              icon: Icons.play_circle_outline_rounded,
+              initiallyExpanded: false,
+              children: [
               _buildSwitchTile(
                 context,
                 title: AppStrings.of(context)?.autoPlay ?? 'Auto-play',
@@ -552,13 +558,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.equalizer_rounded,
                 onTap: () => _showVolumeBoostDialog(context, settings),
               ),
-            ]),
-
-            const SizedBox(height: 24),
+            ],
+            ),
 
             // Playlist Settings
-            _buildSectionHeader(AppStrings.of(context)?.playlists ?? 'Playlists'),
-            _buildSettingsCard([
+            CollapsibleSettingsSection(
+              title: AppStrings.of(context)?.playlists ?? 'Playlists',
+              icon: Icons.playlist_play_rounded,
+              initiallyExpanded: false,
+              children: [
               _buildSwitchTile(
                 context,
                 title: AppStrings.of(context)?.autoRefresh ?? 'Auto-refresh',
@@ -595,13 +603,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _showSuccess(context, value ? (strings?.rememberLastChannelEnabled ?? 'Remember last channel enabled') : (strings?.rememberLastChannelDisabled ?? 'Remember last channel disabled'));
                 },
               ),
-            ]),
-
-            const SizedBox(height: 24),
+            ],
+            ),
 
             // EPG Settings
-            _buildSectionHeader(AppStrings.of(context)?.epg ?? 'EPG (Electronic Program Guide)'),
-            _buildSettingsCard([
+            CollapsibleSettingsSection(
+              title: AppStrings.of(context)?.epg ?? 'EPG (Electronic Program Guide)',
+              icon: Icons.event_note_rounded,
+              initiallyExpanded: false,
+              children: [
               _buildSwitchTile(
                 context,
                 title: AppStrings.of(context)?.enableEpg ?? 'Enable EPG',
@@ -640,70 +650,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () => _showEpgUrlDialog(context, settings),
                 ),
               ],
-            ]),
-
-            const SizedBox(height: 24),
+            ],
+            ),
 
             // DLNA Settings
-            _buildSectionHeader(AppStrings.of(context)?.dlnaCasting ?? 'DLNA Casting'),
+            CollapsibleSettingsSection(
+              title: AppStrings.of(context)?.dlnaCasting ?? 'DLNA Casting',
+              icon: Icons.cast_rounded,
+              initiallyExpanded: false,
+              children: [
             Consumer<DlnaProvider>(
               builder: (context, dlnaProvider, _) {
                 final strings = AppStrings.of(context);
-                return _buildSettingsCard([
-                  _buildSwitchTile(
-                    context,
-                    title: strings?.enableDlnaService ?? 'Enable DLNA Service',
-                    subtitle: dlnaProvider.isRunning
-                        ? (strings?.dlnaServiceStarted ?? 'Started: {deviceName}').replaceFirst('{deviceName}', dlnaProvider.deviceName)
-                        : strings?.allowOtherDevicesToCast ?? 'Allow other devices to cast to this device',
-                    icon: Icons.cast_rounded,
-                    value: dlnaProvider.isEnabled,
-                    onChanged: (value) async {
-                      final success = await dlnaProvider.setEnabled(value);
-                      if (success) {
-                        _showSuccess(context, value ? (strings?.dlnaServiceStartedMsg ?? 'DLNA service started') : (strings?.dlnaServiceStoppedMsg ?? 'DLNA service stopped'));
-                      } else {
-                        _showError(context, strings?.dlnaServiceStartFailed ?? 'Failed to start DLNA service, please check network connection');
-                      }
-                    },
-                  ),
-                ]);
+                return _buildSwitchTile(
+                  context,
+                  title: strings?.enableDlnaService ?? 'Enable DLNA Service',
+                  subtitle: dlnaProvider.isRunning
+                      ? (strings?.dlnaServiceStarted ?? 'Started: {deviceName}').replaceFirst('{deviceName}', dlnaProvider.deviceName)
+                      : strings?.allowOtherDevicesToCast ?? 'Allow other devices to cast to this device',
+                  icon: Icons.cast_rounded,
+                  value: dlnaProvider.isEnabled,
+                  onChanged: (value) async {
+                    final success = await dlnaProvider.setEnabled(value);
+                    if (success) {
+                      _showSuccess(context, value ? (strings?.dlnaServiceStartedMsg ?? 'DLNA service started') : (strings?.dlnaServiceStoppedMsg ?? 'DLNA service stopped'));
+                    } else {
+                      _showError(context, strings?.dlnaServiceStartFailed ?? 'Failed to start DLNA service, please check network connection');
+                    }
+                  },
+                );
               },
             ),
+            ],
+            ),
 
-            // 家长控制 - 暂时隐藏（未实现）
-            // const SizedBox(height: 24),
-            // _buildSectionHeader(AppStrings.of(context)?.parentalControl ?? 'Parental Control'),
-            // _buildSettingsCard([
-            //   _buildSwitchTile(
-            //     context,
-            //     title: AppStrings.of(context)?.enableParentalControl ?? 'Enable Parental Control',
-            //     subtitle: '${AppStrings.of(context)?.enableParentalControlSubtitle ?? 'Require PIN to access certain content'} ${AppStrings.of(context)?.notImplemented ?? '(Not implemented)'}',
-            //     icon: Icons.lock_outline_rounded,
-            //     value: settings.parentalControl,
-            //     onChanged: (value) {
-            //       settings.setParentalControl(value);
-            //       final strings = AppStrings.of(context);
-            //       _showError(context, strings?.parentalControlNotImplemented ?? 'Parental control not implemented, setting will not take effect');
-            //     },
-            //   ),
-            //   if (settings.parentalControl) ...[
-            //     _buildDivider(),
-            //     _buildActionTile(
-            //       context,
-            //       title: AppStrings.of(context)?.changePin ?? 'Change PIN',
-            //       subtitle: '${AppStrings.of(context)?.changePinSubtitle ?? 'Update your parental control PIN'} ${AppStrings.of(context)?.notImplemented ?? '(Not implemented)'}',
-            //       icon: Icons.pin_rounded,
-            //       onTap: () => _showChangePinDialog(context, settings),
-            //     ),
-            //   ],
-            // ]),
-
-            const SizedBox(height: 24),
-
-            // Backup & Restore Section (所有平台都显示)
-            _buildSectionHeader(AppStrings.of(context)?.backupAndRestore ?? '备份与恢复'),
-            _buildSettingsCard([
+            // Backup & Restore Section
+            CollapsibleSettingsSection(
+              title: AppStrings.of(context)?.backupAndRestore ?? '备份与恢复',
+              icon: Icons.backup_rounded,
+              initiallyExpanded: false,
+              children: [
               _buildActionTile(
                 context,
                 title: AppStrings.of(context)?.backupAndRestore ?? '备份与恢复',
@@ -716,12 +702,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   );
                 },
               ),
-            ]),
-            const SizedBox(height: 24),
+            ],
+            ),
 
             // Developer & Debug Settings
-            _buildSectionHeader(AppStrings.of(context)?.developerAndDebug ?? 'Developer & Debug'),
-            _buildSettingsCard([
+            CollapsibleSettingsSection(
+              title: AppStrings.of(context)?.developerAndDebug ?? 'Developer & Debug',
+              icon: Icons.bug_report_rounded,
+              initiallyExpanded: false,
+              children: [
               _buildSelectTile(
                 context,
                 title: AppStrings.of(context)?.logLevel ?? 'Log Level',
@@ -755,13 +744,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () => _openLogFolder(context),
                 ),
               ],
-            ]),
-
-            const SizedBox(height: 24),
+            ],
+            ),
 
             // About Section
-            _buildSectionHeader(AppStrings.of(context)?.about ?? 'About'),
-            _buildSettingsCard([
+            CollapsibleSettingsSection(
+              title: AppStrings.of(context)?.about ?? 'About',
+              icon: Icons.info_outline_rounded,
+              initiallyExpanded: false,
+              children: [
               FutureBuilder<String>(
                 future: _getCurrentVersion(),
                 builder: (context, snapshot) {
@@ -788,12 +779,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 value: _getPlatformName(),
                 icon: Icons.devices_rounded,
               ),
-            ]),
-
-            const SizedBox(height: 24),
+            ],
+            ),
 
             // Reset Section
-            _buildSettingsCard([
+            CollapsibleSettingsSection(
+              title: AppStrings.of(context)?.resetAllSettings ?? 'Reset All Settings',
+              icon: Icons.restore_rounded,
+              initiallyExpanded: false,
+              children: [
               _buildActionTile(
                 context,
                 title: AppStrings.of(context)?.resetAllSettings ?? 'Reset All Settings',
@@ -802,7 +796,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 isDestructive: true,
                 onTap: () => _confirmResetSettings(context, settings),
               ),
-            ]),
+            ],
+            ),
 
             const SizedBox(height: 40),
           ],
@@ -1426,37 +1421,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Widget _buildSectionHeader(String title) {
-    return Builder(
-      builder: (context) => Padding(
-        padding: const EdgeInsets.only(left: 4, bottom: 12),
-        child: Text(
-          title,
-          style: TextStyle(
-            color: AppTheme.getTextSecondary(context),
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.5,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSettingsCard(List<Widget> children) {
-    return Builder(
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: AppTheme.getSurfaceColor(context),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          children: children,
-        ),
-      ),
-    );
-  }
-
   Widget _buildDivider() {
     return Builder(
       builder: (context) => Divider(
@@ -2041,45 +2005,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  void _showBufferSizeDialog(BuildContext context, SettingsProvider settings) {
-    final options = [10, 20, 30, 45, 60];
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          backgroundColor: AppTheme.getSurfaceColor(context),
-          title: Text(
-            AppStrings.of(context)?.bufferSize ?? 'Buffer Size',
-            style: TextStyle(color: AppTheme.getTextPrimary(context)),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: options.map((seconds) {
-              return RadioListTile<int>(
-                title: Text(
-                  '$seconds ${AppStrings.of(context)?.seconds ?? 'seconds'}',
-                  style: TextStyle(color: AppTheme.getTextPrimary(context)),
-                ),
-                value: seconds,
-                groupValue: settings.bufferSize,
-                onChanged: (value) {
-                  if (value != null) {
-                    settings.setBufferSize(value);
-                    Navigator.pop(dialogContext);
-                    final strings = AppStrings.of(context);
-                    _showError(context, strings?.bufferSizeNotImplemented ?? 'Buffer size setting not implemented, setting will not take effect');
-                  }
-                },
-                activeColor: AppTheme.getPrimaryColor(dialogContext),
-              );
-            }).toList(),
-          ),
-        );
-      },
-    );
-  }
-
   void _showVolumeBoostDialog(BuildContext context, SettingsProvider settings) {
     final style = _getDialogStyle(context);
     final options = [-10, -5, 0, 5, 10, 15, 20];
@@ -2262,53 +2187,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   } else {
                     _showSuccess(context, strings?.epgUrlSaved ?? 'EPG URL saved');
                   }
-                }
-              },
-              child: Text(AppStrings.of(context)?.save ?? 'Save'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showChangePinDialog(BuildContext context, SettingsProvider settings) {
-    final controller = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          backgroundColor: AppTheme.getSurfaceColor(context),
-          title: Text(
-            AppStrings.of(context)?.setPin ?? 'Set PIN',
-            style: TextStyle(color: AppTheme.getTextPrimary(context)),
-          ),
-          content: TextField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-            maxLength: 4,
-            obscureText: true,
-            style: TextStyle(color: AppTheme.getTextPrimary(context)),
-            decoration: InputDecoration(
-              hintText: AppStrings.of(context)?.enterPin ?? 'Enter 4-digit PIN',
-              hintStyle: TextStyle(color: AppTheme.getTextMuted(context)),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text(AppStrings.of(context)?.cancel ?? 'Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final strings = AppStrings.of(context);
-                if (controller.text.length == 4) {
-                  settings.setParentalPin(controller.text);
-                  Navigator.pop(dialogContext);
-                  _showError(context, strings?.pinNotImplemented ?? 'Parental control not implemented, PIN setting will not take effect');
-                } else {
-                  _showError(context, strings?.enter4DigitPin ?? 'Please enter 4-digit PIN');
                 }
               },
               child: Text(AppStrings.of(context)?.save ?? 'Save'),

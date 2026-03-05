@@ -224,8 +224,8 @@ class _UserAgentQRDialogState extends State<UserAgentQRDialog> {
   }
 
   Widget _buildQrCodeState(AppStrings strings, bool isMobile) {
-    // 生成 User-Agent 输入 URL
-    final userAgentUrl = '\/user-agent';
+    // 生成 User-Agent 输入 URL - 使用服务器的完整 URL
+    final userAgentUrl = _serverService.userAgentUrl;
     
     if (isMobile) {
       // 手机端：纵向布局
