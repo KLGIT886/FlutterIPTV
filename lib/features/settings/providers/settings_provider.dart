@@ -53,6 +53,7 @@ class SettingsProvider extends ChangeNotifier {
   static const String _keyShowFavoritesOnHome = 'show_favorites_on_home'; // 首页是否显示收藏夹
   static const String _keyUserAgent = 'user_agent'; // User-Agent for HTTP requests
   static const String _keyShowUserAgent = 'show_user_agent'; // 是否在播放器OSD显示User-Agent
+  static const String _keyPageTransitionAnimation = 'page_transition_animation'; // 页面切换动画类型
 
   // Default User-Agent (same as current hardcoded value)
   static const String defaultUserAgent = 'Wget/1.21.3';
@@ -104,6 +105,7 @@ class SettingsProvider extends ChangeNotifier {
   bool _showFavoritesOnHome = false; // 首页是否显示收藏夹 - 默认不显示
   String _userAgent = defaultUserAgent; // User-Agent for HTTP requests - 默认 Wget/1.21.3
   bool _showUserAgent = false; // 是否在播放器OSD显示User-Agent - 默认不显示
+  String _pageTransitionAnimation = 'fade'; // 页面切换动画：fade, slide, scale, none - 默认淡入淡出
 
   // Getters
   String get themeMode => _themeMode;
@@ -151,6 +153,7 @@ class SettingsProvider extends ChangeNotifier {
   bool get showFavoritesOnHome => _showFavoritesOnHome;
   String get userAgent => _userAgent;
   bool get showUserAgent => _showUserAgent;
+  String get pageTransitionAnimation => _pageTransitionAnimation;
   
   /// 获取当前应该使用的配色方案
   String get currentColorScheme {
@@ -267,6 +270,9 @@ class SettingsProvider extends ChangeNotifier {
     _userAgent = prefs.getString(_keyUserAgent) ?? defaultUserAgent;
     _showUserAgent = prefs.getBool(_keyShowUserAgent) ?? false;
     
+    // 加载页面切换动画设置
+    _pageTransitionAnimation = prefs.getString(_keyPageTransitionAnimation) ?? 'fade';
+    
     // 不在构造函数中调用 notifyListeners()，避免 build 期间触发重建
   }
 
@@ -360,6 +366,7 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setBool(_keyShowFavoritesOnHome, _showFavoritesOnHome);
     await prefs.setString(_keyUserAgent, _userAgent);
     await prefs.setBool(_keyShowUserAgent, _showUserAgent);
+    await prefs.setString(_keyPageTransitionAnimation, _pageTransitionAnimation);
   }
 
   // Setters with persistence
@@ -723,6 +730,14 @@ class SettingsProvider extends ChangeNotifier {
   Future<void> setShowUserAgent(bool show) async {
     ServiceLocator.log.d('SettingsProvider: 设置显示User-Agent - $show');
     _showUserAgent = show;
+    await _saveSettings();
+    notifyListeners();
+  }
+
+  /// 设置页面切换动画类型
+  Future<void> setPageTransitionAnimation(String animation) async {
+    ServiceLocator.log.d('SettingsProvider: 设置页面切换动画 - $animation');
+    _pageTransitionAnimation = animation;
     await _saveSettings();
     notifyListeners();
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../features/splash/screens/splash_screen.dart';
 import '../../features/home/screens/home_screen.dart';
@@ -10,6 +11,7 @@ import '../../features/favorites/screens/favorites_screen.dart';
 import '../../features/search/screens/search_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import '../../features/epg/screens/epg_screen.dart';
+import '../../features/settings/providers/settings_provider.dart';
 
 class AppRouter {
   // Route observer for tracking navigation
@@ -98,21 +100,106 @@ class AppRouter {
       settings: settings,
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        const begin = Offset(1.0, 0.0);
-        const end = Offset.zero;
-        const curve = Curves.easeInOutCubic;
+        // 获取当前的动画类型设置
+        final animationType = context.read<SettingsProvider>().pageTransitionAnimation;
+        
+        switch (animationType) {
+          case 'fade':
+            // 淡入淡出
+            return FadeTransition(
+              opacity: animation,
+              child: child,
+            );
+          
+          case 'slide':
+            // 从右到左滑入 + 淡入
+            const begin = Offset(1.0, 0.0);
+            const end = Offset.zero;
+            const curve = Curves.easeInOutCubic;
 
-        var tween = Tween(begin: begin, end: end).chain(
-          CurveTween(curve: curve),
-        );
+            var tween = Tween(begin: begin, end: end).chain(
+              CurveTween(curve: curve),
+            );
 
-        return SlideTransition(
-          position: animation.drive(tween),
-          child: FadeTransition(
-            opacity: animation,
-            child: child,
-          ),
-        );
+            return SlideTransition(
+              position: animation.drive(tween),
+              child: FadeTransition(
+                opacity: animation,
+                child: child,
+              ),
+            );
+          
+          case 'scale':
+            // 缩放 + 淡入
+            const curve = Curves.easeInOutCubic;
+            var scaleTween = Tween(begin: 0.8, end: 1.0).chain(
+              CurveTween(curve: curve),
+            );
+
+            return ScaleTransition(
+              scale: animation.drive(scaleTween),
+              child: FadeTransition(
+                opacity: animation,
+                child: child,
+              ),
+            );
+          
+          case 'material':
+            // Material（Android）风格：从下到上滑入 + 淡入
+            const begin = Offset(0.0, 0.04);
+            const end = Offset.zero;
+            const curve = Curves.fastOutSlowIn;
+
+            var tween = Tween(begin: begin, end: end).chain(
+              CurveTween(curve: curve),
+            );
+
+            return SlideTransition(
+              position: animation.drive(tween),
+              child: FadeTransition(
+                opacity: CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeIn,
+                ),
+                child: child,
+              ),
+            );
+          
+          case 'cupertino':
+            // Cupertino（iOS）风格：从右到左滑入，带视差效果
+            const curve = Curves.linearToEaseOut;
+            
+            // 新页面从右侧滑入
+            var primaryTween = Tween(
+              begin: const Offset(1.0, 0.0),
+              end: Offset.zero,
+            ).chain(CurveTween(curve: curve));
+            
+            // 旧页面向左侧移动（视差效果）
+            var secondaryTween = Tween(
+              begin: Offset.zero,
+              end: const Offset(-0.3, 0.0),
+            ).chain(CurveTween(curve: curve));
+
+            return SlideTransition(
+              position: animation.drive(primaryTween),
+              child: SlideTransition(
+                position: secondaryAnimation.drive(secondaryTween),
+                child: child,
+              ),
+            );
+          
+          case 'none':
+            // 无动画
+            return child;
+          
+          default:
+            // 默认淡入淡出
+            return FadeTransition(
+              opacity: animation,
+              child: child,
+            );
+        }
       },
       transitionDuration: const Duration(milliseconds: 300),
     );

@@ -52,6 +52,9 @@ class _ChannelsScreenState extends State<ChannelsScreen> with ThrottledStateMixi
   List<Channel> _cachedChannels = [];
   bool _isLoadingMore = false;
 
+  // ✅ 追踪上一次选中的分类，用于检测分类变化
+  String? _lastSelectedGroup;
+
   // 用于TV端分类焦点管理
   final List<FocusNode> _groupFocusNodes = [];
   final List<FocusNode> _channelFocusNodes = [];
@@ -735,7 +738,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> with ThrottledStateMixi
                 _currentGroupIndex = groupIndex;
                 _groupSelectTimer?.cancel();
                 _groupSelectTimer =
-                    Timer(const Duration(milliseconds: 300), () {
+                    Timer(const Duration(milliseconds: 100), () {
                   if (mounted) {
                     // 切换分类时重置频道索引并滚动到顶部
                     _lastChannelIndex = 0;
@@ -855,18 +858,29 @@ class _ChannelsScreenState extends State<ChannelsScreen> with ThrottledStateMixi
         ServiceLocator.log.d(
             '[ChannelsScreen] Consumer builder 被调用 - filteredChannels=${provider.filteredChannels.length}, cached=${_cachedChannels.length}');
 
-        // 首次加载或切换分类时更新缓存
+        // ✅ 检测分类是否变化
+        final groupChanged = _selectedGroup != _lastSelectedGroup;
+
+        // 首次加载、切换分类或长度变化时更新缓存
         if (_cachedChannels.isEmpty ||
+            groupChanged ||
             provider.filteredChannels.length != _cachedChannels.length) {
           ServiceLocator.log.d(
-              '[ChannelsScreen] 需要更新缓存: empty=${_cachedChannels.isEmpty}, lengthChanged=${provider.filteredChannels.length != _cachedChannels.length}');
+              '[ChannelsScreen] 需要更新缓存: empty=${_cachedChannels.isEmpty}, groupChanged=$groupChanged, lengthChanged=${provider.filteredChannels.length != _cachedChannels.length}');
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
               throttledSetState(() {
                 _cachedChannels = provider.filteredChannels;
+                _lastSelectedGroup = _selectedGroup; // ✅ 记录当前分类
                 ServiceLocator.log
                     .d('[ChannelsScreen] 缓存已更新: ${_cachedChannels.length} 个频道');
               });
+
+              // ✅ 如果是分类变化，滚动到顶部
+              if (groupChanged && _scrollController.hasClients) {
+                _scrollController.jumpTo(0);
+                ServiceLocator.log.d('[ChannelsScreen] 分类变化，已滚动到顶部');
+              }
 
               // ✅ 检查是否填满屏幕，如果未填满且还有更多数据，自动触发加载下一页
               Future.delayed(const Duration(milliseconds: 200), () {

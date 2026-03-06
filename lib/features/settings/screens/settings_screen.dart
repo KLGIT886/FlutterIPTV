@@ -160,6 +160,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 },
               ),
               _buildDivider(),
+              _buildSelectTile(
+                context,
+                title: AppStrings.of(context)?.pageTransitionAnimation ?? 'Page Transition Animation',
+                subtitle: _getPageTransitionLabel(context, settings.pageTransitionAnimation),
+                icon: Icons.animation_rounded,
+                onTap: () => _showPageTransitionDialog(context, settings),
+              ),
+              _buildDivider(),
               _buildSwitchTile(
                 context,
                 title: AppStrings.of(context)?.showWatchHistoryOnHome ?? 'Show Watch History on Home',
@@ -2698,6 +2706,97 @@ class _SettingsScreenState extends State<SettingsScreen> {
       default:
         return fontFamily;
     }
+  }
+
+  String _getPageTransitionLabel(BuildContext context, String animation) {
+    final strings = AppStrings.of(context);
+    switch (animation) {
+      case 'fade':
+        return strings?.transitionFade ?? 'Fade';
+      case 'slide':
+        return strings?.transitionSlide ?? 'Slide';
+      case 'scale':
+        return strings?.transitionScale ?? 'Scale';
+      case 'none':
+        return strings?.transitionNone ?? 'None';
+      case 'material':
+        return strings?.transitionMaterial ?? 'Material (Android)';
+      case 'cupertino':
+        return strings?.transitionCupertino ?? 'Cupertino (iOS)';
+      default:
+        return strings?.transitionFade ?? 'Fade';
+    }
+  }
+
+  void _showPageTransitionDialog(BuildContext context, SettingsProvider settings) {
+    final style = _getDialogStyle(context);
+    final strings = AppStrings.of(context);
+
+    final animations = [
+      {'value': 'fade', 'label': strings?.transitionFade ?? 'Fade', 'desc': strings?.transitionFadeDesc ?? 'Smooth fade in/out effect'},
+      {'value': 'slide', 'label': strings?.transitionSlide ?? 'Slide', 'desc': strings?.transitionSlideDesc ?? 'Slide from right to left'},
+      {'value': 'scale', 'label': strings?.transitionScale ?? 'Scale', 'desc': strings?.transitionScaleDesc ?? 'Scale in effect'},
+      {'value': 'material', 'label': strings?.transitionMaterial ?? 'Material (Android)', 'desc': strings?.transitionMaterialDesc ?? 'Android native animation'},
+      {'value': 'cupertino', 'label': strings?.transitionCupertino ?? 'Cupertino (iOS)', 'desc': strings?.transitionCupertinoDesc ?? 'iOS native animation with parallax'},
+      {'value': 'none', 'label': strings?.transitionNone ?? 'None', 'desc': strings?.transitionNoneDesc ?? 'Direct switch, no animation'},
+    ];
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppTheme.getSurfaceColor(context),
+          shape: style['shape'] as ShapeBorder,
+          title: Text(
+            strings?.pageTransitionAnimation ?? 'Page Transition Animation',
+            style: TextStyle(color: AppTheme.getTextPrimary(context)),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: animations.map((anim) {
+                final isSelected = settings.pageTransitionAnimation == anim['value'];
+                return RadioListTile<String>(
+                  title: Text(
+                    anim['label'] as String,
+                    style: TextStyle(
+                      color: AppTheme.getTextPrimary(context),
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                  subtitle: Text(
+                    anim['desc'] as String,
+                    style: TextStyle(
+                      color: AppTheme.getTextSecondary(context),
+                      fontSize: 12,
+                    ),
+                  ),
+                  value: anim['value'] as String,
+                  groupValue: settings.pageTransitionAnimation,
+                  activeColor: AppTheme.getPrimaryColor(context),
+                  onChanged: (value) {
+                    if (value != null) {
+                      settings.setPageTransitionAnimation(value);
+                      Navigator.pop(dialogContext);
+                      _showSuccess(context, strings?.pageTransitionSet ?? 'Page transition animation set');
+                    }
+                  },
+                );
+              }).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(
+                strings?.close ?? 'Close',
+                style: TextStyle(color: AppTheme.getPrimaryColor(context)),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _showFontFamilyDialog(BuildContext context, SettingsProvider settings) {

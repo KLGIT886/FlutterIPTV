@@ -618,6 +618,23 @@ class AppStrings {
   String get showFavoritesOnHomeSubtitle => _localizedValues['showFavoritesOnHomeSubtitle']!;
   String get watchHistoryOnHomeEnabled => _localizedValues['watchHistoryOnHomeEnabled']!;
   String get watchHistoryOnHomeDisabled => _localizedValues['watchHistoryOnHomeDisabled']!;
+
+  // Page transition animation settings
+  String get pageTransitionAnimation => _localizedValues['pageTransitionAnimation']!;
+  String get pageTransitionAnimationSubtitle => _localizedValues['pageTransitionAnimationSubtitle']!;
+  String get transitionFade => _localizedValues['transitionFade']!;
+  String get transitionSlide => _localizedValues['transitionSlide']!;
+  String get transitionScale => _localizedValues['transitionScale']!;
+  String get transitionNone => _localizedValues['transitionNone']!;
+  String get transitionMaterial => _localizedValues['transitionMaterial']!;
+  String get transitionCupertino => _localizedValues['transitionCupertino']!;
+  String get transitionFadeDesc => _localizedValues['transitionFadeDesc']!;
+  String get transitionSlideDesc => _localizedValues['transitionSlideDesc']!;
+  String get transitionScaleDesc => _localizedValues['transitionScaleDesc']!;
+  String get transitionNoneDesc => _localizedValues['transitionNoneDesc']!;
+  String get transitionMaterialDesc => _localizedValues['transitionMaterialDesc']!;
+  String get transitionCupertinoDesc => _localizedValues['transitionCupertinoDesc']!;
+  String get pageTransitionSet => _localizedValues['pageTransitionSet']!;
   String get favoritesOnHomeEnabled => _localizedValues['favoritesOnHomeEnabled']!;
   String get favoritesOnHomeDisabled => _localizedValues['favoritesOnHomeDisabled']!;
 
@@ -1130,6 +1147,23 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'watchHistoryOnHomeDisabled': '首页观看记录显示已关闭',
     'favoritesOnHomeEnabled': '首页收藏夹显示已启用',
     'favoritesOnHomeDisabled': '首页收藏夹显示已关闭',
+
+    // Page transition animation settings
+    'pageTransitionAnimation': '页面切换动画',
+    'pageTransitionAnimationSubtitle': '选择页面切换时的动画效果',
+    'transitionFade': '淡入淡出',
+    'transitionSlide': '滑动',
+    'transitionScale': '缩放',
+    'transitionNone': '无动画',
+    'transitionMaterial': 'Material（Android）',
+    'transitionCupertino': 'Cupertino（iOS）',
+    'transitionFadeDesc': '平滑的淡入淡出效果',
+    'transitionSlideDesc': '从右向左滑入',
+    'transitionScaleDesc': '缩放进入效果',
+    'transitionNoneDesc': '直接切换，无动画',
+    'transitionMaterialDesc': 'Android 原生动画效果',
+    'transitionCupertinoDesc': 'iOS 原生动画效果（带视差）',
+    'pageTransitionSet': '页面切换动画已设置',
 
     // Developer and debug settings
     'developerAndDebug': '开发者与调试',
@@ -1696,6 +1730,23 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'watchHistoryOnHomeDisabled': 'Watch history on home disabled',
     'favoritesOnHomeEnabled': 'Favorites on home enabled',
     'favoritesOnHomeDisabled': 'Favorites on home disabled',
+
+    // Page transition animation settings
+    'pageTransitionAnimation': 'Page Transition Animation',
+    'pageTransitionAnimationSubtitle': 'Choose animation effect for page transitions',
+    'transitionFade': 'Fade',
+    'transitionSlide': 'Slide',
+    'transitionScale': 'Scale',
+    'transitionNone': 'None',
+    'transitionMaterial': 'Material (Android)',
+    'transitionCupertino': 'Cupertino (iOS)',
+    'transitionFadeDesc': 'Smooth fade in/out effect',
+    'transitionSlideDesc': 'Slide from right to left',
+    'transitionScaleDesc': 'Scale in effect',
+    'transitionNoneDesc': 'Direct switch, no animation',
+    'transitionMaterialDesc': 'Android native animation',
+    'transitionCupertinoDesc': 'iOS native animation with parallax',
+    'pageTransitionSet': 'Page transition animation set',
 
     // Developer and debug settings
     'developerAndDebug': 'Developer & Debug',
