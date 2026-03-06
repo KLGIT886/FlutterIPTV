@@ -92,8 +92,7 @@ class PlayerProvider extends ChangeNotifier {
 
   /// Create Media object with custom User-Agent header
   Media _createMedia(String url) {
-    final userAgent =
-        ServiceLocator.settings?.userAgent ?? SettingsProvider.defaultUserAgent;
+    final userAgent = ServiceLocator.settings?.userAgent ?? SettingsProvider.defaultUserAgent;
     ServiceLocator.log.d('PlayerProvider: 创建Media对象 User-Agent: $userAgent');
     return Media(url, httpHeaders: {'User-Agent': userAgent});
   }
