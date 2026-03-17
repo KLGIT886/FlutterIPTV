@@ -1574,6 +1574,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                                 Channel(
                                     playlistId: 0, name: 'Unknown', url: '')),
                         isPlayingCatchup: _originalChannel != null,
+                        currentCatchupProgram: _currentCatchupProgram,
                         onProgramSelected: (program) {
                           // Handle playback
                           _playCatchup(program);
