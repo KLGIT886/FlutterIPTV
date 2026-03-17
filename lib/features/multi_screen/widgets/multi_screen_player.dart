@@ -18,6 +18,96 @@ import '../../settings/providers/settings_provider.dart';
 import '../../epg/providers/epg_provider.dart';
 import '../../channels/providers/channel_provider.dart';
 
+class _ChannelNameOverlay extends StatelessWidget {
+  final ScreenPlayerState screen;
+  final double nameWidth;
+  final bool forceAutoScroll;
+
+  const _ChannelNameOverlay({
+    required this.screen,
+    required this.nameWidth,
+    required this.forceAutoScroll,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final settingsProvider = context.read<SettingsProvider>();
+
+    // 如果配置为不显示频道名称，则返回空数组
+    if (!settingsProvider.showMultiScreenChannelName) {
+      return const SizedBox.shrink();
+    }
+
+    // 使用 select 只监听当前屏幕频道的 EPG 数据
+    final currentProgram = screen.channel != null
+        ? context.select<EpgProvider, EpgProgram?>(
+            (provider) => provider.getCurrentProgram(
+              screen.channel!.epgId,
+              screen.channel!.name,
+            ),
+          )
+        : null;
+
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.bottomCenter,
+          end: Alignment.topCenter,
+          colors: [Colors.black.withOpacity(0.8), Colors.transparent],
+        ),
+      ),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: SizedBox(
+          width: nameWidth,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AutoScrollText(
+                key: ValueKey('ch_${screen.channel?.id}'),
+                text: screen.channel?.name ?? '',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold),
+                scrollSpeed: 30.0,
+                scrollDelay: const Duration(milliseconds: 1000),
+                textAlign: TextAlign.left,
+                forceScroll: forceAutoScroll,
+              ),
+              if (currentProgram != null) ...[
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Icon(Icons.play_circle_filled,
+                        color: AppTheme.getPrimaryColor(context), size: 10),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: AutoScrollText(
+                        key: ValueKey('pg_${currentProgram.title}'),
+                        text: currentProgram.title,
+                        style: TextStyle(
+                            color: AppTheme.getPrimaryColor(context),
+                            fontSize: 10),
+                        scrollSpeed: 30.0,
+                        scrollDelay: const Duration(milliseconds: 1000),
+                        textAlign: TextAlign.left,
+                        forceScroll: forceAutoScroll,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class MultiScreenPlayer extends StatefulWidget {
   final VoidCallback? onExitMultiScreen;
   final VoidCallback? onBack;
@@ -57,7 +147,8 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
   Future<void> _syncWindowFullscreenState() async {
     if (!mounted) return;
     if (PlatformDetector.isWindows) {
-      setState(() => _isWindowFullscreen = WindowsFullscreenNative.isFullScreen());
+      setState(
+          () => _isWindowFullscreen = WindowsFullscreenNative.isFullScreen());
       return;
     }
     if (PlatformDetector.isDesktop) {
@@ -183,7 +274,6 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                     child: _buildTopControls(context),
                   ),
 
-
                 // Mini模式紡控制埗按挳（最彸上婅（屽终堟樉绀猴級
                 if (isMiniMode)
                   Positioned(
@@ -295,8 +385,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
             IconButton(
               icon: const Icon(Icons.grid_off_rounded, color: Colors.white),
               onPressed: widget.onExitMultiScreen,
-              tooltip: AppStrings.of(context)?.exitMultiScreen ??
-                  '退出分屏',
+              tooltip: AppStrings.of(context)?.exitMultiScreen ?? '退出分屏',
             ),
           ],
         ),
@@ -368,11 +457,13 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                 children: [
                   Text(
                     _formatDuration(screen.position),
-                    style: const TextStyle(color: Color(0xCCFFFFFF), fontSize: 10),
+                    style:
+                        const TextStyle(color: Color(0xCCFFFFFF), fontSize: 10),
                   ),
                   Text(
                     _formatDuration(screen.duration),
-                    style: const TextStyle(color: Color(0xCCFFFFFF), fontSize: 10),
+                    style:
+                        const TextStyle(color: Color(0xCCFFFFFF), fontSize: 10),
                   ),
                 ],
               ),
@@ -392,9 +483,10 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                       child: SliderTheme(
                         data: SliderTheme.of(context).copyWith(
                           trackHeight: 2.5,
-                          thumbShape:
-                              const RoundSliderThumbShape(enabledThumbRadius: 5),
-                          overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+                          thumbShape: const RoundSliderThumbShape(
+                              enabledThumbRadius: 5),
+                          overlayShape:
+                              const RoundSliderOverlayShape(overlayRadius: 10),
                         ),
                         child: Slider(
                           value: multiScreenProvider.volume,
@@ -459,6 +551,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
       ),
     );
   }
+
   String _formatDuration(Duration duration) {
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
@@ -476,6 +569,8 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
     final isActive = multiScreenProvider.activeScreenIndex == index;
     final settingsProvider = context.watch<SettingsProvider>();
     final isMiniMode = WindowsPipChannel.isInPipMode;
+    final forceAutoScroll = PlatformDetector.isWindows || PlatformDetector.isTV;
+    final nameWidth = forceAutoScroll ? 110.0 : 60.0;
 
     return Expanded(
       child: MouseRegion(
@@ -535,7 +630,6 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                   _buildLoadingPlaceholder(screen)
                 else
                   _buildEmptyScreenPlaceholder(context, index, isMiniMode),
-
                 if (!isMiniMode) ...[
                   Positioned(
                     top: 8,
@@ -568,10 +662,14 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                     ),
                   if (screen.channel != null)
                     Positioned(
-                      bottom: 0,
                       left: 0,
+                      bottom: 0,
                       right: 0,
-                      child: _buildBottomInfo(context, screen),
+                      child: _ChannelNameOverlay(
+                        screen: screen,
+                        nameWidth: nameWidth,
+                        forceAutoScroll: forceAutoScroll,
+                      ),
                     ),
                   if (_showControls &&
                       _hoveredScreenIndex == index &&
@@ -589,7 +687,6 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                       ),
                     ),
                 ],
-
                 if (screen.isLoading)
                   Center(
                     child: SizedBox(
@@ -601,7 +698,6 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                       ),
                     ),
                   ),
-
                 if (screen.error != null)
                   Center(
                     child: Icon(
@@ -617,6 +713,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
       ),
     );
   }
+
   Widget _buildChannelSelector(
       BuildContext context, MultiScreenProvider multiScreenProvider) {
     final channelProvider = context.watch<ChannelProvider>();
@@ -1040,87 +1137,6 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
     return '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
   }
 
-  Widget _buildBottomInfo(BuildContext context, ScreenPlayerState screen) {
-    final settingsProvider = context.watch<SettingsProvider>();
-    final forceAutoScroll = PlatformDetector.isWindows || PlatformDetector.isTV;
-    final nameWidth = (PlatformDetector.isWindows || PlatformDetector.isTV)
-        ? 110.0
-        : 60.0;
-
-    // 如果配置为不显示频道名称，则返回空数组
-    if (!settingsProvider.showMultiScreenChannelName) {
-      return const SizedBox.shrink();
-    }
-
-    // 使用 select 只监听当前屏幕频道的 EPG 数据
-    final currentProgram = screen.channel != null
-        ? context.select<EpgProvider, EpgProgram?>(
-            (provider) => provider.getCurrentProgram(
-              screen.channel!.epgId, 
-              screen.channel!.name,
-            ),
-          )
-        : null;
-
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.bottomCenter,
-          end: Alignment.topCenter,
-          colors: [Colors.black.withOpacity(0.8), Colors.transparent],
-        ),
-      ),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: SizedBox(
-          width: nameWidth,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AutoScrollText(
-                key: ValueKey('ch_${screen.channel?.id}'),
-                text: screen.channel?.name ?? '',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold),
-                scrollSpeed: 30.0,
-                scrollDelay: const Duration(milliseconds: 1000),
-                textAlign: TextAlign.left,
-                forceScroll: forceAutoScroll,
-              ),
-              if (currentProgram != null) ...[
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Icon(Icons.play_circle_filled,
-                        color: AppTheme.getPrimaryColor(context), size: 10),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: AutoScrollText(
-                        key: ValueKey('pg_${currentProgram.title}'),
-                        text: currentProgram.title,
-                        style: TextStyle(
-                            color: AppTheme.getPrimaryColor(context),
-                            fontSize: 10),
-                        scrollSpeed: 30.0,
-                        scrollDelay: const Duration(milliseconds: 1000),
-                        textAlign: TextAlign.left,
-                        forceScroll: forceAutoScroll,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildLoadingPlaceholder(ScreenPlayerState screen) {
     return Container(
       color: Colors.black,
@@ -1169,5 +1185,3 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
     );
   }
 }
-
-
