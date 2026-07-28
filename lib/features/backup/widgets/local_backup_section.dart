@@ -128,7 +128,7 @@ class _LocalBackupSectionState extends State<LocalBackupSection> {
 
   Future<void> _selectBackupDirectory(BuildContext context) async {
     try {
-      final result = await FilePicker.platform.getDirectoryPath(
+      final result = await FilePicker.getDirectoryPath(
         dialogTitle: '选择备份目录',
       );
 

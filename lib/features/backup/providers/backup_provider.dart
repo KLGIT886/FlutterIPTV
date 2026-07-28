@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
@@ -344,7 +344,7 @@ class BackupProvider extends ChangeNotifier {
   Future<bool> restoreFromSelectedFile() async {
     try {
       // 使用 file_picker 让用户选择备份文件
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['zip'],
         dialogTitle: '选择备份文件',

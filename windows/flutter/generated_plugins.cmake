@@ -5,6 +5,7 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   media_kit_libs_windows_video
   media_kit_video
+  restart_app
   screen_brightness_windows
   screen_retriever_windows
   url_launcher_windows
@@ -12,6 +13,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
+  jni
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)

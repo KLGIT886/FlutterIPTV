@@ -5,6 +5,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:screen_brightness/screen_brightness.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:intl/intl.dart';
 import 'dart:async';
 
 import '../../../core/i18n/app_strings.dart';
@@ -151,9 +152,10 @@ class _PlayerScreenState extends State<PlayerScreen>
 
       // 初始化当前屏幕方向 (手机端)
       if (PlatformDetector.isMobile) {
-        _currentOrientation = MediaQuery.of(context).orientation == Orientation.portrait
-            ? DeviceOrientation.portraitUp
-            : DeviceOrientation.landscapeLeft;
+        _currentOrientation =
+            MediaQuery.of(context).orientation == Orientation.portrait
+                ? DeviceOrientation.portraitUp
+                : DeviceOrientation.landscapeLeft;
       }
 
       // 检查是否是 DLNA 投屏模式
@@ -678,7 +680,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (PlatformDetector.isMobile && _settingsProvider != null) {
       final orientation = _settingsProvider!.mobileOrientation;
       List<DeviceOrientation> orientations;
-      
+
       switch (orientation) {
         case 'portrait':
           orientations = [
@@ -702,7 +704,7 @@ class _PlayerScreenState extends State<PlayerScreen>
           ];
           break;
       }
-      
+
       SystemChrome.setPreferredOrientations(orientations);
     }
 
@@ -770,22 +772,22 @@ class _PlayerScreenState extends State<PlayerScreen>
   /// 切换屏幕方向 (横屏 <-> 竖屏) - 仅手机端
   Future<void> _toggleOrientation() async {
     if (!PlatformDetector.isMobile) return;
-    
+
     // 判断当前方向,切换到相反方向
     final isPortrait = _currentOrientation == DeviceOrientation.portraitUp;
-    
-    final newOrientation = isPortrait 
-        ? DeviceOrientation.landscapeLeft 
+
+    final newOrientation = isPortrait
+        ? DeviceOrientation.landscapeLeft
         : DeviceOrientation.portraitUp;
-    
+
     // 应用新方向
     await SystemChrome.setPreferredOrientations([newOrientation]);
-    
+
     // 更新状态
     setState(() {
       _currentOrientation = newOrientation;
     });
-    
+
     // 显示简短提示
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1067,45 +1069,84 @@ class _PlayerScreenState extends State<PlayerScreen>
   String? _generateCatchupUrl(Channel channel, EpgProgram program) {
     if (channel.catchupSource == null) return null;
 
-    // Unix timestamp (seconds)
-    final startUnix = program.start.millisecondsSinceEpoch ~/ 1000;
-    final endUnix = program.end.millisecondsSinceEpoch ~/ 1000;
+    // IMPORTANT: program.start and program.end are LOCAL time (converted in EPG parser)
+    // They match what user sees in EPG UI.
+    final startLocal = program.start;
+    final endLocal = program.end;
+    final startUtc = startLocal.toUtc();
+    final endUtc = endLocal.toUtc();
 
-    // ISO 8601 format (UTC): yyyy-MM-ddTHH:mm:ssZ
-    final startIso = program.start
-        .toUtc()
-        .toIso8601String(); // e.g. 2026-02-25T02:14:00.000Z
-    // Remove milliseconds if present (some servers are picky)
+    // ISO 8601 format (UTC): yyyy-MM-ddTHH:mm:ssZ - for ${start}, ${stop}, ${end}
+    final startIso = startUtc.toIso8601String();
     final startIsoClean = startIso.replaceAll(RegExp(r'\.\d+Z$'), 'Z');
-
-    final endIso = program.end.toUtc().toIso8601String();
+    final endIso = endUtc.toIso8601String();
     final endIsoClean = endIso.replaceAll(RegExp(r'\.\d+Z$'), 'Z');
 
     var url = channel.catchupSource!;
 
-    // Replace with ISO format (priority) - handling ${start} and {start}
-    // We try ISO first because user provided logs showing ISO is expected
-    // But if the original URL has ${start} intended for unix, we might break it?
-    // Actually, usually ${start} in IPTV means Unix timestamp.
-    // However, the user explicitly said "Correct request... start=2026-02-25T..."
-    // This strongly implies I should use ISO format for this specific backend.
-    // To be safe, I'll check if the URL looks like it expects unix or ISO? No easy way.
-    // I will use ISO format as requested by user feedback.
+    // Step 1: Handle custom date format patterns with timezone support
+    // Pattern variations:
+    //   ${(b)yyyyMMddHHmmss}   -> begin/start, LOCAL time (matches EPG display)
+    //   ${(e)yyyyMMddHHmmss}   -> end, LOCAL time
+    //   ${(bu)yyyyMMddHHmmss}  -> begin/start, UTC time (explicit UTC)
+    //   ${(eu)yyyyMMddHHmmss}  -> end, UTC time
+    //   ${(B)...} / ${(E)...}  -> uppercase variants as aliases
+    final customFormatRegex = RegExp(r'\$\{\(([bBeE])([uU]?)\)([^}]+)\}');
+    final customMatches = customFormatRegex.allMatches(url);
+    for (final match in customMatches) {
+      final timeMarker = match.group(1)!.toLowerCase(); // 'b' or 'e'
+      final tzMarker = match.group(2)!.toLowerCase();   // 'u' or ''
+      final formatStr = match.group(3)!;                 // e.g. 'yyyyMMddHHmmss'
 
-    // Handle literal ${start} (escaped in regex)
+      // Choose local or UTC datetime based on 'u' suffix
+      DateTime dateTime;
+      if (tzMarker == 'u') {
+        // Explicit UTC requested
+        dateTime = (timeMarker == 'b') ? startUtc : endUtc;
+      } else {
+        // Default: use LOCAL time to match EPG display
+        dateTime = (timeMarker == 'b') ? startLocal : endLocal;
+      }
+
+      try {
+        final formatter = DateFormat(formatStr);
+        final formatted = formatter.format(dateTime);
+        url = url.replaceFirst(match.group(0)!, formatted);
+      } catch (_) {
+        // If DateFormat fails, skip this replacement (keep original pattern)
+      }
+    }
+
+    // Also handle brace-only version: {(b)yyyyMMddHHmmss}, {(bu)yyyyMMddHHmmss}
+    final braceFormatRegex = RegExp(r'\{\(([bBeE])([uU]?)\)([^}]+)\}');
+    final braceMatches = braceFormatRegex.allMatches(url);
+    for (final match in braceMatches) {
+      final timeMarker = match.group(1)!.toLowerCase();
+      final tzMarker = match.group(2)!.toLowerCase();
+      final formatStr = match.group(3)!;
+      DateTime dateTime;
+      if (tzMarker == 'u') {
+        dateTime = (timeMarker == 'b') ? startUtc : endUtc;
+      } else {
+        dateTime = (timeMarker == 'b') ? startLocal : endLocal;
+      }
+      try {
+        final formatter = DateFormat(formatStr);
+        final formatted = formatter.format(dateTime);
+        url = url.replaceFirst(match.group(0)!, formatted);
+      } catch (_) {}
+    }
+
+    // Step 2: Handle standard ${start}/${stop}/${end} patterns with ISO 8601 (UTC)
+    // ISO format with 'Z' suffix always means UTC - this is the standard behavior
     url = url.replaceAll(RegExp(r'\$\{start\}'), startIsoClean);
     url = url.replaceAll(RegExp(r'\$\{stop\}'), endIsoClean);
-    url =
-        url.replaceAll(RegExp(r'\$\{end\}'), endIsoClean); // handle ${end} too
+    url = url.replaceAll(RegExp(r'\$\{end\}'), endIsoClean);
 
-    // Handle {start}
+    // Handle {start}/{stop}/{end}
     url = url.replaceAll(RegExp(r'\{start\}'), startIsoClean);
     url = url.replaceAll(RegExp(r'\{stop\}'), endIsoClean);
     url = url.replaceAll(RegExp(r'\{end\}'), endIsoClean);
-
-    // Also try replacing Unix timestamp just in case the server supports both or user config differs?
-    // But replacing twice is dangerous.
-    // Let's stick to the user's "Correct request" format.
 
     return url;
   }
@@ -1478,8 +1519,8 @@ class _PlayerScreenState extends State<PlayerScreen>
       },
       child: Scaffold(
         backgroundColor: Colors.black,
-        floatingActionButton: (PlatformDetector.isMobile && _showControls) 
-            ? _buildOrientationFab() 
+        floatingActionButton: (PlatformDetector.isMobile && _showControls)
+            ? _buildOrientationFab()
             : null,
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
         body: Focus(
@@ -1850,7 +1891,9 @@ class _PlayerScreenState extends State<PlayerScreen>
       return 'Safari';
     }
     // 默认显示前20个字符
-    return userAgent.length > 20 ? '${userAgent.substring(0, 20)}...' : userAgent;
+    return userAgent.length > 20
+        ? '${userAgent.substring(0, 20)}...'
+        : userAgent;
   }
 
   Widget _buildVideoPlayer() {

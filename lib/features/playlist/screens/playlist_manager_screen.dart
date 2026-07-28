@@ -587,7 +587,7 @@ class _PlaylistManagerScreenState extends State<PlaylistManagerScreen> {
         );
       }
 
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['m3u', 'm3u8', 'txt'],
       );
