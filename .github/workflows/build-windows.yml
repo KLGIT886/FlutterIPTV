@@ -25,7 +25,7 @@ jobs:
     
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -90,7 +90,7 @@ jobs:
         shell: pwsh
       
       - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: windows-release
           path: flutteriptv-Windows-x64-Setup.exe
@@ -108,7 +108,7 @@ jobs:
     
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
       
