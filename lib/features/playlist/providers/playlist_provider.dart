@@ -56,7 +56,9 @@ class PlaylistProvider extends ChangeNotifier {
     
     _isLoading = true;
     _error = null;
-    notifyListeners();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
 
     try {
       final results = await ServiceLocator.database.query(
@@ -155,7 +157,9 @@ class PlaylistProvider extends ChangeNotifier {
     }
 
     _isLoading = false;
-    notifyListeners();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
   }
 
   /// Detect playlist format from URL or content

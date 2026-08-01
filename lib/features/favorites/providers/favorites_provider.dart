@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import '../../../core/models/channel.dart';
 import '../../../core/services/service_locator.dart';
 
@@ -27,7 +28,9 @@ class FavoritesProvider extends ChangeNotifier {
   Future<void> loadFavorites() async {
     _isLoading = true;
     _error = null;
-    notifyListeners();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
 
     try {
       // 首先获取当前激活的播放列表ID（如果未设置）
@@ -46,7 +49,9 @@ class FavoritesProvider extends ChangeNotifier {
           ServiceLocator.log.d('没有找到激活的播放列表');
           _favorites = [];
           _isLoading = false;
-          notifyListeners();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            notifyListeners();
+          });
           return;
         }
       }
@@ -75,7 +80,9 @@ class FavoritesProvider extends ChangeNotifier {
     }
 
     _isLoading = false;
-    notifyListeners();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
   }
 
   // Check if a channel is favorited

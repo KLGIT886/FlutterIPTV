@@ -643,13 +643,6 @@ class AppStrings {
   String get deinterlaceDesc => _localizedValues['deinterlaceDesc']!;
   String get deinterlaceEnabled => _localizedValues['deinterlaceEnabled']!;
   String get deinterlaceDisabled => _localizedValues['deinterlaceDisabled']!;
-  String get deinterlaceMode => _localizedValues['deinterlaceMode']!;
-  String get deinterlaceModeYadif => _localizedValues['deinterlaceModeYadif']!;
-  String get deinterlaceModeYadif1 => _localizedValues['deinterlaceModeYadif1']!;
-  String get deinterlaceModeYadif2 => _localizedValues['deinterlaceModeYadif2']!;
-  String get deinterlaceModeBwdif => _localizedValues['deinterlaceModeBwdif']!;
-  String get deinterlaceModeNnedi => _localizedValues['deinterlaceModeNnedi']!;
-  String get deinterlaceModeSet => _localizedValues['deinterlaceModeSet']!;
 
   // Map access for dynamic keys if needed
   String operator [](String key) => _localizedValues[key] ?? key;
@@ -1229,13 +1222,6 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'deinterlaceDesc': '为隔行扫描源（480i/576i/1080i）应用去交错滤镜',
     'deinterlaceEnabled': '去交错已启用',
     'deinterlaceDisabled': '去交错已禁用',
-    'deinterlaceMode': '去交错模式',
-    'deinterlaceModeYadif': 'yadif（推荐）',
-    'deinterlaceModeYadif1': 'yadif=1（倍帧）',
-    'deinterlaceModeYadif2': 'yadif=2（Bob）',
-    'deinterlaceModeBwdif': 'bwdif',
-    'deinterlaceModeNnedi': 'nnedi（高质量）',
-    'deinterlaceModeSet': '去交错模式已设置为：{mode}',
   };
 
   static const Map<String, String> _enValues = {
@@ -1823,12 +1809,5 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'deinterlaceDesc': 'Apply deinterlacing filter for interlaced video (480i/576i/1080i)',
     'deinterlaceEnabled': 'Deinterlace enabled',
     'deinterlaceDisabled': 'Deinterlace disabled',
-    'deinterlaceMode': 'Deinterlace Mode',
-    'deinterlaceModeYadif': 'yadif (Recommended)',
-    'deinterlaceModeYadif1': 'yadif=1 (Double FPS)',
-    'deinterlaceModeYadif2': 'yadif=2 (Bob)',
-    'deinterlaceModeBwdif': 'bwdif',
-    'deinterlaceModeNnedi': 'nnedi (High Quality)',
-    'deinterlaceModeSet': 'Deinterlace mode set to: {mode}',
   };
 }

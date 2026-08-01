@@ -52,6 +52,8 @@ class PlayerProvider extends ChangeNotifier {
   bool _allowSoftwareFallback = true;
   String _windowsHwdecMode = 'auto-safe';
   bool _isDisposed = false;
+  StreamSubscription<VideoParams>? _videoParamsSubscription;
+  bool _deinterlaceConfiguredForCurrentStream = false;
   String _videoOutput = 'auto';
   String _vo = 'unknown';
   String _configuredVo = 'auto';
@@ -341,7 +343,12 @@ class PlayerProvider extends ChangeNotifier {
         ServiceLocator.log.d('>>> 重试: 使用播放地址: $realUrl', tag: 'PlayerProvider');
 
         final playStartTime = DateTime.now();
+        _resetDeinterlaceDetection();
+        await _applyDeinterlaceFilter();
         await _mediaKitPlayer?.open(_createMedia(realUrl));
+
+        // 在 media 打开后应用去交错滤镜（mpv 可能在 open 时重置参数）
+        await _applyDeinterlaceFilter();
 
         final playTime =
             DateTime.now().difference(playStartTime).inMilliseconds;
@@ -440,8 +447,8 @@ class PlayerProvider extends ChangeNotifier {
     // 目前只做实例初始化，不做无效流程预加载
   }
 
-  void _initMediaKitPlayer(
-      {bool useSoftwareDecoding = false, String bufferStrength = 'fast'}) {
+  Future<void> _initMediaKitPlayer(
+      {bool useSoftwareDecoding = false, String bufferStrength = 'fast'}) async {
     _mediaKitPlayer?.dispose();
     _debugInfoTimer?.cancel();
     // Load decoding settings (overridden by explicit useSoftwareDecoding)
@@ -541,64 +548,224 @@ class PlayerProvider extends ChangeNotifier {
     _setupMediaKitListeners();
     _updateDebugInfo();
 
-    // 抑制 FFmpeg 冗余日志（SEI truncated 等）
-    _suppressFFmpegLogs();
+    // VideoController 创建后会强制设 hwdec=auto，在此覆盖去交错参数
+    // 必须在 open() 之前调用，否则 hwdec=auto 会绕过 vf 滤镜链
+    _resetDeinterlaceDetection();
+    await _applyDeinterlaceFilter();
 
     ServiceLocator.log.i('播放器初始化完成', tag: 'PlayerProvider');
   }
 
-  /// 抑制 FFmpeg 冗余日志（如 SEI type 4 truncated）
-  void _suppressFFmpegLogs() {
+  /// 安全调用 setProperty，单个失败不影响其他调用
+  /// 返回 true 表示成功，false 表示失败
+  Future<bool> _safeSetProperty(String property, String value, String label) async {
     try {
-      (player?.platform as dynamic)
-          .setProperty('msg-level', 'ffmpeg=error:vd=error');
+      final nativePlayer = player?.platform as dynamic;
+      await nativePlayer.setProperty(property, value);
+      return true;
     } catch (e) {
-      ServiceLocator.log.d('设置 msg-level 失败: $e', tag: 'PlayerProvider');
+      ServiceLocator.log.d('设置 $label 失败: $e', tag: 'PlayerProvider');
+      return false;
     }
   }
 
-  /// 应用去交错（反隔行）滤镜
-  /// 策略：同时使用 deinterlace 属性（适配硬解）和 vf 滤镜（适配软解/auto-copy）
-  /// 必须在 media open 之后调用
+  /// 安全读取 getProperty，失败返回 null
+  Future<String?> _safeGetProperty(String property, String label) async {
+    try {
+      final nativePlayer = player?.platform as dynamic;
+      return await nativePlayer.getProperty(property);
+    } catch (e) {
+      ServiceLocator.log.d('读取 $label 失败: $e', tag: 'PlayerProvider');
+      return null;
+    }
+  }
+
+  /// 返回用户配置的 hwdec 模式，考虑软解码设置
+  String _getConfiguredHwdecMode() {
+    if (_isSoftwareDecoding) return 'no';
+    switch (_windowsHwdecMode) {
+      case 'auto-copy':
+        return 'auto-copy';
+      case 'd3d11va':
+        return 'd3d11va';
+      case 'dxva2':
+        return 'dxva2';
+      case 'auto-safe':
+      default:
+        return 'auto-safe';
+    }
+  }
+
+  /// 重置去交错检测状态，取消 videoParams 监听订阅
+  /// 在每次播放新流之前调用，确保旧流监听不会影响新流
+  void _resetDeinterlaceDetection() {
+    _videoParamsSubscription?.cancel();
+    _videoParamsSubscription = null;
+    _deinterlaceConfiguredForCurrentStream = false;
+  }
+
+  /// 应用去交错（反隔行）配置
+  ///
+  /// 决策树：
+  ///   1. 设置公共参数 video-sync / framedrop
+  ///   2. 若禁用 → 简单配置后返回
+  ///   3. 若启用 → 通过 videoParams 流监听 + 补读 interlaced 属性来判定源类型
+  ///      - 1080i 隔行 → 软件去交错（bwdif→yadif→lavfi:yadif），回退硬件去交错
+  ///      - 2160p 4K → 硬解 + HDR 处理
+  ///      - 1080p 逐行（或默认）→ 硬解，无去交错
+  ///
+  /// 注意：必须在 open() 之前调用，确保监听器在流初始化前就绪；
+  ///       open() 之后再次调用以重新设置 mpv 可能重置的公共参数。
   Future<void> _applyDeinterlaceFilter() async {
     if (!Platform.isWindows) return;
     final prefs = ServiceLocator.prefs;
     final enabled = prefs.getBool('deinterlace_enabled') ?? true;
-    final mode = prefs.getString('deinterlace_mode') ?? 'yadif';
-    try {
-      final nativePlayer = player?.platform as dynamic;
-      if (enabled) {
-        // deinterlace 属性在硬件解码下也能工作（mpv 内部管理滤镜插入点）
-        await nativePlayer.setProperty('deinterlace', 'yes');
-        // vf 滤镜在软解/auto-copy 模式下提供模式选择
-        await nativePlayer.setProperty('vf', mode);
-        ServiceLocator.log.i('去交错已启用: deinterlace=yes, vf=$mode',
-            tag: 'PlayerProvider');
-      } else {
-        await nativePlayer.setProperty('deinterlace', 'no');
-        ServiceLocator.log.i('去交错已禁用', tag: 'PlayerProvider');
-      }
-    } catch (e) {
-      ServiceLocator.log.e('设置去交错失败: $e', tag: 'PlayerProvider');
+
+    // 公共参数：所有源均使用 display-resample 同步
+    await _safeSetProperty('video-sync', 'display-resample', 'video-sync');
+    await _safeSetProperty('framedrop', 'no', 'framedrop');
+
+    if (!enabled) {
+      // 去交错禁用：恢复用户配置的 hwdec，关闭所有去交错
+      await _safeSetProperty('deinterlace', 'no', 'deinterlace');
+      await _safeSetProperty('vf', '', 'clear_vf');
+      await _safeSetProperty('hwdec', _getConfiguredHwdecMode(), 'hwdec');
+      _videoParamsSubscription?.cancel();
+      _videoParamsSubscription = null;
+      ServiceLocator.log.i('去交错已禁用', tag: 'PlayerProvider');
+      return;
+    }
+
+    // 启用：通过 videoParams 流等待有效视频参数后自动配置
+    // 仅当尚未设置监听器时设置（避免重复订阅）
+    // 每次播放新流前通过 _resetDeinterlaceDetection() 取消旧订阅
+    if (_videoParamsSubscription == null) {
+      _deinterlaceConfiguredForCurrentStream = false;
+      _videoParamsSubscription = _mediaKitPlayer?.stream.videoParams.listen((params) async {
+        // 等待有效数据（w > 0 && h > 0），且防重入
+        if (_deinterlaceConfiguredForCurrentStream || params.w == null || params.w! <= 0) return;
+        _deinterlaceConfiguredForCurrentStream = true;
+
+        // 补读 video-frame-info/interlaced — VideoParams 不含此字段
+        final interlaced = await _safeGetProperty('video-frame-info/interlaced', 'interlaced');
+        // 补读 estimated-vf-fps 辅助判定
+        final vfFpsStr = await _safeGetProperty('estimated-vf-fps', 'vf-fps');
+        final vfFps = double.tryParse(vfFpsStr ?? '') ?? 0;
+
+        // 读取源端实际色彩空间，用于动态 HDR/SDR 判定
+        final srcGamma = await _safeGetProperty('video-params/gamma', 'gamma');
+        final srcPrimaries = await _safeGetProperty('video-params/primaries', 'primaries');
+        final sigPeak = await _safeGetProperty('video-params/sig-peak', 'sig-peak');
+
+        final h = params.h ?? 0;
+        final w = params.w ?? 0;
+        final isInterlaced = interlaced == '1';
+
+        // 1080i 判定：高度 1080 + 显式隔行标志，或帧率 < 31 且未被显式标记为非隔行
+        final is1080i = (h == 1080 && isInterlaced) ||
+                        (h == 1080 && vfFps < 31 && interlaced != '0');
+        // HDR 判定：BT.2020 色域 + PQ 伽马曲线
+        final isHDR = srcGamma == 'pq' && srcPrimaries == 'bt.2020';
+
+        // ════════════════════════════════════════════
+        // 第一步：动态色彩映射 — 先判断 HDR/SDR，再决定色彩参数
+        // ════════════════════════════════════════════
+        if (isHDR) {
+          // 真 HDR 源：色调映射到 SDR 输出（BT.709 色域 + sRGB 伽马）
+          await _safeSetProperty('target-prim', 'bt.709', 'target-prim');
+          await _safeSetProperty('target-trc', 'srgb', 'target-trc');
+          ServiceLocator.log.i(
+              'HDR 源: 色调映射到 SDR (gamma=$srcGamma, primaries=$srcPrimaries, sig-peak=$sigPeak)',
+              tag: 'PlayerProvider');
+        } else {
+          // SDR 源（包括 4K SDR、1080p 等）：清零所有 HDR 残留参数
+          await _safeSetProperty('target-prim', 'auto', 'target-prim');
+          await _safeSetProperty('target-trc', 'auto', 'target-trc');
+          await _safeSetProperty('hdr-compute-peak', 'no', 'hdr-compute-peak');
+          ServiceLocator.log.i(
+              'SDR 源: 标准输出 (gamma=$srcGamma, primaries=$srcPrimaries)',
+              tag: 'PlayerProvider');
+        }
+
+        // ════════════════════════════════════════════
+        // 第二步：硬件解码 + 去交错配置 — 在正确色彩空间基础上叠加
+        // ════════════════════════════════════════════
+        if (is1080i && !_isSoftwareDecoding) {
+          // 分支 A: 1080i 隔行源 → 软件去交错优先
+          await _safeSetProperty('deinterlace', 'no', 'deinterlace');
+          await _safeSetProperty('hwdec', 'd3d11va-copy', 'hwdec');
+
+          const filters = [
+            'bwdif=mode=1:parity=tff',
+            'yadif=mode=1:parity=tff',
+            'lavfi:yadif=mode=1:parity=tff',
+          ];
+
+          String? workingFilter;
+          for (final vf in filters) {
+            await _safeSetProperty('vf', '', 'clear_vf');
+            final success = await _safeSetProperty('vf', vf, 'try_vf');
+            if (success) {
+              final currentVf = await _safeGetProperty('vf', 'verify_vf');
+              if (currentVf != null && currentVf.isNotEmpty) {
+                workingFilter = vf;
+                ServiceLocator.log.i(
+                    '1080i: 软件滤镜 $vf (hwdec=d3d11va-copy)',
+                    tag: 'PlayerProvider');
+                break;
+              }
+            }
+          }
+
+          if (workingFilter == null) {
+            ServiceLocator.log.i(
+                '1080i: 软件滤镜不可用，退回硬件去交错 (deinterlace=yes)',
+                tag: 'PlayerProvider');
+            await _safeSetProperty('vf', '', 'clear_vf');
+            await _safeSetProperty('hwdec', _getConfiguredHwdecMode(), 'hwdec');
+            await _safeSetProperty('deinterlace', 'yes', 'deinterlace');
+          }
+        } else {
+          // 分支 B: 逐行源（1080p / 2160p SDR / 2160p HDR 等）
+          await _safeSetProperty('deinterlace', 'no', 'deinterlace');
+          await _safeSetProperty('vf', '', 'clear_vf');
+          if (!_isSoftwareDecoding) {
+            await _safeSetProperty('hwdec', _getConfiguredHwdecMode(), 'hwdec');
+          }
+          final label = h > 0 ? '${h}p 逐行源' : '源（默认按逐行处理）';
+          ServiceLocator.log.i('$label: 硬解, 无去交错', tag: 'PlayerProvider');
+        }
+      });
     }
   }
 
   void _setupMediaKitListeners() {
     ServiceLocator.log.d('设置播放器监听器', tag: 'PlayerProvider');
 
-    // 只有在日志关闭时才完成 mpv 日志
-    if (ServiceLocator.log.currentLevel != LogLevel.off) {
-      _mediaKitPlayer!.stream.log.listen((log) {
-        final message = log.text.toLowerCase();
+    // 始终激活 mpv 日志监听器，确保所有冗余日志被过滤
+    // 不依赖 LogLevel 开关，因为 mpv 日志过滤对于保持输出干净至关重要
+    _mediaKitPlayer!.stream.log.listen((log) {
+      final message = log.text.toLowerCase();
 
-        // 过滤 FFmpeg 噪音日志（SEI truncated、deprecated pixel format 等）
-        if (message.contains('sei type') ||
-            message.contains('truncated at') ||
-            message.contains('deprecated pixel format')) {
-          return;
-        }
+      // 过滤 FFmpeg 噪音日志（SEI truncated、mmco、reference frames 等）
+      if (message.contains('sei type') ||
+          message.contains('truncated at') ||
+          message.contains('mmco') ||
+          message.contains('reference frames') ||
+          message.contains('exceeds max') ||
+          message.contains('discarding one') ||
+          message.contains('deprecated pixel format') ||
+          message.contains("skip ('#ext") ||
+          (message.contains('hls @') && message.contains('skip')) ||
+          message.contains('no such filter') ||
+          message.contains('error creating filters')) {
+        return;
+      }
 
+      // 根据当前日志级别决定是否转发
+      if (ServiceLocator.log.currentLevel != LogLevel.off) {
         ServiceLocator.log.d('MPV log: ${log.text}', tag: 'PlayerProvider');
+      }
 
         // // 检测并记录解码信息
         if (message.contains('using hardware decoding') ||
@@ -644,7 +811,6 @@ class PlayerProvider extends ChangeNotifier {
           ServiceLocator.log.w('MPV警告: ${log.text}', tag: 'PlayerProvider');
         }
       });
-    }
 
     _mediaKitPlayer!.stream.playing.listen((playing) {
       ServiceLocator.log.d('播放状态变化: playing=$playing', tag: 'PlayerProvider');
@@ -948,8 +1114,12 @@ class PlayerProvider extends ChangeNotifier {
     _retryTimer?.cancel(); // 取消任何正在进行的重试
     _isAutoDetecting = false; // 取消任何正在进行的自动检测
     _noVideoFallbackAttempted = false;
+    _resetDeinterlaceDetection();
     loadVolumeSettings(); // Apply volume boost settings
-    notifyListeners();
+    // 使用 postFrameCallback 避免在构建阶段同步 notifyListeners 导致 setState during build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
 
     // 如果有多个源，先检测找到第一个可用的源
     if (channel.hasMultipleSources && !preserveCurrentSource) {
@@ -1008,9 +1178,10 @@ class PlayerProvider extends ChangeNotifier {
         ServiceLocator.log
             .i('>>> Start initializing player', tag: 'PlayerProvider');
         final playStartTime = DateTime.now();
+        await _applyDeinterlaceFilter();
         await _mediaKitPlayer?.open(_createMedia(realUrl));
 
-        // 在 media 打开后应用去交错滤镜（mpv 可能在 open 时重置 vf 链）
+        // 在 media 打开后应用去交错滤镜（mpv 可能在 open 时重置 deinterlace）
         await _applyDeinterlaceFilter();
 
         final playTime =
@@ -1116,6 +1287,7 @@ class PlayerProvider extends ChangeNotifier {
     _lastErrorMessage = null; // 重置错误防抖
     _errorDisplayed = false; // 重置错误显示标记
     _noVideoFallbackAttempted = false;
+    _resetDeinterlaceDetection();
     loadVolumeSettings(); // Apply volume boost settings
     notifyListeners();
 
@@ -1138,9 +1310,10 @@ class PlayerProvider extends ChangeNotifier {
       ServiceLocator.log
           .i('>>> Start initializing player', tag: 'PlayerProvider');
       final playStartTime = DateTime.now();
+      await _applyDeinterlaceFilter();
       await _mediaKitPlayer?.open(_createMedia(realUrl));
 
-      // 在 media 打开后应用去交错滤镜（mpv 可能在 open 时重置 vf 链）
+      // 在 media 打开后应用去交错滤镜（mpv 可能在 open 时重置 deinterlace）
       await _applyDeinterlaceFilter();
 
       final playTime = DateTime.now().difference(playStartTime).inMilliseconds;
@@ -1427,7 +1600,12 @@ class PlayerProvider extends ChangeNotifier {
             .d('>>> 切换源: 使用播放地址: $realUrl', tag: 'PlayerProvider');
 
         final playStartTime = DateTime.now();
+        _resetDeinterlaceDetection();
+        await _applyDeinterlaceFilter();
         await _mediaKitPlayer?.open(_createMedia(realUrl));
+
+        // 在 media 打开后应用去交错滤镜（mpv 可能在 open 时重置参数）
+        await _applyDeinterlaceFilter();
 
         final playTime =
             DateTime.now().difference(playStartTime).inMilliseconds;
@@ -1435,7 +1613,7 @@ class PlayerProvider extends ChangeNotifier {
         ServiceLocator.log
             .i('>>> 切换源: 播放器初始化完成，耗时: ${playTime}ms', tag: 'PlayerProvider');
         ServiceLocator.log
-            .i('>>> 切换源: 总昏€楁时: ${totalTime}ms', tag: 'PlayerProvider');
+            .i('>>> 切换源: 总耗时: ${totalTime}ms', tag: 'PlayerProvider');
 
         _state = PlayerState.playing;
         _scheduleNoVideoFallbackIfNeeded();

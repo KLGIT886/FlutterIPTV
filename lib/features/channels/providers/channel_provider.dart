@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import '../../../core/models/channel.dart';
 import '../../../core/models/channel_group.dart';
 import '../../../core/services/service_locator.dart';
@@ -58,16 +59,21 @@ class ChannelProvider extends ChangeNotifier {
     _notifyTimer = Timer(_notifyThrottleDuration, () {
       if (_hasPendingNotify) {
         _hasPendingNotify = false;
-        notifyListeners();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          notifyListeners();
+        });
       }
     });
   }
 
   // ✅ 立即通知（用于重要状态变化）
+  // 使用 addPostFrameCallback 避免在 build 阶段调用 notifyListeners 导致断言失败
   void _immediateNotify() {
     _notifyTimer?.cancel();
     _hasPendingNotify = false;
-    notifyListeners();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
   }
 
   @override

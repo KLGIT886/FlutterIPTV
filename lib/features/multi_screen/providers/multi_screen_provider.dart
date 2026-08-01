@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
 import '../../../core/models/channel.dart';
 import '../../../core/services/service_locator.dart';
+import '../../../core/services/log_service.dart';
 import '../../settings/providers/settings_provider.dart';
 
 /// 单个屏幕的播放器状态
@@ -19,6 +21,7 @@ class ScreenPlayerState {
   String? error;
   bool isSoftwareDecoding = false;
   bool softwareFallbackAttempted = false;
+  String hwdecMode = 'auto-safe';
   Duration position = Duration.zero;
   Duration duration = Duration.zero;
   
@@ -28,10 +31,17 @@ class ScreenPlayerState {
   int bitrate = 0;
   double fps = 0;
   double networkSpeed = 0;
+
+  // 去交错检测状态（按播放器独立跟踪）
+  StreamSubscription<VideoParams>? videoParamsSubscription;
+  bool deinterlaceConfigured = false;
   
   ScreenPlayerState();
   
   Future<void> dispose() async {
+    // 取消去交错监听
+    videoParamsSubscription?.cancel();
+    videoParamsSubscription = null;
     // 先停止播放，再释放资源
     if (player != null) {
       await player!.stop();
@@ -242,6 +252,33 @@ class MultiScreenProvider extends ChangeNotifier {
           screen.duration = duration;
           notifyListeners();
         });
+
+        // 监听 mpv 日志，过滤冗余 FFmpeg 输出
+        screen.player!.stream.log.listen((log) {
+          final message = log.text.toLowerCase();
+
+          // 过滤 FFmpeg 噪音日志（SEI truncated、mmco、reference frames 等）
+          if (message.contains('sei type') ||
+              message.contains('truncated at') ||
+              message.contains('mmco') ||
+              message.contains('reference frames') ||
+              message.contains('exceeds max') ||
+              message.contains('discarding one') ||
+              message.contains('deprecated pixel format') ||
+              message.contains("skip ('#ext") ||
+              (message.contains('hls @') && message.contains('skip')) ||
+              message.contains('no such filter') ||
+              message.contains('error creating filters')) {
+            return;
+          }
+
+          // 根据当前日志级别决定是否转发
+          if (ServiceLocator.log.currentLevel != LogLevel.off) {
+            ServiceLocator.log.d(
+                'MultiScreen MPV log [screen $screenIndex]: ${log.text}',
+                tag: 'MultiScreenProvider');
+          }
+        });
         
         // 监听错误
         screen.player!.stream.error.listen((error) async {
@@ -286,9 +323,18 @@ class MultiScreenProvider extends ChangeNotifier {
       
       final userAgent = ServiceLocator.settings?.userAgent ?? SettingsProvider.defaultUserAgent;
       ServiceLocator.log.d('MultiScreenProvider: 屏幕$screenIndex User-Agent: $userAgent');
+
+      // 在 open() 之前应用去交错，确保 hwdec 和 vf 在流初始化前生效
+      // VideoController 创建时可能已设 hwdec=auto，在此覆盖
+      // 重置去交错检测，为新流准备新的订阅
+      screen.videoParamsSubscription?.cancel();
+      screen.videoParamsSubscription = null;
+      screen.deinterlaceConfigured = false;
+      await _applyDeinterlaceFilter(screen.player!);
+
       await screen.player!.open(Media(realUrl, httpHeaders: {'User-Agent': userAgent}));
 
-      // 在 media 打开后应用去交错滤镜（mpv 可能在 open 时重置 vf 链）
+      // 在 media 打开后再次应用去交错滤镜（mpv 可能在 open 时重置参数）
       await _applyDeinterlaceFilter(screen.player!);
       
       final playTime = DateTime.now().difference(playStartTime).inMilliseconds;
@@ -311,7 +357,7 @@ class MultiScreenProvider extends ChangeNotifier {
     }
   }
 
-  void _createPlayerForScreen(int screenIndex, {required bool useSoftwareDecoding}) {
+  Future<void> _createPlayerForScreen(int screenIndex, {required bool useSoftwareDecoding}) async {
     final screen = _screens[screenIndex];
     screen.player?.dispose();
 
@@ -366,6 +412,8 @@ class MultiScreenProvider extends ChangeNotifier {
       }
     }
 
+    screen.hwdecMode = hwdecMode;
+
     screen.videoController = VideoController(
       player,
       configuration: VideoControllerConfiguration(
@@ -376,32 +424,187 @@ class MultiScreenProvider extends ChangeNotifier {
     screen.isSoftwareDecoding = effectiveSoftware;
     screen.softwareFallbackAttempted = effectiveSoftware;
 
-    // 抑制 FFmpeg 冗余日志
-    try {
-      (player.platform as dynamic)
-          .setProperty('msg-level', 'ffmpeg=error:vd=error');
-    } catch (_) {}
+    // VideoController 创建后会强制设 hwdec=auto，在此覆盖去交错参数
+    // 必须在 open() 之前调用，否则 hwdec=auto 会绕过 vf 滤镜链
+    screen.videoParamsSubscription?.cancel();
+    screen.videoParamsSubscription = null;
+    screen.deinterlaceConfigured = false;
+    await _applyDeinterlaceFilter(player);
   }
 
-  /// 应用去交错（反隔行）滤镜
-  /// 策略：同时使用 deinterlace 属性（适配硬解）和 vf 滤镜（适配软解/auto-copy）
-  /// 必须在 media open 之后调用
+  /// 安全调用 setProperty，单个失败不影响其他调用
+  /// 返回 true 表示成功，false 表示失败
+  Future<bool> _safeSetProperty(
+      Player player, String property, String value, String label) async {
+    try {
+      final nativePlayer = player.platform as dynamic;
+      await nativePlayer.setProperty(property, value);
+      return true;
+    } catch (e) {
+      ServiceLocator.log.d('MultiScreenProvider: 设置 $label 失败: $e');
+      return false;
+    }
+  }
+
+  /// 安全读取 getProperty，失败返回 null
+  Future<String?> _safeGetProperty(Player player, String property, String label) async {
+    try {
+      final nativePlayer = player.platform as dynamic;
+      return await nativePlayer.getProperty(property);
+    } catch (e) {
+      ServiceLocator.log.d('MultiScreenProvider: 读取 $label 失败: $e');
+      return null;
+    }
+  }
+
+  /// 返回用户配置的 hwdec 模式，考虑软解码设置
+  String _getConfiguredHwdecMode() {
+    if (_decodingMode == 'software') return 'no';
+    switch (_windowsHwdecMode) {
+      case 'auto-copy':
+        return 'auto-copy';
+      case 'd3d11va':
+        return 'd3d11va';
+      case 'dxva2':
+        return 'dxva2';
+      case 'auto-safe':
+      default:
+        return 'auto-safe';
+    }
+  }
+
+  /// 应用去交错（反隔行）配置
+  ///
+  /// 决策树：
+  ///   1. 设置公共参数 video-sync / framedrop
+  ///   2. 若禁用 → 简单配置后返回
+  ///   3. 若启用 → 通过 videoParams 流监听 + 补读 interlaced 属性来判定源类型
+  ///      - 1080i 隔行 → 软件去交错（bwdif→yadif→lavfi:yadif），回退硬件去交错
+  ///      - 2160p 4K → 硬解 + HDR 处理
+  ///      - 1080p 逐行（或默认）→ 硬解，无去交错
+  ///
+  /// 注意：必须在 open() 之前调用，确保监听器在流初始化前就绪；
+  ///       open() 之后再次调用以重新设置 mpv 可能重置的公共参数。
   Future<void> _applyDeinterlaceFilter(Player player) async {
     if (!Platform.isWindows) return;
     final prefs = ServiceLocator.prefs;
     final enabled = prefs.getBool('deinterlace_enabled') ?? true;
-    final mode = prefs.getString('deinterlace_mode') ?? 'yadif';
-    try {
-      final nativePlayer = player.platform as dynamic;
-      if (enabled) {
-        await nativePlayer.setProperty('deinterlace', 'yes');
-        await nativePlayer.setProperty('vf', mode);
-        ServiceLocator.log.d('MultiScreenProvider: 去交错已启用: deinterlace=yes, vf=$mode');
-      } else {
-        await nativePlayer.setProperty('deinterlace', 'no');
-      }
-    } catch (e) {
-      ServiceLocator.log.d('MultiScreenProvider: 设置去交错失败: $e');
+
+    // 公共参数：所有源均使用 display-resample 同步
+    await _safeSetProperty(player, 'video-sync', 'display-resample', 'video-sync');
+    await _safeSetProperty(player, 'framedrop', 'no', 'framedrop');
+
+    if (!enabled) {
+      // 去交错禁用：恢复用户配置的 hwdec，关闭所有去交错
+      await _safeSetProperty(player, 'deinterlace', 'no', 'deinterlace');
+      await _safeSetProperty(player, 'vf', '', 'clear_vf');
+      await _safeSetProperty(player, 'hwdec', _getConfiguredHwdecMode(), 'hwdec');
+      // 取消该播放器的订阅
+      final screen = _screens.where((s) => s.player == player).firstOrNull;
+      screen?.videoParamsSubscription?.cancel();
+      screen?.videoParamsSubscription = null;
+      ServiceLocator.log.d('MultiScreenProvider: 去交错已禁用');
+      return;
+    }
+
+    // 查找该播放器对应的屏幕状态
+    final screen = _screens.where((s) => s.player == player).firstOrNull;
+    if (screen == null) return;
+
+    // 启用：仅当尚未设置监听器时设置（避免重复订阅）
+    if (screen.videoParamsSubscription == null) {
+      screen.deinterlaceConfigured = false;
+      screen.videoParamsSubscription = player.stream.videoParams.listen((params) async {
+        // 等待有效数据（w > 0 && h > 0），且防重入
+        if (screen.deinterlaceConfigured || params.w == null || params.w! <= 0) return;
+        screen.deinterlaceConfigured = true;
+
+        // 补读 video-frame-info/interlaced — VideoParams 不含此字段
+        final interlaced = await _safeGetProperty(player, 'video-frame-info/interlaced', 'interlaced');
+        // 补读 estimated-vf-fps 辅助判定
+        final vfFpsStr = await _safeGetProperty(player, 'estimated-vf-fps', 'vf-fps');
+        final vfFps = double.tryParse(vfFpsStr ?? '') ?? 0;
+
+        // 读取源端实际色彩空间，用于动态 HDR/SDR 判定
+        final srcGamma = await _safeGetProperty(player, 'video-params/gamma', 'gamma');
+        final srcPrimaries = await _safeGetProperty(player, 'video-params/primaries', 'primaries');
+        final sigPeak = await _safeGetProperty(player, 'video-params/sig-peak', 'sig-peak');
+
+        final h = params.h ?? 0;
+        final w = params.w ?? 0;
+        final isInterlaced = interlaced == '1';
+
+        // 1080i 判定：高度 1080 + 显式隔行标志，或帧率 < 31 且未被显式标记为非隔行
+        final is1080i = (h == 1080 && isInterlaced) ||
+                        (h == 1080 && vfFps < 31 && interlaced != '0');
+        // HDR 判定：BT.2020 色域 + PQ 伽马曲线
+        final isHDR = srcGamma == 'pq' && srcPrimaries == 'bt.2020';
+
+        // ════════════════════════════════════════════
+        // 第一步：动态色彩映射 — 先判断 HDR/SDR，再决定色彩参数
+        // ════════════════════════════════════════════
+        if (isHDR) {
+          // 真 HDR 源：色调映射到 SDR 输出（BT.709 色域 + sRGB 伽马）
+          await _safeSetProperty(player, 'target-prim', 'bt.709', 'target-prim');
+          await _safeSetProperty(player, 'target-trc', 'srgb', 'target-trc');
+          ServiceLocator.log.i(
+              'MultiScreenProvider: HDR 源: 色调映射到 SDR (gamma=$srcGamma, primaries=$srcPrimaries, sig-peak=$sigPeak)');
+        } else {
+          // SDR 源（包括 4K SDR、1080p 等）：清零所有 HDR 残留参数
+          await _safeSetProperty(player, 'target-prim', 'auto', 'target-prim');
+          await _safeSetProperty(player, 'target-trc', 'auto', 'target-trc');
+          await _safeSetProperty(player, 'hdr-compute-peak', 'no', 'hdr-compute-peak');
+          ServiceLocator.log.i(
+              'MultiScreenProvider: SDR 源: 标准输出 (gamma=$srcGamma, primaries=$srcPrimaries)');
+        }
+
+        // ════════════════════════════════════════════
+        // 第二步：硬件解码 + 去交错配置 — 在正确色彩空间基础上叠加
+        // ════════════════════════════════════════════
+        if (is1080i && _decodingMode != 'software') {
+          // 分支 A: 1080i 隔行源 → 软件去交错优先
+          await _safeSetProperty(player, 'deinterlace', 'no', 'deinterlace');
+          await _safeSetProperty(player, 'hwdec', 'd3d11va-copy', 'hwdec');
+
+          const filters = [
+            'bwdif=mode=1:parity=tff',
+            'yadif=mode=1:parity=tff',
+            'lavfi:yadif=mode=1:parity=tff',
+          ];
+
+          String? workingFilter;
+          for (final vf in filters) {
+            await _safeSetProperty(player, 'vf', '', 'clear_vf');
+            final success = await _safeSetProperty(player, 'vf', vf, 'try_vf');
+            if (success) {
+              final currentVf = await _safeGetProperty(player, 'vf', 'verify_vf');
+              if (currentVf != null && currentVf.isNotEmpty) {
+                workingFilter = vf;
+                ServiceLocator.log.i(
+                    'MultiScreenProvider: 1080i: 软件滤镜 $vf (hwdec=d3d11va-copy)');
+                break;
+              }
+            }
+          }
+
+          if (workingFilter == null) {
+            ServiceLocator.log.i(
+                'MultiScreenProvider: 1080i: 软件滤镜不可用，退回硬件去交错 (deinterlace=yes)');
+            await _safeSetProperty(player, 'vf', '', 'clear_vf');
+            await _safeSetProperty(player, 'hwdec', _getConfiguredHwdecMode(), 'hwdec');
+            await _safeSetProperty(player, 'deinterlace', 'yes', 'deinterlace');
+          }
+        } else {
+          // 分支 B: 逐行源（1080p / 2160p SDR / 2160p HDR 等）
+          await _safeSetProperty(player, 'deinterlace', 'no', 'deinterlace');
+          await _safeSetProperty(player, 'vf', '', 'clear_vf');
+          if (_decodingMode != 'software') {
+            await _safeSetProperty(player, 'hwdec', _getConfiguredHwdecMode(), 'hwdec');
+          }
+          final label = h > 0 ? '${h}p 逐行源' : '源（默认按逐行处理）';
+          ServiceLocator.log.i('MultiScreenProvider: $label: 硬解, 无去交错');
+        }
+      });
     }
   }
 

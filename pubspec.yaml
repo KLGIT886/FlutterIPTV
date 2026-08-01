@@ -72,6 +72,12 @@ dependencies:
   screen_retriever: ^0.2.2
   device_info_plus: ^13.2.0
 
+dependency_overrides:
+  # 使用 zhongfly/mpv-winbuild 的完整版 libmpv（含 libavfilter + msg-level 支持）
+  # 本地 fork 替换官方精简版，路径: packages/media_kit_libs_windows_video_full
+  media_kit_libs_windows_video:
+    path: packages/media_kit_libs_windows_video_full
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

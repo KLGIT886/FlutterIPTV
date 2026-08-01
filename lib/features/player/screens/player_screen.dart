@@ -179,8 +179,12 @@ class _PlayerScreenState extends State<PlayerScreen>
             _playerProvider!.volume, _settingsProvider!.volumeBoost);
       }
 
-      // 现在可以安全地检查和启动播放器了
-      _checkAndLaunchPlayer();
+      // 现在可以安全地检查和启动播放器了（延迟到构建完成后，避免 setState during build）
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _checkAndLaunchPlayer();
+        }
+      });
     }
     // 保存分屏模式状态
     _wasMultiScreenMode = _isMultiScreenMode();
@@ -625,13 +629,18 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
 
     // 如果是全屏模式，退出全屏 - 使用原生 API
+    // 注意：不能在 dispose 期间直接调用 SetWindowPos，否则会触发
+    // Flutter 帧调度断言失败（_schedulerPhase == midFrameMicrotasks）
+    // 延迟到下一帧执行窗口操作
     if (_isFullScreen && PlatformDetector.isWindows) {
-      final success = WindowsFullscreenNative.exitFullScreen();
-      if (!success) {
-        ServiceLocator.log
-            .d('Native exitFullScreen failed in dispose, using window_manager');
-        unawaited(windowManager.setFullScreen(false));
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final success = WindowsFullscreenNative.exitFullScreen();
+        if (!success) {
+          ServiceLocator.log
+              .d('Native exitFullScreen failed, using window_manager');
+          windowManager.setFullScreen(false);
+        }
+      });
     }
 
     // 保存分屏状态（Windows 平台）

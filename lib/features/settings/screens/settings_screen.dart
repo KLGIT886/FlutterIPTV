@@ -284,14 +284,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   },
                 ),
                 if (settings.deinterlaceEnabled) ...[
-                  _buildDivider(),
-                  _buildSelectTile(
-                    context,
-                    title: AppStrings.of(context)?.deinterlaceMode ?? 'Deinterlace Mode',
-                    subtitle: _getDeinterlaceModeLabel(context, settings.deinterlaceMode),
-                    icon: Icons.filter_alt_rounded,
-                    onTap: () => _showDeinterlaceModeDialog(context, settings),
-                  ),
+                  // 去交错模式下拉已移除：当前 mpv 构建不支持 vf 滤镜（yadif/bwdif 等），
+                  // 仅使用 deinterlace=yes/no 属性，无需选择模式
                 ],
               ] else if (isAndroid && isMobile) ...[
                 _buildDivider(),
@@ -1272,91 +1266,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  String _getDeinterlaceModeLabel(BuildContext context, String mode) {
-    final strings = AppStrings.of(context);
-    switch (mode) {
-      case 'yadif':
-        return strings?.deinterlaceModeYadif ?? 'yadif (Recommended)';
-      case 'yadif=1':
-        return strings?.deinterlaceModeYadif1 ?? 'yadif=1 (Double FPS)';
-      case 'yadif=2':
-        return strings?.deinterlaceModeYadif2 ?? 'yadif=2 (Bob)';
-      case 'bwdif':
-        return strings?.deinterlaceModeBwdif ?? 'bwdif';
-      case 'nnedi':
-        return strings?.deinterlaceModeNnedi ?? 'nnedi (High Quality)';
-      default:
-        return mode;
-    }
-  }
-
-  void _showDeinterlaceModeDialog(
-      BuildContext context, SettingsProvider settings) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
-    final isLandscape =
-        screenWidth > 600 && screenWidth < 900 && screenHeight < screenWidth;
-    final strings = AppStrings.of(context);
-    const modeOptions = ['yadif', 'yadif=1', 'yadif=2', 'bwdif', 'nnedi'];
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          backgroundColor: AppTheme.getSurfaceColor(dialogContext),
-          contentPadding: EdgeInsets.fromLTRB(
-            isLandscape ? 16 : 24,
-            isLandscape ? 8 : 16,
-            isLandscape ? 16 : 24,
-            isLandscape ? 8 : 16,
-          ),
-          title: Text(
-            strings?.deinterlaceMode ?? 'Deinterlace Mode',
-            style: TextStyle(
-              color: AppTheme.getTextPrimary(context),
-              fontSize: isLandscape ? 14 : 18,
-            ),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: modeOptions.map((mode) {
-                return RadioListTile<String>(
-                  title: Text(
-                    _getDeinterlaceModeLabel(context, mode),
-                    style: TextStyle(
-                      color: AppTheme.getTextPrimary(context),
-                      fontSize: isLandscape ? 12 : 14,
-                    ),
-                  ),
-                  value: mode,
-                  groupValue: settings.deinterlaceMode,
-                  onChanged: (value) async {
-                    if (value != null) {
-                      await settings.setDeinterlaceMode(value);
-                      await _reinitMediaKitPlayer(context, settings);
-                      Navigator.pop(dialogContext);
-                      final label = _getDeinterlaceModeLabel(context, value);
-                      final template = strings?.deinterlaceModeSet ?? 'Deinterlace mode set to: {mode}';
-                      _showSuccess(
-                        context,
-                        template.replaceAll('{mode}', label),
-                      );
-                    }
-                  },
-                  activeColor: AppTheme.getPrimaryColor(dialogContext),
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: isLandscape ? 8 : 16,
-                    vertical: isLandscape ? 0 : 4,
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        );
-      },
-    );
-  }
+  // _getDeinterlaceModeLabel 和 _showDeinterlaceModeDialog 已移除：
+  // 当前 mpv 构建不支持 vf 滤镜，去交错仅通过 deinterlace=yes/no 属性控制，无需模式选择
 
   void _showWindowsHwdecDialog(BuildContext context, SettingsProvider settings) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -1432,6 +1343,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _reinitMediaKitPlayer(BuildContext context, SettingsProvider settings) async {
+    // 延迟到下一个事件循环，避免与当前帧的 build phase 冲突
+    // 不使用 endOfFrame/addPostFrameCallback，避免引入额外帧调度
+    // 导致 schedulerPhase 状态混乱
+    await Future.delayed(Duration.zero);
+
     // Settings screen may appear without PlayerProvider in the widget tree.
     try {
       await context.read<PlayerProvider>().reinitializePlayer(

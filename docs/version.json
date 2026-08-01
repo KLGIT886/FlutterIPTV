@@ -1,23 +1,23 @@
 {
-  "version": "1.5.23",
-  "build": 183,
-  "releaseDate": "2026-03-07",
+  "version": "1.6.0",
+  "build": 184,
+  "releaseDate": "2026-08-01",
   "assets": {
-     "windows": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.23/flutteriptv-Windows-x64-Setup.exe",
+     "windows": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.0/flutteriptv-Windows-x64-Setup.exe",
     "android_mobile": {
-      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.23/flutteriptv-Android-Mobile-arm64-v8a.apk",
-      "armeabi-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.23/flutteriptv-Android-Mobile-armeabi-v7a.apk",
-      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.23/flutteriptv-Android-Mobile-x86_64.apk"
+      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.0/flutteriptv-Android-Mobile-arm64-v8a.apk",
+      "armeabi-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.0/flutteriptv-Android-Mobile-armeabi-v7a.apk",
+      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.0/flutteriptv-Android-Mobile-x86_64.apk"
     },
     "android_tv": {
-      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.23/flutteriptv-AndroidTV-arm64-v8a.apk",
-      "armeabi-v7a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.23/flutteriptv-AndroidTV-armeabi-v7a.apk",
-      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.5.23/flutteriptv-AndroidTV-x86_64.apk"
+      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.0/flutteriptv-AndroidTV-arm64-v8a.apk",
+      "armeabi-v7a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.0/flutteriptv-AndroidTV-armeabi-v7a.apk",
+      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.0/flutteriptv-AndroidTV-x86_64.apk"
     }
   },
   "changelog": {
-    "zh": "- 新增：手机端播放页面横竖屏切换悬浮按钮\n- 优化：悬浮按钮跟随控制栏显示/隐藏\n- 优化：退出播放页面自动恢复原屏幕方向设置\n- 优化：悬浮按钮位置调整,避免遮挡底部控制按钮\n- 新增：全平台首次启动免责声明功能\n- 新增：全平台自定义User-Agent支持\n- 新增：10个预设User-Agent选项\n- 新增：TV端扫码输入User-Agent功能\n- 新增：播放器右上角显示User-Agent开关\n- 优化：TV端设置界面避免焦点陷阱\n- 修复：重置设置时正确还原User-Agent\n- 修复：Android原生播放器User-Agent硬编码问题\n- 新增：设置页面分类折叠功能，优化TV端焦点管理\n- 新增：所有设置分组默认折叠，节省屏幕空间\n- 修复：TV端User-Agent扫码页面显示完整URL地址\n- 优化：设置页面响应式布局，支持横屏模式\n- 优化：TV端焦点导航体验\n- 修复：频道分类切换时刷新不完整的问题\n- 新增：页面过渡动画设置（6种效果可选）\n- 优化：Windows多屏幕模式控制条UI，增大音量滑块、播放按钮尺寸，改善操作体验",
-    "en": "- New: Screen orientation toggle floating button on mobile player page\n- Optimization: Floating button follows control bar visibility\n- Optimization: Auto restore screen orientation when exiting player\n- Optimization: Adjusted floating button position to avoid blocking bottom controls\n- New: First-launch disclaimer for all platforms\n- New: Custom User-Agent support for all platforms\n- New: 10 preset User-Agent options\n- New: QR code input for User-Agent on TV\n- New: Display User-Agent in player top-right corner\n- Optimization: TV settings UI avoids focus trap\n- Fix: Correctly restore User-Agent when resetting settings\n- Fix: Android native player User-Agent hardcoded issue\n- New: Collapsible settings sections with optimized TV focus management\n- New: All settings groups collapsed by default to save screen space\n- Fix: TV User-Agent QR page displays full URL address\n- Optimization: Responsive settings layout with landscape support\n- Optimization: TV focus navigation experience\n- Fix: Channel category switching refresh issue\n- New: Page transition animation settings (6 effects available)\n- Optimize: Multi-screen mode control bar UI on Windows, enlarged volume slider and play button for better usability"
+    "zh": "- 重构：去交错功能改用 videoParams 流动态检测源类型（1080i/1080p/2160p），按源分流配置\n- 新增：1080i 隔行源软件去交错支持（bwdif→yadif→lavfi:yadif 优先级链，自动回退硬件去交错）\n- 修复：4K SDR 画面过曝泛白问题，改用动态 HDR/SDR 色彩空间检测\n- 修复：Flutter 帧调度断言失败（schedulerPhase == midFrameMicrotasks）\n- 优化：Provider 在 build 阶段的 notifyListeners 调用包裹 addPostFrameCallback，避免 setState during build\n- 移除：去交错模式选择器（因 mpv 构建限制，改用自动检测）\n- 升级：切换至完整版 libmpv（zhongfly/mpv-winbuild），支持 libavfilter 和 msg-level",
+    "en": "- Refactor: Deinterlace now dynamically detects source type (1080i/1080p/2160p) via videoParams stream for per-source configuration\n- New: Software deinterlacing for 1080i sources (bwdif→yadif→lavfi:yadif priority chain with automatic hardware fallback)\n- Fix: 4K SDR overexposure/washed-out issue by dynamic HDR/SDR color space detection\n- Fix: Flutter frame scheduling assertion failure (schedulerPhase == midFrameMicrotasks)\n- Optimization: Wrap notifyListeners in addPostFrameCallback during build phase to prevent setState during build\n- Removed: Deinterlace mode selector (replaced by automatic detection due to mpv build limitations)\n- Upgrade: Switch to full libmpv build (zhongfly/mpv-winbuild) with libavfilter and msg-level support"
   },
   "minVersion": "1.0.0"
 }
