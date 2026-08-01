@@ -203,14 +203,14 @@ class WindowsFullscreenNative {
       if (_savedX != null && _savedY != null && 
           _savedWidth != null && _savedHeight != null) {
         _setWindowPos!(
-          hwnd,
-          0,
-          _savedX!,
-          _savedY!,
-          _savedWidth!,
-          _savedHeight!,
-          swpFrameChanged | swpNozorder | swpShowwindow,
-        );
+        hwnd,
+        0,
+        _savedX!,
+        _savedY!,
+        _savedWidth!,
+        _savedHeight!,
+        swpFrameChanged | swpNozorder,
+      );
       }
 
       // 显示窗口

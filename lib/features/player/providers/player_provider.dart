@@ -541,7 +541,46 @@ class PlayerProvider extends ChangeNotifier {
     _setupMediaKitListeners();
     _updateDebugInfo();
 
+    // 抑制 FFmpeg 冗余日志（SEI truncated 等）
+    _suppressFFmpegLogs();
+
     ServiceLocator.log.i('播放器初始化完成', tag: 'PlayerProvider');
+  }
+
+  /// 抑制 FFmpeg 冗余日志（如 SEI type 4 truncated）
+  void _suppressFFmpegLogs() {
+    try {
+      (player?.platform as dynamic)
+          .setProperty('msg-level', 'ffmpeg=error:vd=error');
+    } catch (e) {
+      ServiceLocator.log.d('设置 msg-level 失败: $e', tag: 'PlayerProvider');
+    }
+  }
+
+  /// 应用去交错（反隔行）滤镜
+  /// 策略：同时使用 deinterlace 属性（适配硬解）和 vf 滤镜（适配软解/auto-copy）
+  /// 必须在 media open 之后调用
+  Future<void> _applyDeinterlaceFilter() async {
+    if (!Platform.isWindows) return;
+    final prefs = ServiceLocator.prefs;
+    final enabled = prefs.getBool('deinterlace_enabled') ?? true;
+    final mode = prefs.getString('deinterlace_mode') ?? 'yadif';
+    try {
+      final nativePlayer = player?.platform as dynamic;
+      if (enabled) {
+        // deinterlace 属性在硬件解码下也能工作（mpv 内部管理滤镜插入点）
+        await nativePlayer.setProperty('deinterlace', 'yes');
+        // vf 滤镜在软解/auto-copy 模式下提供模式选择
+        await nativePlayer.setProperty('vf', mode);
+        ServiceLocator.log.i('去交错已启用: deinterlace=yes, vf=$mode',
+            tag: 'PlayerProvider');
+      } else {
+        await nativePlayer.setProperty('deinterlace', 'no');
+        ServiceLocator.log.i('去交错已禁用', tag: 'PlayerProvider');
+      }
+    } catch (e) {
+      ServiceLocator.log.e('设置去交错失败: $e', tag: 'PlayerProvider');
+    }
   }
 
   void _setupMediaKitListeners() {
@@ -551,6 +590,14 @@ class PlayerProvider extends ChangeNotifier {
     if (ServiceLocator.log.currentLevel != LogLevel.off) {
       _mediaKitPlayer!.stream.log.listen((log) {
         final message = log.text.toLowerCase();
+
+        // 过滤 FFmpeg 噪音日志（SEI truncated、deprecated pixel format 等）
+        if (message.contains('sei type') ||
+            message.contains('truncated at') ||
+            message.contains('deprecated pixel format')) {
+          return;
+        }
+
         ServiceLocator.log.d('MPV log: ${log.text}', tag: 'PlayerProvider');
 
         // // 检测并记录解码信息
@@ -963,6 +1010,9 @@ class PlayerProvider extends ChangeNotifier {
         final playStartTime = DateTime.now();
         await _mediaKitPlayer?.open(_createMedia(realUrl));
 
+        // 在 media 打开后应用去交错滤镜（mpv 可能在 open 时重置 vf 链）
+        await _applyDeinterlaceFilter();
+
         final playTime =
             DateTime.now().difference(playStartTime).inMilliseconds;
         ServiceLocator.log
@@ -1089,6 +1139,10 @@ class PlayerProvider extends ChangeNotifier {
           .i('>>> Start initializing player', tag: 'PlayerProvider');
       final playStartTime = DateTime.now();
       await _mediaKitPlayer?.open(_createMedia(realUrl));
+
+      // 在 media 打开后应用去交错滤镜（mpv 可能在 open 时重置 vf 链）
+      await _applyDeinterlaceFilter();
+
       final playTime = DateTime.now().difference(playStartTime).inMilliseconds;
       final totalTime = DateTime.now().difference(startTime).inMilliseconds;
       ServiceLocator.log

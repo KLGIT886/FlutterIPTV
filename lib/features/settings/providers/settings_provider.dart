@@ -68,6 +68,10 @@ class SettingsProvider extends ChangeNotifier {
       'show_user_agent'; // 是否在播放器OSD显示User-Agent
   static const String _keyPageTransitionAnimation =
       'page_transition_animation'; // 页面切换动画：fade, slide, scale, material, cupertino, none
+  static const String _keyDeinterlaceEnabled =
+      'deinterlace_enabled'; // 去交错（反隔行）开启
+  static const String _keyDeinterlaceMode =
+      'deinterlace_mode'; // 去交错模式：auto, yadif, yadif=1, yadif=2, bwdif, nnedi, off
 
   // Default User-Agent (same as current hardcoded value)
   static const String defaultUserAgent = 'Wget/1.21.3';
@@ -122,6 +126,9 @@ class SettingsProvider extends ChangeNotifier {
       defaultUserAgent; // User-Agent for HTTP requests - 默认 Wget/1.21.3
   bool _showUserAgent = false; // 是否在播放器OSD显示User-Agent - 默认不显示
   String _pageTransitionAnimation = 'fade'; // 页面切换动画
+  bool _deinterlaceEnabled = true; // 去交错（反隔行）默认开启（应对480i/576i/1080i广电录屏源）
+  String _deinterlaceMode =
+      'yadif'; // 去交错模式：yadif(推荐)、yadif=1、yadif=2、bwdif、nnedi
 
   // Getters
   String get themeMode => _themeMode;
@@ -170,6 +177,8 @@ class SettingsProvider extends ChangeNotifier {
   String get userAgent => _userAgent;
   bool get showUserAgent => _showUserAgent;
   String get pageTransitionAnimation => _pageTransitionAnimation;
+  bool get deinterlaceEnabled => _deinterlaceEnabled;
+  String get deinterlaceMode => _deinterlaceMode;
 
   /// 获取当前应该使用的配色方案
   String get currentColorScheme {
@@ -292,6 +301,10 @@ class SettingsProvider extends ChangeNotifier {
     _pageTransitionAnimation =
         prefs.getString(_keyPageTransitionAnimation) ?? 'fade';
 
+    // 加载去交错设置
+    _deinterlaceEnabled = prefs.getBool(_keyDeinterlaceEnabled) ?? true;
+    _deinterlaceMode = prefs.getString(_keyDeinterlaceMode) ?? 'yadif';
+
     // 不在构造函数中调用 notifyListeners()，避免 build 期间触发重建
   }
 
@@ -389,6 +402,8 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setBool(_keyShowUserAgent, _showUserAgent);
     await prefs.setString(
         _keyPageTransitionAnimation, _pageTransitionAnimation);
+    await prefs.setBool(_keyDeinterlaceEnabled, _deinterlaceEnabled);
+    await prefs.setString(_keyDeinterlaceMode, _deinterlaceMode);
   }
 
   // Setters with persistence
@@ -772,6 +787,23 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 设置去交错（反隔行）开关
+  Future<void> setDeinterlaceEnabled(bool enabled) async {
+    ServiceLocator.log.d('SettingsProvider: 设置去交错开关 - $enabled');
+    _deinterlaceEnabled = enabled;
+    await _saveSettings();
+    notifyListeners();
+  }
+
+  /// 设置去交错（反隔行）模式
+  /// 可选值: yadif, yadif=1, yadif=2, bwdif, nnedi
+  Future<void> setDeinterlaceMode(String mode) async {
+    ServiceLocator.log.d('SettingsProvider: 设置去交错模式 - $mode');
+    _deinterlaceMode = mode;
+    await _saveSettings();
+    notifyListeners();
+  }
+
   /// 设置首页是否显示收藏夹
   Future<void> setShowFavoritesOnHome(bool show) async {
     ServiceLocator.log.d('SettingsProvider: 设置首页显示收藏夹 - $show');
@@ -818,6 +850,8 @@ class SettingsProvider extends ChangeNotifier {
     _userAgent = defaultUserAgent; // 重置 User-Agent 为默认值 Wget/1.21.3
     _showUserAgent = false; // 重置显示User-Agent开关为关闭
     _pageTransitionAnimation = 'fade';
+    _deinterlaceEnabled = true;
+    _deinterlaceMode = 'yadif';
 
     await _saveSettings();
 

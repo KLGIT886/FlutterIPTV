@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -264,6 +264,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.display_settings_rounded,
                   onTap: () => _showVideoOutputDialog(context, settings),
                 ),
+                _buildDivider(),
+                _buildSwitchTile(
+                  context,
+                  title: AppStrings.of(context)?.deinterlace ?? 'Deinterlace',
+                  subtitle: AppStrings.of(context)?.deinterlaceDesc ?? 'Apply deinterlacing filter for interlaced video (480i/576i/1080i)',
+                  icon: Icons.deblur_rounded,
+                  value: settings.deinterlaceEnabled,
+                  onChanged: (value) async {
+                    await settings.setDeinterlaceEnabled(value);
+                    await _reinitMediaKitPlayer(context, settings);
+                    final strings = AppStrings.of(context);
+                    _showSuccess(
+                      context,
+                      value
+                          ? (strings?.deinterlaceEnabled ?? 'Deinterlace enabled')
+                          : (strings?.deinterlaceDisabled ?? 'Deinterlace disabled'),
+                    );
+                  },
+                ),
+                if (settings.deinterlaceEnabled) ...[
+                  _buildDivider(),
+                  _buildSelectTile(
+                    context,
+                    title: AppStrings.of(context)?.deinterlaceMode ?? 'Deinterlace Mode',
+                    subtitle: _getDeinterlaceModeLabel(context, settings.deinterlaceMode),
+                    icon: Icons.filter_alt_rounded,
+                    onTap: () => _showDeinterlaceModeDialog(context, settings),
+                  ),
+                ],
               ] else if (isAndroid && isMobile) ...[
                 _buildDivider(),
                 _buildSelectTile(
@@ -1241,6 +1270,92 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return strings?.windowsHwdecAutoSafeDesc ??
             'Recommended. Only use safe hardware decoders.';
     }
+  }
+
+  String _getDeinterlaceModeLabel(BuildContext context, String mode) {
+    final strings = AppStrings.of(context);
+    switch (mode) {
+      case 'yadif':
+        return strings?.deinterlaceModeYadif ?? 'yadif (Recommended)';
+      case 'yadif=1':
+        return strings?.deinterlaceModeYadif1 ?? 'yadif=1 (Double FPS)';
+      case 'yadif=2':
+        return strings?.deinterlaceModeYadif2 ?? 'yadif=2 (Bob)';
+      case 'bwdif':
+        return strings?.deinterlaceModeBwdif ?? 'bwdif';
+      case 'nnedi':
+        return strings?.deinterlaceModeNnedi ?? 'nnedi (High Quality)';
+      default:
+        return mode;
+    }
+  }
+
+  void _showDeinterlaceModeDialog(
+      BuildContext context, SettingsProvider settings) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isLandscape =
+        screenWidth > 600 && screenWidth < 900 && screenHeight < screenWidth;
+    final strings = AppStrings.of(context);
+    const modeOptions = ['yadif', 'yadif=1', 'yadif=2', 'bwdif', 'nnedi'];
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppTheme.getSurfaceColor(dialogContext),
+          contentPadding: EdgeInsets.fromLTRB(
+            isLandscape ? 16 : 24,
+            isLandscape ? 8 : 16,
+            isLandscape ? 16 : 24,
+            isLandscape ? 8 : 16,
+          ),
+          title: Text(
+            strings?.deinterlaceMode ?? 'Deinterlace Mode',
+            style: TextStyle(
+              color: AppTheme.getTextPrimary(context),
+              fontSize: isLandscape ? 14 : 18,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: modeOptions.map((mode) {
+                return RadioListTile<String>(
+                  title: Text(
+                    _getDeinterlaceModeLabel(context, mode),
+                    style: TextStyle(
+                      color: AppTheme.getTextPrimary(context),
+                      fontSize: isLandscape ? 12 : 14,
+                    ),
+                  ),
+                  value: mode,
+                  groupValue: settings.deinterlaceMode,
+                  onChanged: (value) async {
+                    if (value != null) {
+                      await settings.setDeinterlaceMode(value);
+                      await _reinitMediaKitPlayer(context, settings);
+                      Navigator.pop(dialogContext);
+                      final label = _getDeinterlaceModeLabel(context, value);
+                      final template = strings?.deinterlaceModeSet ?? 'Deinterlace mode set to: {mode}';
+                      _showSuccess(
+                        context,
+                        template.replaceAll('{mode}', label),
+                      );
+                    }
+                  },
+                  activeColor: AppTheme.getPrimaryColor(dialogContext),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: isLandscape ? 8 : 16,
+                    vertical: isLandscape ? 0 : 4,
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _showWindowsHwdecDialog(BuildContext context, SettingsProvider settings) {

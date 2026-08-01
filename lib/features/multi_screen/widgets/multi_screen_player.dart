@@ -621,10 +621,14 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
             child: Stack(
               children: [
                 if (screen.channel != null && screen.videoController != null)
-                  Video(
-                    controller: screen.videoController!,
-                    fill: Colors.black,
-                    controls: NoVideoControls,
+                  ExcludeSemantics(
+                    // Exclude semantics from video texture widget to prevent AXTree update
+                    // errors when the platform video surface rebuilds.
+                    child: Video(
+                      controller: screen.videoController!,
+                      fill: Colors.black,
+                      controls: NoVideoControls,
+                    ),
                   )
                 else if (screen.channel != null)
                   _buildLoadingPlaceholder(screen)

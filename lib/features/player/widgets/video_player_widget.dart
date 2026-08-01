@@ -87,9 +87,13 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
   Widget build(BuildContext context) {
     return Container(
       color: Colors.black,
-      child: Video(
-        controller: _controller,
-        controls: widget.showControls ? AdaptiveVideoControls : NoVideoControls,
+      child: ExcludeSemantics(
+        // Exclude semantics from video texture widget to prevent AXTree update
+        // errors when the platform video surface rebuilds.
+        child: Video(
+          controller: _controller,
+          controls: widget.showControls ? AdaptiveVideoControls : NoVideoControls,
+        ),
       ),
     );
   }

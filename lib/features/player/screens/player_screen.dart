@@ -1913,9 +1913,13 @@ class _PlayerScreenState extends State<PlayerScreen>
           );
         }
 
-        return Video(
-          controller: provider.videoController!,
-          controls: NoVideoControls,
+        return ExcludeSemantics(
+          // Exclude semantics from video texture widget to prevent AXTree update
+          // errors when the platform video surface rebuilds.
+          child: Video(
+            controller: provider.videoController!,
+            controls: NoVideoControls,
+          ),
         );
       },
     );

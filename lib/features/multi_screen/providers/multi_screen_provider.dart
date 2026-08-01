@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'dart:io';
 import 'dart:math' as math;
 
 import '../../../core/models/channel.dart';
@@ -286,6 +287,9 @@ class MultiScreenProvider extends ChangeNotifier {
       final userAgent = ServiceLocator.settings?.userAgent ?? SettingsProvider.defaultUserAgent;
       ServiceLocator.log.d('MultiScreenProvider: 屏幕$screenIndex User-Agent: $userAgent');
       await screen.player!.open(Media(realUrl, httpHeaders: {'User-Agent': userAgent}));
+
+      // 在 media 打开后应用去交错滤镜（mpv 可能在 open 时重置 vf 链）
+      await _applyDeinterlaceFilter(screen.player!);
       
       final playTime = DateTime.now().difference(playStartTime).inMilliseconds;
       ServiceLocator.log.d('MultiScreenProvider: >>> 屏幕$screenIndex 播放器初始化完成，耗时: ${playTime}ms');
@@ -371,6 +375,34 @@ class MultiScreenProvider extends ChangeNotifier {
     );
     screen.isSoftwareDecoding = effectiveSoftware;
     screen.softwareFallbackAttempted = effectiveSoftware;
+
+    // 抑制 FFmpeg 冗余日志
+    try {
+      (player.platform as dynamic)
+          .setProperty('msg-level', 'ffmpeg=error:vd=error');
+    } catch (_) {}
+  }
+
+  /// 应用去交错（反隔行）滤镜
+  /// 策略：同时使用 deinterlace 属性（适配硬解）和 vf 滤镜（适配软解/auto-copy）
+  /// 必须在 media open 之后调用
+  Future<void> _applyDeinterlaceFilter(Player player) async {
+    if (!Platform.isWindows) return;
+    final prefs = ServiceLocator.prefs;
+    final enabled = prefs.getBool('deinterlace_enabled') ?? true;
+    final mode = prefs.getString('deinterlace_mode') ?? 'yadif';
+    try {
+      final nativePlayer = player.platform as dynamic;
+      if (enabled) {
+        await nativePlayer.setProperty('deinterlace', 'yes');
+        await nativePlayer.setProperty('vf', mode);
+        ServiceLocator.log.d('MultiScreenProvider: 去交错已启用: deinterlace=yes, vf=$mode');
+      } else {
+        await nativePlayer.setProperty('deinterlace', 'no');
+      }
+    } catch (e) {
+      ServiceLocator.log.d('MultiScreenProvider: 设置去交错失败: $e');
+    }
   }
 
   bool _shouldTrySoftwareFallback(String error, ScreenPlayerState screen) {
