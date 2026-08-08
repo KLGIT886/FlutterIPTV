@@ -35,6 +35,8 @@ class ScreenPlayerState {
   // 去交错检测状态（按播放器独立跟踪）
   StreamSubscription<VideoParams>? videoParamsSubscription;
   bool deinterlaceConfigured = false;
+  bool initialHwdecSet = false;
+  int deinterlaceGeneration = 0; // 代际计数器，用于检测过时的 videoParams 回调
   
   ScreenPlayerState();
   
@@ -324,18 +326,16 @@ class MultiScreenProvider extends ChangeNotifier {
       final userAgent = ServiceLocator.settings?.userAgent ?? SettingsProvider.defaultUserAgent;
       ServiceLocator.log.d('MultiScreenProvider: 屏幕$screenIndex User-Agent: $userAgent');
 
-      // 在 open() 之前应用去交错，确保 hwdec 和 vf 在流初始化前生效
-      // VideoController 创建时可能已设 hwdec=auto，在此覆盖
-      // 重置去交错检测，为新流准备新的订阅
+      // 重置去交错检测，为新流准备新的订阅。不重置 initialHwdecSet，
+      // 避免每次换台同步阶段重新设置 hwdec 触发 mpv 视频链初始化导致的延迟。
+      // 代际计数器确保旧的 videoParams 回调不会锁死新流的 guard。
+      screen.deinterlaceGeneration++; // 递增代际，使正在执行的旧回调失效
       screen.videoParamsSubscription?.cancel();
       screen.videoParamsSubscription = null;
       screen.deinterlaceConfigured = false;
       await _applyDeinterlaceFilter(screen.player!);
 
       await screen.player!.open(Media(realUrl, httpHeaders: {'User-Agent': userAgent}));
-
-      // 在 media 打开后再次应用去交错滤镜（mpv 可能在 open 时重置参数）
-      await _applyDeinterlaceFilter(screen.player!);
       
       final playTime = DateTime.now().difference(playStartTime).inMilliseconds;
       ServiceLocator.log.d('MultiScreenProvider: >>> 屏幕$screenIndex 播放器初始化完成，耗时: ${playTime}ms');
@@ -426,6 +426,8 @@ class MultiScreenProvider extends ChangeNotifier {
 
     // VideoController 创建后会强制设 hwdec=auto，在此覆盖去交错参数
     // 必须在 open() 之前调用，否则 hwdec=auto 会绕过 vf 滤镜链
+    // 重置 initialHwdecSet 确保新播放器的 hwdec 被正确设置
+    screen.initialHwdecSet = false;
     screen.videoParamsSubscription?.cancel();
     screen.videoParamsSubscription = null;
     screen.deinterlaceConfigured = false;
@@ -476,8 +478,19 @@ class MultiScreenProvider extends ChangeNotifier {
   /// 应用去交错（反隔行）配置（多屏版）
   ///
   /// 时序分两阶段，同步 player_provider 的逻辑：
-  ///   1. 同步阶段（open() 之前）：设 hwdec=d3d11va-copy
-  ///   2. 异步阶段（videoParams 回调）：只做增量调整，不切换 hwdec
+  ///   1. 同步阶段（open() 之前）：
+  ///      - 设置公共参数 video-sync / framedrop
+  ///      - 设置 deinterlace=no, vf=``（清除旧滤镜残留）
+  ///      - 仅在首次创建播放器时设置 hwdec（通过 initialHwdecSet 控制）
+  ///   2. 异步阶段（videoParams 回调）：
+  ///      - 根据源类型做增量调整：
+  ///        - 1080i: 切换 hwdec=d3d11va-copy + 尝试软件 vf 滤镜
+  ///        - 逐行源: 重置 hwdec 为用户配置模式，清除上一流可能残留的 d3d11va-copy
+  ///      - 部分场景（软件滤镜失败）回退硬件去交错
+  ///
+  /// 注意：每次切换频道前必须递增代际计数器，确保旧的 videoParams 异步回调
+  /// 不会干扰新流的配置。initialHwdecSet 仅在创建新播放器时重置，不随换台重置，
+  /// 避免不必要的 hwdec 设置触发 mpv 视频链初始化延迟。
   Future<void> _applyDeinterlaceFilter(Player player) async {
     if (!Platform.isWindows) return;
     final prefs = ServiceLocator.prefs;
@@ -487,31 +500,39 @@ class MultiScreenProvider extends ChangeNotifier {
     await _safeSetProperty(player, 'video-sync', 'display-resample', 'video-sync');
     await _safeSetProperty(player, 'framedrop', 'vo', 'framedrop');
 
+    // 查找该播放器对应的屏幕状态
+    final screen = _screens.where((s) => s.player == player).firstOrNull;
+    if (screen == null) return;
+
     // ═══════════════════════════════════════════════
     // 同步阶段（open() 之前）：设置解码器启动参数
     // ═══════════════════════════════════════════════
     if (enabled) {
-      // 启用去交错：d3d11va-copy 是通用 safe 默认值
-      // 对隔行/逐行/4K 均有效，且是软件 vf 滤镜的前置条件
-      await _safeSetProperty(player, 'hwdec', 'd3d11va-copy', 'hwdec');
+      // 启用去交错：使用用户配置的 hwdec 模式（如 auto-safe、auto-copy 等）
+      // - 不使用硬编码 d3d11va-copy：某些 HEVC 4K 流在 d3d11va-copy 下解码失败（PPS id out of range）
+      // - 异步 videoParams 回调确认是 1080i 后，才会切换为 d3d11va-copy 以支持软件 vf 滤镜
+      // - 对逐行 4K 源：保持用户配置的 hwdec，避免解码器不兼容
+      // hwdec 只在首次设置，避免 open() 后重复设置触发解码器重建
+      if (!screen.initialHwdecSet) {
+        await _safeSetProperty(player, 'hwdec', _getConfiguredHwdecMode(), 'hwdec');
+        screen.initialHwdecSet = true;
+      }
       await _safeSetProperty(player, 'deinterlace', 'no', 'deinterlace');
       await _safeSetProperty(player, 'vf', '', 'clear_vf');
     } else {
       // 禁用去交错：使用用户配置的 hwdec
       await _safeSetProperty(player, 'deinterlace', 'no', 'deinterlace');
       await _safeSetProperty(player, 'vf', '', 'clear_vf');
-      await _safeSetProperty(player, 'hwdec', _getConfiguredHwdecMode(), 'hwdec');
+      if (!screen.initialHwdecSet) {
+        await _safeSetProperty(player, 'hwdec', _getConfiguredHwdecMode(), 'hwdec');
+        screen.initialHwdecSet = true;
+      }
       // 取消该播放器的订阅
-      final screen = _screens.where((s) => s.player == player).firstOrNull;
-      screen?.videoParamsSubscription?.cancel();
-      screen?.videoParamsSubscription = null;
+      screen.videoParamsSubscription?.cancel();
+      screen.videoParamsSubscription = null;
       ServiceLocator.log.d('MultiScreenProvider: 去交错已禁用');
       return;
     }
-
-    // 查找该播放器对应的屏幕状态
-    final screen = _screens.where((s) => s.player == player).firstOrNull;
-    if (screen == null) return;
 
     // ═══════════════════════════════════════════════
     // 异步阶段（open() 之后）：videoParams 流回调，增量调整
@@ -520,9 +541,10 @@ class MultiScreenProvider extends ChangeNotifier {
     if (screen.videoParamsSubscription == null) {
       screen.deinterlaceConfigured = false;
       screen.videoParamsSubscription = player.stream.videoParams.listen((params) async {
+        // 捕获当前代际，用于检测过时的回调
+        final capturedGeneration = screen.deinterlaceGeneration;
         // 等待有效数据（w > 0 && h > 0），且防重入
         if (screen.deinterlaceConfigured || params.w == null || params.w! <= 0) return;
-        screen.deinterlaceConfigured = true;
 
         // 补读 video-frame-info/interlaced — VideoParams 不含此字段
         final interlaced = await _safeGetProperty(player, 'video-frame-info/interlaced', 'interlaced');
@@ -531,8 +553,26 @@ class MultiScreenProvider extends ChangeNotifier {
         final vfFps = double.tryParse(vfFpsStr ?? '') ?? 0;
 
         // 读取源端实际色彩空间，用于动态 HDR/SDR 判定
+        // 注意：色彩空间信息（gamma/primaries）可能延迟就绪，需先检查再设置 guard
         final srcGamma = await _safeGetProperty(player, 'video-params/gamma', 'gamma');
         final srcPrimaries = await _safeGetProperty(player, 'video-params/primaries', 'primaries');
+
+        // 如果 HDR 元数据尚未就绪，不设置 guard 标志，等待下次 videoParams 事件重试
+        if (srcGamma == null || srcGamma.isEmpty || srcPrimaries == null || srcPrimaries.isEmpty) {
+          ServiceLocator.log.d(
+              'MultiScreenProvider: 色彩空间信息尚未就绪 (gamma=$srcGamma, primaries=$srcPrimaries)，延迟到下次 videoParams 事件配置');
+          return;
+        }
+
+        // 检查代际：如果在此期间 playChannelOnScreen() 被调用（快速切换频道），
+        // 当前回调属于旧流，不应再设置 guard 或配置参数，让新流的回调来处理
+        if (capturedGeneration != screen.deinterlaceGeneration) {
+          ServiceLocator.log.d('MultiScreenProvider: videoParams 回调已过时（代际变化），忽略');
+          return;
+        }
+
+        screen.deinterlaceConfigured = true;
+
         final sigPeak = await _safeGetProperty(player, 'video-params/sig-peak', 'sig-peak');
 
         // 读取 codec 用于预设规则
@@ -583,11 +623,14 @@ class MultiScreenProvider extends ChangeNotifier {
         }
 
         // ════════════════════════════════════════════
-        // 第二步：去交错增量配置 — hwdec 已固定为 d3d11va-copy，无需切换
+        // 第二步：去交错增量配置 — 根据源类型选择性调整 hwdec
         // ════════════════════════════════════════════
         if (is1080i && _decodingMode != 'software') {
           // 分支 A: 1080i 隔行源 → 软件去交错优先
-          // hwdec 已由同步阶段设为 d3d11va-copy，这里不再切换，避免解码器重建
+          // 策略：先用当前 hwdec 尝试 vf 滤镜（如果上一流也是 1080i，hwdec 已是
+          // d3d11va-copy，滤镜可直接生效，无需 hwdec 切换触发解码器重建）。
+          // 仅当当前 hwdec 不支持软件 vf 时（如从 4K 切来，hwdec=auto-safe），
+          // 才切换为 d3d11va-copy 并重试。
           await _safeSetProperty(player, 'deinterlace', 'no', 'deinterlace');
 
           const filters = [
@@ -597,6 +640,8 @@ class MultiScreenProvider extends ChangeNotifier {
           ];
 
           String? workingFilter;
+
+          // 第一轮尝试：用当前 hwdec 试 vf 滤镜
           for (final vf in filters) {
             await _safeSetProperty(player, 'vf', '', 'clear_vf');
             final success = await _safeSetProperty(player, 'vf', vf, 'try_vf');
@@ -611,8 +656,32 @@ class MultiScreenProvider extends ChangeNotifier {
             }
           }
 
+          // 如果当前 hwdec 不支持软件 vf（如 auto-safe 硬解模式无法挂载 vf 滤镜链），
+          // 切换为 d3d11va-copy 后重试
           if (workingFilter == null) {
-            // 软件滤镜全部不可用 → 切换到硬件去交错
+            await _safeSetProperty(player, 'hwdec', 'd3d11va-copy', 'hwdec_1080i');
+            // hwdec 切换后解码器重建，需等待重建完成再设置 vf 滤镜
+            // 采用轮询方式：反复尝试设置并验证 vf，直到成功或超时
+            for (int retry = 0; retry < 5 && workingFilter == null; retry++) {
+              await Future.delayed(const Duration(milliseconds: 50));
+              for (final vf in filters) {
+                await _safeSetProperty(player, 'vf', '', 'clear_vf');
+                final success = await _safeSetProperty(player, 'vf', vf, 'try_vf');
+                if (success) {
+                  final currentVf = await _safeGetProperty(player, 'vf', 'verify_vf');
+                  if (currentVf != null && currentVf.isNotEmpty) {
+                    workingFilter = vf;
+                    ServiceLocator.log.i(
+                        'MultiScreenProvider: 1080i: 软件滤镜 $vf (hwdec=d3d11va-copy, 第二轮)');
+                    break;
+                  }
+                }
+              }
+            }
+          }
+
+          if (workingFilter == null) {
+            // 软件滤镜全部不可用 → 切换回用户配置的 hwdec 并启用硬件去交错
             ServiceLocator.log.i(
                 'MultiScreenProvider: 1080i: 软件滤镜不可用，退回硬件去交错 (deinterlace=yes)');
             await _safeSetProperty(player, 'vf', '', 'clear_vf');
@@ -621,11 +690,15 @@ class MultiScreenProvider extends ChangeNotifier {
           }
         } else {
           // 分支 B: 逐行源（1080p / 2160p SDR / 2160p HDR 等）
-          // 保持 hwdec=d3d11va-copy，不切换！避免解码器重建
+          // 显式重置 hwdec 为用户配置模式，清除上一流可能设置的 d3d11va-copy
+          // 同步阶段跳过 hwdec 设置（initialHwdecSet 已为 true），
+          // 因此由异步阶段在此处确保 hwdec 正确
+          await _safeSetProperty(player, 'hwdec', _getConfiguredHwdecMode(), 'hwdec_progressive');
           await _safeSetProperty(player, 'deinterlace', 'no', 'deinterlace');
           await _safeSetProperty(player, 'vf', '', 'clear_vf');
           final label = h > 0 ? '${h}p 逐行源' : '源（默认按逐行处理）';
-          ServiceLocator.log.i('MultiScreenProvider: $label: d3d11va-copy 硬解, 无去交错');
+          final currentHwdec = _decodingMode == 'software' ? '软解(no)' : _getConfiguredHwdecMode();
+          ServiceLocator.log.i('MultiScreenProvider: $label: $currentHwdec 硬解, 无去交错');
         }
       });
     }

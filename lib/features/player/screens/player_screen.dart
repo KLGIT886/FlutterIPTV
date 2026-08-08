@@ -893,7 +893,7 @@ class _PlayerScreenState extends State<PlayerScreen>
             _currentGestureType = 'channel';
           }
         } else {
-          // 姘村钩婊戝姩
+          // 水平滑动
           _currentGestureType = 'horizontal';
         }
       }
@@ -925,7 +925,7 @@ class _PlayerScreenState extends State<PlayerScreen>
         _gestureValue = newBrightness;
       });
     } else if (_currentGestureType == 'channel') {
-      // 个棿鍖哄煙显示婊戝姩鎸囩ず
+      // 中间区域显示滑动指示
       setState(() {
         _showGestureIndicator = true;
         _gestureValue = dy.clamp(-100.0, 100.0) / 100.0; // 用于显示方向
@@ -946,9 +946,9 @@ class _PlayerScreenState extends State<PlayerScreen>
 
     // 处理频道切换
     if (_currentGestureType == 'channel') {
-      final threshold = screenHeight * 0.08; // 婊戝姩瓒呰繃屏箷8%启冲彲切囨崲
+      final threshold = screenHeight * 0.08; // 滑动超过屏幕8%才可以切换
       if (dy.abs() > threshold) {
-        _errorShown = false; // 切囨崲棰戦亾时堕噸缃敊璇爣璁?
+        _errorShown = false; // 切换频道时重置错误标记
         _errorHideTimer?.cancel(); // 取消错误提示隐藏定时器
         // 隐藏错误提示
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -972,7 +972,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 
     // 处理水平滑动 - 显示/隐藏分类菜单
     if (_currentGestureType == 'horizontal') {
-      final threshold = screenWidth * 0.15; // 婊戝姩瓒呰繃屏箷15%
+      final threshold = screenWidth * 0.15; // 滑动超过屏幕15%
       if (dx < -threshold && !_showCategoryPanel && !_showEpgPanel) {
         // 宸︽粦显示切嗙被鑿滃崟
         setState(() {
@@ -1179,7 +1179,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       icon = _gestureValue > 0.5 ? Icons.brightness_high : Icons.brightness_low;
       label = '${(_gestureValue * 100).toInt()}%';
     } else if (_currentGestureType == 'channel') {
-      // 棰戦亾切囨崲鎸囩ず
+      // 频道切换指示
       if (_gestureValue < 0) {
         icon = Icons.keyboard_arrow_up;
         label = AppStrings.of(context)?.nextChannel ?? 'Next channel';
@@ -1279,7 +1279,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       return KeyEventResult.handled;
     }
 
-    // Left key - 切囨崲个婁竴个簮 / 闀挎寜手撳紑切嗙被闈㈡澘
+    // Left key - 切换到上一个源 / 长按打开分类面板
     if (key == LogicalKeyboardKey.arrowLeft) {
       if (event is KeyDownEvent) {
         if (event is KeyRepeatEvent) return KeyEventResult.handled;
@@ -1288,7 +1288,7 @@ class _PlayerScreenState extends State<PlayerScreen>
         _longPressTimer?.cancel();
         _longPressTimer = Timer(const Duration(milliseconds: 500), () {
           if (mounted && _lastLeftKeyDownTime != null) {
-            // 闀挎寜锛氭墦开切嗙被闈㈡澘骞跺畾浣嶅埌当前前棰戦亾
+            // 长按：打开分类面板并定位到当前频道
             final playerProvider = context.read<PlayerProvider>();
             final channelProvider = context.read<ChannelProvider>();
             final currentChannel = playerProvider.currentChannel;
@@ -1356,7 +1356,7 @@ class _PlayerScreenState extends State<PlayerScreen>
             return KeyEventResult.handled;
           }
 
-          // 切囨崲切颁笂个€个簮
+          // 切换到上一个源
           final channel = playerProvider.currentChannel;
           if (channel != null && channel.hasMultipleSources) {
             playerProvider.switchToPreviousSource();
@@ -1368,7 +1368,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       return KeyEventResult.handled;
     }
 
-    // Right key - 切囨崲个嬩竴个簮
+    // Right key - 切换到下一个源
     if (key == LogicalKeyboardKey.arrowRight) {
       if (_showCategoryPanel) {
         // 如果在分类面板，按键不做任何事
@@ -1381,7 +1381,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       }
 
       if (event is KeyDownEvent && event is! KeyRepeatEvent) {
-        // 切囨崲切颁笅个€个簮
+        // 切换到下一个源
         final channel = playerProvider.currentChannel;
         if (channel != null && channel.hasMultipleSources) {
           playerProvider.switchToNextSource();
@@ -1399,7 +1399,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     // Previous Channel (Up)
     if (key == LogicalKeyboardKey.arrowUp ||
         key == LogicalKeyboardKey.channelUp) {
-      _errorShown = false; // 切囨崲棰戦亾时堕噸缃敊璇爣璁?
+      _errorShown = false; // 切换频道时重置错误标记
       _errorHideTimer?.cancel(); // 取消错误提示隐藏定时器
       // 隐藏错误提示
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -1414,7 +1414,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     // Next Channel (Down)
     if (key == LogicalKeyboardKey.arrowDown ||
         key == LogicalKeyboardKey.channelDown) {
-      _errorShown = false; // 切囨崲棰戦亾时堕噸缃敊璇爣璁?
+      _errorShown = false; // 切换频道时重置错误标记
       _errorHideTimer?.cancel(); // 取消错误提示隐藏定时器
       // 隐藏错误提示
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -2449,7 +2449,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
   }
 
-  // 切嗗睆模式紡切囨崲按挳
+  // 多屏模式切换按钮
   Widget _buildMultiScreenButton() {
     return TVFocusable(
       onSelect: _switchToMultiScreenMode,
@@ -2491,7 +2491,7 @@ class _PlayerScreenState extends State<PlayerScreen>
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // PiP 切囨崲按挳
+            // PiP 切换按钮
             TVFocusable(
               onSelect: () async {
                 await WindowsPipChannel.togglePipMode();
@@ -2821,7 +2821,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                       provider.currentChannel?.hasCatchup == true)
                     const SizedBox(width: 16),
 
-                  // 手嬫満绔簮切囨崲按挳 - 个婁竴个簮
+                  // 手机端源切换按钮 - 上一个源
                   if (PlatformDetector.isMobile &&
                       provider.currentChannel != null &&
                       provider.currentChannel!.hasMultipleSources)
@@ -2898,7 +2898,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                     ),
                   ),
 
-                  // 手嬫満绔簮切囨崲按挳 - 个嬩竴个簮
+                  // 手机端源切换按钮 - 下一个源
                   if (PlatformDetector.isMobile &&
                       provider.currentChannel != null &&
                       provider.currentChannel!.hasMultipleSources)
@@ -3204,7 +3204,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
   }
 
-  // 切囨崲全ㄥ睆模式紡 (浠?Windows)
+  // 切换全屏模式 (仅Windows)
   void _toggleFullScreen() {
     if (!PlatformDetector.isWindows) return;
 
@@ -3216,7 +3216,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
     _lastFullScreenToggle = now;
 
-    // 使用敤压熺敓 Windows API 切囨崲全ㄥ睆
+    // 使用原生 Windows API 切换全屏
     final success = WindowsFullscreenNative.toggleFullScreen();
 
     if (success) {
@@ -3417,7 +3417,7 @@ class _PlayerScreenState extends State<PlayerScreen>
               ),
             ),
           ),
-          // 棰戦亾切楄〃锛堝綋閫変腑切嗙被时舵樉绀猴級
+          // 频道列表（当选中分类时显示）
           if (_selectedCategory != null) _buildChannelList(),
         ],
       ),
@@ -3491,7 +3491,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                         settingsProvider.setLastChannelId(channel.id);
                       }
 
-                      // 切囨崲切拌棰戦亾
+                      // 切换到该频道
                       playerProvider.playChannel(channel);
                       // 全抽棴闈㈡澘
                       setState(() {

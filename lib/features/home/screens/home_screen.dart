@@ -288,8 +288,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
       // 加载 EPG（使用播放列表的 EPG URL，如果失败则使用设置中的兜底 URL）
       ServiceLocator.log.d(
           'HomeScreen: 检查 EPG 加载条件 - activePlaylist.epgUrl=${activePlaylist?.epgUrl}, settingsProvider.epgUrl=${settingsProvider.epgUrl}');
-      print(
-          'HomeScreen: 检查 EPG 加载条件 - activePlaylist.epgUrl=${activePlaylist?.epgUrl}, settingsProvider.epgUrl=${settingsProvider.epgUrl}');
       if (activePlaylist?.epgUrl != null &&
           activePlaylist!.epgUrl!.isNotEmpty) {
         ServiceLocator.log

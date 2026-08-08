@@ -54,6 +54,8 @@ class PlayerProvider extends ChangeNotifier {
   bool _isDisposed = false;
   StreamSubscription<VideoParams>? _videoParamsSubscription;
   bool _deinterlaceConfiguredForCurrentStream = false;
+  bool _initialHwdecSet = false;
+  int _deinterlaceGeneration = 0; // 代际计数器，用于检测过时的 videoParams 回调
   String _videoOutput = 'auto';
   String _vo = 'unknown';
   String _configuredVo = 'auto';
@@ -343,12 +345,9 @@ class PlayerProvider extends ChangeNotifier {
         ServiceLocator.log.d('>>> 重试: 使用播放地址: $realUrl', tag: 'PlayerProvider');
 
         final playStartTime = DateTime.now();
-        _resetDeinterlaceDetection();
+        // 代际计数器已在 _resetDeinterlaceDetection() 中递增，确保旧回调不影响新流
         await _applyDeinterlaceFilter();
         await _mediaKitPlayer?.open(_createMedia(realUrl));
-
-        // 在 media 打开后应用去交错滤镜（mpv 可能在 open 时重置参数）
-        await _applyDeinterlaceFilter();
 
         final playTime =
             DateTime.now().difference(playStartTime).inMilliseconds;
@@ -387,6 +386,10 @@ class PlayerProvider extends ChangeNotifier {
   int _videoHeight = 0;
   double _downloadSpeed = 0; // bytes per second
 
+  // 音频信息
+  String _audioCodec = '';
+  int _audioChannels = 0;
+
   double get currentFps => _currentFps;
   int get videoWidth => _videoWidth;
   int get videoHeight => _videoHeight;
@@ -400,6 +403,14 @@ class PlayerProvider extends ChangeNotifier {
     final parts = <String>['${w}x$h'];
     if (_videoCodec.isNotEmpty) parts.add(_videoCodec);
     if (_fps > 0) parts.add('${_fps.toStringAsFixed(1)} fps');
+    // 音频格式
+    if (_audioCodec.isNotEmpty) {
+      final audioPart = StringBuffer(_audioCodec);
+      if (_audioChannels > 0) {
+        audioPart.write('|$_audioChannels声道');
+      }
+      parts.add(audioPart.toString());
+    }
     final hwdecInfo = _formatHwdecInfo();
     if (hwdecInfo.isNotEmpty) {
       parts.add('hwdec: $hwdecInfo');
@@ -407,6 +418,15 @@ class PlayerProvider extends ChangeNotifier {
     final voInfo = _formatVoInfo();
     if (voInfo.isNotEmpty) {
       parts.add('vo: $voInfo');
+    }
+    // 码率显示（基于预估下载速度）
+    if (_downloadSpeed > 0) {
+      final bitrateMbps = _downloadSpeed * 8 / 1000000;
+      if (bitrateMbps >= 100) {
+        parts.add('${bitrateMbps.toStringAsFixed(0)} Mbps');
+      } else {
+        parts.add('${bitrateMbps.toStringAsFixed(1)} Mbps');
+      }
     }
     return parts.join(' | ');
   }
@@ -504,7 +524,7 @@ class PlayerProvider extends ChangeNotifier {
       ),
     );
 
-    // 确畾确欢视ｇ爜妯″紡
+    // 确定硬件解码模式
     String? hwdecMode;
     if (Platform.isAndroid) {
       hwdecMode = effectiveSoftware ? 'no' : 'mediacodec';
@@ -550,6 +570,8 @@ class PlayerProvider extends ChangeNotifier {
 
     // VideoController 创建后会强制设 hwdec=auto，在此覆盖去交错参数
     // 必须在 open() 之前调用，否则 hwdec=auto 会绕过 vf 滤镜链
+    // 重置 _initialHwdecSet 确保新播放器的 hwdec 被正确设置
+    _initialHwdecSet = false;
     _resetDeinterlaceDetection();
     await _applyDeinterlaceFilter();
 
@@ -597,8 +619,14 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   /// 重置去交错检测状态，取消 videoParams 监听订阅
-  /// 在每次播放新流之前调用，确保旧流监听不会影响新流
+  /// 在每次播放新流之前调用，确保旧流监听不会影响新流。
+  /// 递增代际计数器使正在执行的旧异步回调在设置 guard 前检测到代际变化并忽略。
+  ///
+  /// 注意：不重置 _initialHwdecSet，避免每次换台同步阶段重新设置 hwdec
+  /// 触发 mpv 视频链初始化导致的 1-2s 延迟。hwdec 仅在首次创建播放器时设置，
+  /// 异步阶段根据源类型（1080i/逐行）做增量调整。
   void _resetDeinterlaceDetection() {
+    _deinterlaceGeneration++; // 递增代际，使正在执行的旧回调失效
     _videoParamsSubscription?.cancel();
     _videoParamsSubscription = null;
     _deinterlaceConfiguredForCurrentStream = false;
@@ -609,17 +637,19 @@ class PlayerProvider extends ChangeNotifier {
   /// 时序分两阶段：
   ///   1. 同步阶段（open() 之前调用）：
   ///      - 设置公共参数 video-sync / framedrop
-  ///      - 启用时：设 hwdec=d3d11va-copy 作为通用 safe 默认值，
-  ///        d3d11va-copy 对隔行/逐行/4K 均有效，且是软件 vf 滤镜的前置条件。
-  ///        解码器从启动时就用正确模式，避免二次重建。
-  ///      - 禁用时：使用用户配置的 hwdec 模式
+  ///      - 设置 deinterlace=no, vf=``（清除旧滤镜残留）
+  ///      - 仅在首次创建播放器时设置 hwdec（通过 _initialHwdecSet 控制）
   ///   2. 异步阶段（videoParams 流回调，open() 之后）：
   ///      - 补读 interlaced / gamma / primaries 等属性
-  ///      - 只做增量调整（加 vf 滤镜、加 HDR 参数），不切换 hwdec
-  ///      - 唯一需要切换 hwdec 的场景：软件滤镜全部失败，回退硬件去交错
+  ///      - 根据源类型做增量调整：
+  ///        - 1080i: 切换 hwdec=d3d11va-copy + 尝试软件 vf 滤镜
+  ///        - 逐行源: 重置 hwdec 为用户配置模式，清除上一流可能残留的 d3d11va-copy
+  ///      - 部分场景（软件滤镜失败）回退硬件去交错
   ///
-  /// 注意：必须在 open() 之前调用，确保监听器在流初始化前就绪；
-  ///       open() 之后再次调用以重新设置 mpv 可能重置的公共参数。
+  /// 注意：每次切换频道前必须调用 _resetDeinterlaceDetection() 递增代际计数器，
+  /// 确保旧的 videoParams 异步回调不会干扰新流的配置。
+  /// _initialHwdecSet 仅在创建新播放器时重置，不随换台重置，避免不必要的 hwdec
+  /// 设置触发 mpv 视频链初始化延迟。
   Future<void> _applyDeinterlaceFilter() async {
     if (!Platform.isWindows) return;
     final prefs = ServiceLocator.prefs;
@@ -633,18 +663,25 @@ class PlayerProvider extends ChangeNotifier {
     // 同步阶段（open() 之前）：设置解码器启动参数
     // ═══════════════════════════════════════════════
     if (enabled) {
-      // 启用去交错：d3d11va-copy 是通用 safe 默认值
-      // - 对隔行源：d3d11va-copy 是软件 vf 滤镜的前置条件
-      // - 对逐行源：d3d11va-copy 也能正常工作，无解码器重建
-      // - 之后 videoParams 回调会在确认是逐行后保持此模式
-      await _safeSetProperty('hwdec', 'd3d11va-copy', 'hwdec');
+      // 启用去交错：使用用户配置的 hwdec 模式（如 auto-safe、auto-copy 等）
+      // - 不使用硬编码 d3d11va-copy：某些 HEVC 4K 流在 d3d11va-copy 下解码失败（PPS id out of range）
+      // - 异步 videoParams 回调确认是 1080i 后，才会切换为 d3d11va-copy 以支持软件 vf 滤镜
+      // - 对逐行 4K 源：保持用户配置的 hwdec，避免解码器不兼容
+      // hwdec 只在首次设置，避免 open() 后重复设置触发解码器重建
+      if (!_initialHwdecSet) {
+        await _safeSetProperty('hwdec', _getConfiguredHwdecMode(), 'hwdec');
+        _initialHwdecSet = true;
+      }
       await _safeSetProperty('deinterlace', 'no', 'deinterlace');
       await _safeSetProperty('vf', '', 'clear_vf');
     } else {
       // 禁用去交错：使用用户配置的 hwdec
       await _safeSetProperty('deinterlace', 'no', 'deinterlace');
       await _safeSetProperty('vf', '', 'clear_vf');
-      await _safeSetProperty('hwdec', _getConfiguredHwdecMode(), 'hwdec');
+      if (!_initialHwdecSet) {
+        await _safeSetProperty('hwdec', _getConfiguredHwdecMode(), 'hwdec');
+        _initialHwdecSet = true;
+      }
       _videoParamsSubscription?.cancel();
       _videoParamsSubscription = null;
       ServiceLocator.log.i('去交错已禁用', tag: 'PlayerProvider');
@@ -659,9 +696,10 @@ class PlayerProvider extends ChangeNotifier {
     if (_videoParamsSubscription == null) {
       _deinterlaceConfiguredForCurrentStream = false;
       _videoParamsSubscription = _mediaKitPlayer?.stream.videoParams.listen((params) async {
+        // 捕获当前代际，用于检测过时的回调
+        final capturedGeneration = _deinterlaceGeneration;
         // 等待有效数据（w > 0 && h > 0），且防重入
         if (_deinterlaceConfiguredForCurrentStream || params.w == null || params.w! <= 0) return;
-        _deinterlaceConfiguredForCurrentStream = true;
 
         // 补读 video-frame-info/interlaced — VideoParams 不含此字段
         final interlaced = await _safeGetProperty('video-frame-info/interlaced', 'interlaced');
@@ -670,8 +708,27 @@ class PlayerProvider extends ChangeNotifier {
         final vfFps = double.tryParse(vfFpsStr ?? '') ?? 0;
 
         // 读取源端实际色彩空间，用于动态 HDR/SDR 判定
+        // 注意：色彩空间信息（gamma/primaries）可能延迟就绪，需先检查再设置 guard
         final srcGamma = await _safeGetProperty('video-params/gamma', 'gamma');
         final srcPrimaries = await _safeGetProperty('video-params/primaries', 'primaries');
+
+        // 如果 HDR 元数据尚未就绪，不设置 guard 标志，等待下次 videoParams 事件重试
+        if (srcGamma == null || srcGamma.isEmpty || srcPrimaries == null || srcPrimaries.isEmpty) {
+          ServiceLocator.log.d(
+              '色彩空间信息尚未就绪 (gamma=$srcGamma, primaries=$srcPrimaries)，延迟到下次 videoParams 事件配置',
+              tag: 'PlayerProvider');
+          return;
+        }
+
+        // 检查代际：如果在此期间 _resetDeinterlaceDetection() 被调用（快速切换频道），
+        // 当前回调属于旧流，不应再设置 guard 或配置参数，让新流的回调来处理
+        if (capturedGeneration != _deinterlaceGeneration) {
+          ServiceLocator.log.d('videoParams 回调已过时（代际变化），忽略', tag: 'PlayerProvider');
+          return;
+        }
+
+        _deinterlaceConfiguredForCurrentStream = true;
+
         final sigPeak = await _safeGetProperty('video-params/sig-peak', 'sig-peak');
 
         // 读取 codec 用于预设规则
@@ -725,11 +782,14 @@ class PlayerProvider extends ChangeNotifier {
         }
 
         // ════════════════════════════════════════════
-        // 第二步：去交错增量配置 — hwdec 已固定为 d3d11va-copy，无需切换
+        // 第二步：去交错增量配置 — 根据源类型选择性调整 hwdec
         // ════════════════════════════════════════════
         if (is1080i && !_isSoftwareDecoding) {
           // 分支 A: 1080i 隔行源 → 软件去交错优先
-          // hwdec 已由同步阶段设为 d3d11va-copy，这里不再切换，避免解码器重建
+          // 策略：先用当前 hwdec 尝试 vf 滤镜（如果上一流也是 1080i，hwdec 已是
+          // d3d11va-copy，滤镜可直接生效，无需 hwdec 切换触发解码器重建）。
+          // 仅当当前 hwdec 不支持软件 vf 时（如从 4K 切来，hwdec=auto-safe），
+          // 才切换为 d3d11va-copy 并重试。
           await _safeSetProperty('deinterlace', 'no', 'deinterlace');
 
           const filters = [
@@ -739,6 +799,8 @@ class PlayerProvider extends ChangeNotifier {
           ];
 
           String? workingFilter;
+
+          // 第一轮尝试：用当前 hwdec 试 vf 滤镜
           for (final vf in filters) {
             await _safeSetProperty('vf', '', 'clear_vf');
             final success = await _safeSetProperty('vf', vf, 'try_vf');
@@ -754,9 +816,33 @@ class PlayerProvider extends ChangeNotifier {
             }
           }
 
+          // 如果当前 hwdec 不支持软件 vf（如 auto-safe 硬解模式无法挂载 vf 滤镜链），
+          // 切换为 d3d11va-copy 后重试
           if (workingFilter == null) {
-            // 软件滤镜全部不可用 → 切换到硬件去交错
-            // 这是唯一需要切换 hwdec 的场景
+            await _safeSetProperty('hwdec', 'd3d11va-copy', 'hwdec_1080i');
+            // hwdec 切换后解码器重建，需等待重建完成再设置 vf 滤镜
+            // 采用轮询方式：反复尝试设置并验证 vf，直到成功或超时
+            for (int retry = 0; retry < 5 && workingFilter == null; retry++) {
+              await Future.delayed(const Duration(milliseconds: 50));
+              for (final vf in filters) {
+                await _safeSetProperty('vf', '', 'clear_vf');
+                final success = await _safeSetProperty('vf', vf, 'try_vf');
+                if (success) {
+                  final currentVf = await _safeGetProperty('vf', 'verify_vf');
+                  if (currentVf != null && currentVf.isNotEmpty) {
+                    workingFilter = vf;
+                    ServiceLocator.log.i(
+                        '1080i: 软件滤镜 $vf (hwdec=d3d11va-copy, 第二轮)',
+                        tag: 'PlayerProvider');
+                    break;
+                  }
+                }
+              }
+            }
+          }
+
+          if (workingFilter == null) {
+            // 软件滤镜全部不可用 → 切换回用户配置的 hwdec 并启用硬件去交错
             ServiceLocator.log.i(
                 '1080i: 软件滤镜不可用，退回硬件去交错 (deinterlace=yes)',
                 tag: 'PlayerProvider');
@@ -766,11 +852,15 @@ class PlayerProvider extends ChangeNotifier {
           }
         } else {
           // 分支 B: 逐行源（1080p / 2160p SDR / 2160p HDR 等）
-          // 保持 hwdec=d3d11va-copy，不切换！避免解码器重建
+          // 显式重置 hwdec 为用户配置模式，清除上一流可能设置的 d3d11va-copy
+          // 同步阶段跳过 hwdec 设置（_initialHwdecSet 已为 true），
+          // 因此由异步阶段在此处确保 hwdec 正确
+          await _safeSetProperty('hwdec', _getConfiguredHwdecMode(), 'hwdec_progressive');
           await _safeSetProperty('deinterlace', 'no', 'deinterlace');
           await _safeSetProperty('vf', '', 'clear_vf');
           final label = h > 0 ? '${h}p 逐行源' : '源（默认按逐行处理）';
-          ServiceLocator.log.i('$label: d3d11va-copy 硬解, 无去交错', tag: 'PlayerProvider');
+          final currentHwdec = _isSoftwareDecoding ? '软解(no)' : _getConfiguredHwdecMode();
+          ServiceLocator.log.i('$label: $currentHwdec 硬解, 无去交错', tag: 'PlayerProvider');
         }
       });
     }
@@ -894,28 +984,29 @@ class PlayerProvider extends ChangeNotifier {
 
     _mediaKitPlayer!.stream.tracks.listen((tracks) {
       ServiceLocator.log.d(
-          '轨ㄩ亾淇℃伅更存柊: 视嗛轨?${tracks.video.length}, 音抽轨?${tracks.audio.length}',
+          '轨道信息更新: 视频轨?${tracks.video.length}, 音频轨?${tracks.audio.length}',
           tag: 'PlayerProvider');
 
       for (final track in tracks.video) {
         if (track.codec != null) {
           _videoCodec = track.codec!;
-          ServiceLocator.log.i('视嗛缂栫爜: ${track.codec}', tag: 'PlayerProvider');
+          ServiceLocator.log.i('视频编码: ${track.codec}', tag: 'PlayerProvider');
         }
         if (track.fps != null) {
           _fps = track.fps!;
           ServiceLocator.log
-              .i('视嗛甯х巼: ${track.fps} fps', tag: 'PlayerProvider');
+              .i('视频帧率: ${track.fps} fps', tag: 'PlayerProvider');
         }
         if (track.w != null && track.h != null) {
           ServiceLocator.log
-              .i('视嗛分嗚鲸率? ${track.w}x${track.h}', tag: 'PlayerProvider');
+              .i('视频分辨率: ${track.w}x${track.h}', tag: 'PlayerProvider');
         }
       }
 
       for (final track in tracks.audio) {
         if (track.codec != null) {
-          ServiceLocator.log.i('音抽缂栫爜: ${track.codec}', tag: 'PlayerProvider');
+          _audioCodec = track.codec!;
+          ServiceLocator.log.i('音频编码: ${track.codec}', tag: 'PlayerProvider');
         }
       }
 
@@ -940,13 +1031,13 @@ class PlayerProvider extends ChangeNotifier {
           ServiceLocator.log.e('>>> 网络错误: $err', tag: 'PlayerProvider');
         } else if (err.toLowerCase().contains('hwdec') ||
             err.toLowerCase().contains('hardware')) {
-          ServiceLocator.log.e('>>> 确欢加犻€熼敊璇? $err', tag: 'PlayerProvider');
+          ServiceLocator.log.e('>>> 硬件加速错误: $err', tag: 'PlayerProvider');
         } else if (err.toLowerCase().contains('codec')) {
           ServiceLocator.log.e('>>> 解码器错误: $err', tag: 'PlayerProvider');
         }
 
         if (_shouldTrySoftwareFallback(err)) {
-          ServiceLocator.log.w('宽濊瘯轨В素佸洖退', tag: 'PlayerProvider');
+          ServiceLocator.log.w('尝试软件回退', tag: 'PlayerProvider');
           _attemptSoftwareFallback();
         } else {
           _setError(err);
@@ -956,14 +1047,14 @@ class PlayerProvider extends ChangeNotifier {
 
     _mediaKitPlayer!.stream.width.listen((width) {
       if (width != null && width > 0) {
-        ServiceLocator.log.d('视嗛瀹藉害: $width', tag: 'PlayerProvider');
+        ServiceLocator.log.d('视频宽度: $width', tag: 'PlayerProvider');
       }
       notifyListeners();
     });
 
     _mediaKitPlayer!.stream.height.listen((height) {
       if (height != null && height > 0) {
-        ServiceLocator.log.d('视嗛高樺害: $height', tag: 'PlayerProvider');
+        ServiceLocator.log.d('视频高度: $height', tag: 'PlayerProvider');
       }
       notifyListeners();
     });
@@ -983,17 +1074,41 @@ class PlayerProvider extends ChangeNotifier {
         _hwdecMode = _configuredHwdec;
       }
 
-      // 更存柊视嗛宽哄
+      // 实时读取 hwdec-current 属性，显示实际使用的硬件解码模式
+      // 避免仅显示配置值（如 auto-safe），而实际可能已切换为 d3d11va-copy
+      _safeGetProperty('hwdec-current', 'hwdec-current').then((current) {
+        if (current != null && current.isNotEmpty && current != _hwdecMode) {
+          _hwdecMode = current;
+          notifyListeners();
+        }
+      });
+
+      // 实时读取音频信息
+      _safeGetProperty('audio-params/codec', 'audio-codec').then((codec) {
+        if (codec != null && codec.isNotEmpty && codec != _audioCodec) {
+          _audioCodec = codec;
+          notifyListeners();
+        }
+      });
+      _safeGetProperty('audio-params/channels', 'audio-channels').then((ch) {
+        final chCount = _parseChannelCount(ch ?? '');
+        if (chCount > 0 && chCount != _audioChannels) {
+          _audioChannels = chCount;
+          notifyListeners();
+        }
+      });
+
+      // 更新视频宽高
       final newWidth = _mediaKitPlayer!.state.width ?? 0;
       final newHeight = _mediaKitPlayer!.state.height ?? 0;
 
       // 检测视频尺寸变化（可能表示解码成功）
       if (newWidth != _videoWidth || newHeight != _videoHeight) {
         if (newWidth > 0 && newHeight > 0) {
-          ServiceLocator.log.i('鉁?视嗛视ｇ爜鎴愬姛: ${newWidth}x$newHeight',
+          ServiceLocator.log.i('视频解码成功: ${newWidth}x$newHeight',
               tag: 'PlayerProvider');
         } else if (_videoWidth > 0 && newWidth == 0) {
-          ServiceLocator.log.w('鉁?视嗛视ｇ爜个㈠け', tag: 'PlayerProvider');
+          ServiceLocator.log.w('视频解码失败', tag: 'PlayerProvider');
         }
       }
 
@@ -1001,41 +1116,80 @@ class PlayerProvider extends ChangeNotifier {
       _videoHeight = newHeight;
 
       // Windows 端直接使用 track 中的 fps 信息
-      // media_kit (mpv) 的勬覆查撳抚率囧熀帧瓑浜庤棰戞簮甯х巼
+      // media_kit (mpv) 的显示帧率等于视频源帧率
       if (_state == PlayerState.playing && _fps > 0) {
         _currentFps = _fps;
       } else {
         _currentFps = 0;
       }
 
-      // 预扮畻个嬭浇閫熷害 - 鍩轰簬视嗛分嗚鲸率囧拰甯х巼
-      // media_kit 没有直接的下载速度 API，使用视频参数估算
-      if (_state == PlayerState.playing &&
-          _videoWidth > 0 &&
-          _videoHeight > 0) {
-        final pixels = _videoWidth * _videoHeight;
-        final fps = _fps > 0 ? _fps : 25.0;
-        // 预扮畻全紡锛氬儚绱犳暟 * 甯х巼 * 压嬬缉绯绘暟 (H.264/H.265 全稿瀷压嬬缉姣?
-        // 1080p@30fps 绾?3-8 Mbps, 4K@30fps 绾?15-25 Mbps
-        double compressionFactor;
-        if (pixels >= 3840 * 2160) {
-          compressionFactor = 0.04; // 4K
-        } else if (pixels >= 1920 * 1080) {
-          compressionFactor = 0.06; // 1080p
-        } else if (pixels >= 1280 * 720) {
-          compressionFactor = 0.08; // 720p
-        } else {
-          compressionFactor = 0.10; // SD
-        }
-        final estimatedBitrate =
-            pixels * fps * compressionFactor; // bits per second
-        _downloadSpeed = estimatedBitrate / 8.0; // bytes per second
+      // 实时码率 - 读取 mpv 的 video-bitrate 和 audio-bitrate 属性
+      // 单位为 bps（bits per second），转成 bytes per second 存入 _downloadSpeed
+      if (_state == PlayerState.playing) {
+        _safeGetProperty('video-bitrate', 'video-bitrate').then((v) {
+          _safeGetProperty('audio-bitrate', 'audio-bitrate').then((a) {
+            final vBps = double.tryParse(v ?? '');
+            final aBps = double.tryParse(a ?? '');
+            if (vBps != null && vBps > 0) {
+              _downloadSpeed = (vBps + (aBps ?? 0)) / 8; // bps -> bytes/s
+            } else {
+              _fallbackBitrateEstimate();
+            }
+          });
+        });
       } else {
         _downloadSpeed = 0;
       }
 
       notifyListeners();
     });
+  }
+
+  /// 备用码率估算：当 mpv 的 video-bitrate 属性不可用时，
+  /// 基于视频分辨率和帧率估算码率
+  void _fallbackBitrateEstimate() {
+    if (_videoWidth <= 0 || _videoHeight <= 0) {
+      _downloadSpeed = 0;
+      return;
+    }
+    final pixels = _videoWidth * _videoHeight;
+    final fps = _fps > 0 ? _fps : 25.0;
+    double compressionFactor;
+    if (pixels >= 3840 * 2160) {
+      compressionFactor = 0.04; // 4K
+    } else if (pixels >= 1920 * 1080) {
+      compressionFactor = 0.06; // 1080p
+    } else if (pixels >= 1280 * 720) {
+      compressionFactor = 0.08; // 720p
+    } else {
+      compressionFactor = 0.10; // SD
+    }
+    final estimatedBitrate = pixels * fps * compressionFactor; // bps
+    _downloadSpeed = estimatedBitrate / 8.0; // bytes/s
+  }
+
+  /// 从 mpv 的 audio-params/channels 布局字符串解析声道数
+  /// 例如: "stereo"→2, "5.1"→6, "7.1"→8, "mono"→1
+  int _parseChannelCount(String layout) {
+    if (layout.isEmpty) return 0;
+    // 尝试匹配 "N.M" 或 "N" 格式的数字
+    final match = RegExp(r'(\d+)').firstMatch(layout);
+    if (match != null) {
+      final count = int.tryParse(match.group(1)!);
+      if (count != null && count > 0) return count;
+    }
+    // 处理命名格式
+    switch (layout.toLowerCase()) {
+      case 'mono':
+        return 1;
+      case 'stereo':
+        return 2;
+      case 'quad':
+        return 4;
+      case 'surround':
+        return 5;
+    }
+    return 0;
   }
 
   void _updateHwdecFromLog(String lowerMessage) {
@@ -1135,9 +1289,9 @@ class PlayerProvider extends ChangeNotifier {
   Future<void> playChannel(Channel channel,
       {bool preserveCurrentSource = false}) async {
     ServiceLocator.log
-        .i('========== 开始嬫挱设鹃道==========', tag: 'PlayerProvider');
+        .i('========== 开始播放频道==========', tag: 'PlayerProvider');
     ServiceLocator.log
-        .i('棰戦亾: ${channel.name} (ID: ${channel.id})', tag: 'PlayerProvider');
+        .i('频道: ${channel.name} (ID: ${channel.id})', tag: 'PlayerProvider');
     ServiceLocator.log.d('URL: ${channel.url}', tag: 'PlayerProvider');
     ServiceLocator.log.d('源数量 ${channel.sourceCount}', tag: 'PlayerProvider');
     final playStartTime = DateTime.now();
@@ -1215,11 +1369,9 @@ class PlayerProvider extends ChangeNotifier {
         ServiceLocator.log
             .i('>>> Start initializing player', tag: 'PlayerProvider');
         final playStartTime = DateTime.now();
+        // 代际计数器已在 _resetDeinterlaceDetection() 中递增，确保旧回调不影响新流
         await _applyDeinterlaceFilter();
         await _mediaKitPlayer?.open(_createMedia(realUrl));
-
-        // 在 media 打开后应用去交错滤镜（mpv 可能在 open 时重置 deinterlace）
-        await _applyDeinterlaceFilter();
 
         final playTime =
             DateTime.now().difference(playStartTime).inMilliseconds;
@@ -1347,11 +1499,9 @@ class PlayerProvider extends ChangeNotifier {
       ServiceLocator.log
           .i('>>> Start initializing player', tag: 'PlayerProvider');
       final playStartTime = DateTime.now();
+      // 代际计数器已在 _resetDeinterlaceDetection() 中递增，确保旧回调不影响新流
       await _applyDeinterlaceFilter();
       await _mediaKitPlayer?.open(_createMedia(realUrl));
-
-      // 在 media 打开后应用去交错滤镜（mpv 可能在 open 时重置 deinterlace）
-      await _applyDeinterlaceFilter();
 
       final playTime = DateTime.now().difference(playStartTime).inMilliseconds;
       final totalTime = DateTime.now().difference(startTime).inMilliseconds;
@@ -1429,7 +1579,7 @@ class PlayerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  double _volumeBeforeMute = 1.0; // 淇濆瓨闈欓煶鍓嶇殑音抽噺
+  double _volumeBeforeMute = 1.0; // 保存静音前的音量
 
   void toggleMute() {
     if (!_isMuted) {
@@ -1578,7 +1728,7 @@ class PlayerProvider extends ChangeNotifier {
     if (_currentChannel == null) return;
 
     // 记录初始配置
-    ServiceLocator.log.d('开始嬫挱设鹃道源', tag: 'PlayerProvider');
+    ServiceLocator.log.d('开始播放频道源', tag: 'PlayerProvider');
     ServiceLocator.log.d(
         '频道: ${_currentChannel!.name}, 源索引 ${_currentChannel!.currentSourceIndex}/${_currentChannel!.sourceCount}',
         tag: 'PlayerProvider');
@@ -1637,12 +1787,9 @@ class PlayerProvider extends ChangeNotifier {
             .d('>>> 切换源: 使用播放地址: $realUrl', tag: 'PlayerProvider');
 
         final playStartTime = DateTime.now();
-        _resetDeinterlaceDetection();
+        // 代际计数器已在 _resetDeinterlaceDetection() 中递增，确保旧回调不影响新流
         await _applyDeinterlaceFilter();
         await _mediaKitPlayer?.open(_createMedia(realUrl));
-
-        // 在 media 打开后应用去交错滤镜（mpv 可能在 open 时重置参数）
-        await _applyDeinterlaceFilter();
 
         final playTime =
             DateTime.now().difference(playStartTime).inMilliseconds;
@@ -1702,7 +1849,7 @@ class PlayerProvider extends ChangeNotifier {
           _videoWidth == 0 &&
           _videoHeight == 0) {
         ServiceLocator.log
-            .w('PlayerProvider: 音抽帧変絾时犵敾闈紝宽濊瘯轨В鍥為€€', tag: 'PlayerProvider');
+            .w('PlayerProvider: 音频帧变慢时画面卡顿，尝试软件回退', tag: 'PlayerProvider');
         _attemptSoftwareFallback();
       }
     });

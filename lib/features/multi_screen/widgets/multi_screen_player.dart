@@ -802,7 +802,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                     ],
                   ),
                 ),
-                // 全ㄩ儴频道亾选夐」
+                // 全部频道选择
                 _buildCategoryItem(
                   context,
                   name: AppStrings.of(context)?.allChannels ?? 'All Channels',
@@ -832,7 +832,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
               ],
             ),
           ),
-          // 监充晶频道亾网格
+          // 监听频道网格
           Expanded(
             child: Container(
               decoration: BoxDecoration(
@@ -995,7 +995,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
             ],
           ),
         ),
-        // 频道亾网格
+        // 频道网格
         Expanded(
           child: GridView.builder(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -1060,7 +1060,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                   ),
                 ),
               ),
-              // 频道亾名嶅尯域?
+              // 频道名称区域
               Expanded(
                 flex: 1,
                 child: Container(
