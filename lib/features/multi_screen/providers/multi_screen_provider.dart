@@ -473,18 +473,11 @@ class MultiScreenProvider extends ChangeNotifier {
     }
   }
 
-  /// 应用去交错（反隔行）配置
+  /// 应用去交错（反隔行）配置（多屏版）
   ///
-  /// 决策树：
-  ///   1. 设置公共参数 video-sync / framedrop
-  ///   2. 若禁用 → 简单配置后返回
-  ///   3. 若启用 → 通过 videoParams 流监听 + 补读 interlaced 属性来判定源类型
-  ///      - 1080i 隔行 → 软件去交错（bwdif→yadif→lavfi:yadif），回退硬件去交错
-  ///      - 2160p 4K → 硬解 + HDR 处理
-  ///      - 1080p 逐行（或默认）→ 硬解，无去交错
-  ///
-  /// 注意：必须在 open() 之前调用，确保监听器在流初始化前就绪；
-  ///       open() 之后再次调用以重新设置 mpv 可能重置的公共参数。
+  /// 时序分两阶段，同步 player_provider 的逻辑：
+  ///   1. 同步阶段（open() 之前）：设 hwdec=d3d11va-copy
+  ///   2. 异步阶段（videoParams 回调）：只做增量调整，不切换 hwdec
   Future<void> _applyDeinterlaceFilter(Player player) async {
     if (!Platform.isWindows) return;
     final prefs = ServiceLocator.prefs;
@@ -492,10 +485,19 @@ class MultiScreenProvider extends ChangeNotifier {
 
     // 公共参数：所有源均使用 display-resample 同步
     await _safeSetProperty(player, 'video-sync', 'display-resample', 'video-sync');
-    await _safeSetProperty(player, 'framedrop', 'no', 'framedrop');
+    await _safeSetProperty(player, 'framedrop', 'vo', 'framedrop');
 
-    if (!enabled) {
-      // 去交错禁用：恢复用户配置的 hwdec，关闭所有去交错
+    // ═══════════════════════════════════════════════
+    // 同步阶段（open() 之前）：设置解码器启动参数
+    // ═══════════════════════════════════════════════
+    if (enabled) {
+      // 启用去交错：d3d11va-copy 是通用 safe 默认值
+      // 对隔行/逐行/4K 均有效，且是软件 vf 滤镜的前置条件
+      await _safeSetProperty(player, 'hwdec', 'd3d11va-copy', 'hwdec');
+      await _safeSetProperty(player, 'deinterlace', 'no', 'deinterlace');
+      await _safeSetProperty(player, 'vf', '', 'clear_vf');
+    } else {
+      // 禁用去交错：使用用户配置的 hwdec
       await _safeSetProperty(player, 'deinterlace', 'no', 'deinterlace');
       await _safeSetProperty(player, 'vf', '', 'clear_vf');
       await _safeSetProperty(player, 'hwdec', _getConfiguredHwdecMode(), 'hwdec');
@@ -511,7 +513,10 @@ class MultiScreenProvider extends ChangeNotifier {
     final screen = _screens.where((s) => s.player == player).firstOrNull;
     if (screen == null) return;
 
-    // 启用：仅当尚未设置监听器时设置（避免重复订阅）
+    // ═══════════════════════════════════════════════
+    // 异步阶段（open() 之后）：videoParams 流回调，增量调整
+    // ═══════════════════════════════════════════════
+    // 仅当尚未设置监听器时设置（避免重复订阅）
     if (screen.videoParamsSubscription == null) {
       screen.deinterlaceConfigured = false;
       screen.videoParamsSubscription = player.stream.videoParams.listen((params) async {
@@ -530,25 +535,44 @@ class MultiScreenProvider extends ChangeNotifier {
         final srcPrimaries = await _safeGetProperty(player, 'video-params/primaries', 'primaries');
         final sigPeak = await _safeGetProperty(player, 'video-params/sig-peak', 'sig-peak');
 
+        // 读取 codec 用于预设规则
+        final codec = await _safeGetProperty(player, 'video-params/codec', 'codec');
+
         final h = params.h ?? 0;
         final w = params.w ?? 0;
         final isInterlaced = interlaced == '1';
 
-        // 1080i 判定：高度 1080 + 显式隔行标志，或帧率 < 31 且未被显式标记为非隔行
+        // 1080i 判定：标准检测 + 帧率兜底 + 预设规则
+        // 预设规则：H.264 + 1920×1080 的直播源，中国广电通常为 1080i50
+        // 即使首帧 interlaced 字段不稳定，也能正确启用去隔行
         final is1080i = (h == 1080 && isInterlaced) ||
-                        (h == 1080 && vfFps < 31 && interlaced != '0');
-        // HDR 判定：BT.2020 色域 + PQ 伽马曲线
-        final isHDR = srcGamma == 'pq' && srcPrimaries == 'bt.2020';
+                        (h == 1080 && vfFps < 31 && interlaced != '0') ||
+                        (codec == 'h264' && h == 1080 && w == 1920);
+        // HDR 判定：BT.2020 色域 + (PQ 或 HLG 伽马曲线)
+        final isHDR = srcPrimaries == 'bt.2020' &&
+                      (srcGamma == 'pq' || srcGamma == 'hlg');
 
         // ════════════════════════════════════════════
         // 第一步：动态色彩映射 — 先判断 HDR/SDR，再决定色彩参数
         // ════════════════════════════════════════════
         if (isHDR) {
-          // 真 HDR 源：色调映射到 SDR 输出（BT.709 色域 + sRGB 伽马）
-          await _safeSetProperty(player, 'target-prim', 'bt.709', 'target-prim');
-          await _safeSetProperty(player, 'target-trc', 'srgb', 'target-trc');
-          ServiceLocator.log.i(
-              'MultiScreenProvider: HDR 源: 色调映射到 SDR (gamma=$srcGamma, primaries=$srcPrimaries, sig-peak=$sigPeak)');
+          if (srcGamma == 'hlg') {
+            // HLG 广播源：HLG 设计为兼容 SDR 显示器，75% 电平即 100% SDR 白
+            // 不干预色彩，让 mpv 走默认的 HLG→SDR 广播标准下变换
+            await _safeSetProperty(player, 'hdr-compute-peak', 'yes', 'hdr-compute-peak');
+            ServiceLocator.log.i(
+                'MultiScreenProvider: HDR 源(HLG): mpv 默认 HLG→SDR 转换 (gamma=$srcGamma, primaries=$srcPrimaries)');
+          } else {
+            // PQ/HDR10 源：主动色调映射到 SDR
+            await _safeSetProperty(player, 'target-prim', 'bt.709', 'target-prim');
+            await _safeSetProperty(player, 'target-trc', 'bt.1886', 'target-trc');
+            await _safeSetProperty(player, 'tone-mapping', 'bt.2390', 'tone-mapping');
+            await _safeSetProperty(player, 'tone-mapping-param', 'default', 'tone-mapping-param');
+            await _safeSetProperty(player, 'hdr-compute-peak', 'yes', 'hdr-compute-peak');
+            await _safeSetProperty(player, 'target-peak', '100', 'target-peak');
+            ServiceLocator.log.i(
+                'MultiScreenProvider: HDR 源(PQ/HDR10): 色调映射到 SDR (gamma=$srcGamma, primaries=$srcPrimaries, sig-peak=$sigPeak)');
+          }
         } else {
           // SDR 源（包括 4K SDR、1080p 等）：清零所有 HDR 残留参数
           await _safeSetProperty(player, 'target-prim', 'auto', 'target-prim');
@@ -559,12 +583,12 @@ class MultiScreenProvider extends ChangeNotifier {
         }
 
         // ════════════════════════════════════════════
-        // 第二步：硬件解码 + 去交错配置 — 在正确色彩空间基础上叠加
+        // 第二步：去交错增量配置 — hwdec 已固定为 d3d11va-copy，无需切换
         // ════════════════════════════════════════════
         if (is1080i && _decodingMode != 'software') {
           // 分支 A: 1080i 隔行源 → 软件去交错优先
+          // hwdec 已由同步阶段设为 d3d11va-copy，这里不再切换，避免解码器重建
           await _safeSetProperty(player, 'deinterlace', 'no', 'deinterlace');
-          await _safeSetProperty(player, 'hwdec', 'd3d11va-copy', 'hwdec');
 
           const filters = [
             'bwdif=mode=1:parity=tff',
@@ -588,6 +612,7 @@ class MultiScreenProvider extends ChangeNotifier {
           }
 
           if (workingFilter == null) {
+            // 软件滤镜全部不可用 → 切换到硬件去交错
             ServiceLocator.log.i(
                 'MultiScreenProvider: 1080i: 软件滤镜不可用，退回硬件去交错 (deinterlace=yes)');
             await _safeSetProperty(player, 'vf', '', 'clear_vf');
@@ -596,13 +621,11 @@ class MultiScreenProvider extends ChangeNotifier {
           }
         } else {
           // 分支 B: 逐行源（1080p / 2160p SDR / 2160p HDR 等）
+          // 保持 hwdec=d3d11va-copy，不切换！避免解码器重建
           await _safeSetProperty(player, 'deinterlace', 'no', 'deinterlace');
           await _safeSetProperty(player, 'vf', '', 'clear_vf');
-          if (_decodingMode != 'software') {
-            await _safeSetProperty(player, 'hwdec', _getConfiguredHwdecMode(), 'hwdec');
-          }
           final label = h > 0 ? '${h}p 逐行源' : '源（默认按逐行处理）';
-          ServiceLocator.log.i('MultiScreenProvider: $label: 硬解, 无去交错');
+          ServiceLocator.log.i('MultiScreenProvider: $label: d3d11va-copy 硬解, 无去交错');
         }
       });
     }
