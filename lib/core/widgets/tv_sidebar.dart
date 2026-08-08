@@ -5,10 +5,8 @@ import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../navigation/app_router.dart';
 import '../i18n/app_strings.dart';
-import 'tv_focusable.dart';
 import 'channel_logo_widget.dart';
 import '../../features/settings/providers/settings_provider.dart';
-import '../services/service_locator.dart';
 
 /// TV端共享侧边栏组件
 /// 失去焦点收起，获得焦点展开

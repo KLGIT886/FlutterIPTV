@@ -315,9 +315,9 @@ class _PlayerScreenState extends State<PlayerScreen>
             currentIndex >= 0 &&
             currentIndex < channels.length) {
           final channel = channels[currentIndex];
-          if (channel.id != null && channel.playlistId != null) {
+          if (channel.id != null) {
             await ServiceLocator.watchHistory
-                .addWatchHistory(channel.id!, channel.playlistId!);
+                .addWatchHistory(channel.id!, channel.playlistId);
             ServiceLocator.log.d(
                 'PlayerScreen: Recorded watch history for channel ${channel.name}');
           }
@@ -1014,9 +1014,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (currentChannel == null) return;
 
     // Store original channel if not already playing catchup
-    if (_originalChannel == null) {
-      _originalChannel = currentChannel;
-    }
+    _originalChannel ??= currentChannel;
 
     // Determine the source channel (should be the original one)
     final sourceChannel = _originalChannel!;
@@ -1312,7 +1310,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                     if (currentIndex >= 0 &&
                         _channelScrollController.hasClients) {
                       // 计算滚动位置（每个频道项高 44 像素高）
-                      final itemHeight = 44.0;
+                      const itemHeight = 44.0;
                       final scrollOffset = currentIndex * itemHeight;
 
                       _channelScrollController.animateTo(
@@ -2783,7 +2781,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                       showFocusBorder: false,
                       child: Row(
                         children: [
-                          Icon(
+                          const Icon(
                             Icons.list_alt,
                             color: Colors.white,
                             size: 20,
@@ -3039,7 +3037,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                                 if (currentIndex >= 0 &&
                                     _channelScrollController.hasClients) {
                                   // 计算滚动位置（每个频道项高 44 像素高）
-                                  final itemHeight = 44.0;
+                                  const itemHeight = 44.0;
                                   final scrollOffset =
                                       currentIndex * itemHeight;
 

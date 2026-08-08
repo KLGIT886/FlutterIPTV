@@ -339,7 +339,7 @@ class _LocalBackupSectionState extends State<LocalBackupSection> {
                       ? SizedBox(
                           width: style['iconSize'],
                           height: style['iconSize'],
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: const CircularProgressIndicator(strokeWidth: 2),
                         )
                       : Icon(Icons.refresh_rounded, size: style['iconSize']),
                   label: Text(
@@ -387,9 +387,9 @@ class _LocalBackupSectionState extends State<LocalBackupSection> {
               ),
             )
           else
-            ...provider.localBackups.asMap().entries.map((entry) => 
+            ...provider.localBackups.asMap().entries.map((entry) =>
               _buildBackupItem(context, entry.value, entry.key)
-            ).toList(),
+            ),
         ],
       ),
     );

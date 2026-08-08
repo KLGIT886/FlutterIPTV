@@ -2,6 +2,8 @@ import 'dart:ffi';
 import 'dart:io';
 import 'package:ffi/ffi.dart';
 
+import '../services/service_locator.dart';
+
 // Windows API 函数类型定义
 typedef GetForegroundWindowNative = IntPtr Function();
 typedef GetForegroundWindowDart = int Function();
@@ -110,7 +112,7 @@ class WindowsFullscreenNative {
       _initialized = true;
       return true;
     } catch (e) {
-      print('Failed to initialize Windows API: $e');
+      ServiceLocator.log.e('Failed to initialize Windows API: $e');
       return false;
     }
   }
@@ -122,7 +124,7 @@ class WindowsFullscreenNative {
       final hwnd = _getForegroundWindow!();
       return hwnd != 0 ? hwnd : null;
     } catch (e) {
-      print('Failed to get window handle: $e');
+      ServiceLocator.log.e('Failed to get window handle: $e');
       return null;
     }
   }
@@ -136,7 +138,7 @@ class WindowsFullscreenNative {
       final style = _getWindowLong!(hwnd, gwlStyle);
       return (style & wsOverlappedWindow) == 0;
     } catch (e) {
-      print('Failed to check fullscreen: $e');
+      ServiceLocator.log.e('Failed to check fullscreen: $e');
       return false;
     }
   }
@@ -183,7 +185,7 @@ class WindowsFullscreenNative {
 
       return true;
     } catch (e) {
-      print('Failed to enter fullscreen: $e');
+      ServiceLocator.log.e('Failed to enter fullscreen: $e');
       return false;
     }
   }
@@ -218,7 +220,7 @@ class WindowsFullscreenNative {
 
       return true;
     } catch (e) {
-      print('Failed to exit fullscreen: $e');
+      ServiceLocator.log.e('Failed to exit fullscreen: $e');
       return false;
     }
   }
@@ -232,7 +234,7 @@ class WindowsFullscreenNative {
         return enterFullScreen();
       }
     } catch (e) {
-      print('Failed to toggle fullscreen: $e');
+      ServiceLocator.log.e('Failed to toggle fullscreen: $e');
       return false;
     }
   }

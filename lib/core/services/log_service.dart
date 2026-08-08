@@ -255,7 +255,7 @@ class LogService {
     try {
       if (_file != null) {
         await _file!.writeAsString(
-          _logBuffer.join('\n') + '\n',
+          '${_logBuffer.join('\n')}\n',
           mode: FileMode.append,
           flush: true,
         );
@@ -420,7 +420,7 @@ class _BatchFileOutput extends LogOutput {
       // 当缓冲区达到一定大小时，批量写入
       if (logService._logBuffer.length >= LogService._bufferSize) {
         logService._file!.writeAsStringSync(
-          logService._logBuffer.join('\n') + '\n',
+          '${logService._logBuffer.join('\n')}\n',
           mode: FileMode.append,
           flush: false, // 不立即刷新，提高性能
         );

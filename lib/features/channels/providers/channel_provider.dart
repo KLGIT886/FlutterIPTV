@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import '../../../core/models/channel.dart';
 import '../../../core/models/channel_group.dart';
@@ -11,7 +10,7 @@ class ChannelProvider extends ChangeNotifier {
   List<ChannelGroup> _allGroups = [];
   
   // ✅ UI分页显示：避免一次性渲染太多台标
-  List<Channel> _displayedChannels = []; // UI显示的频道（分页累积）
+  final List<Channel> _displayedChannels = []; // UI显示的频道（分页累积）
   static const int _displayPageSize = 50; // 每次显示50个
   int _displayedCount = 0; // 已显示的数量
   
@@ -23,10 +22,8 @@ class ChannelProvider extends ChangeNotifier {
   // ✅ 分页相关（仅用于UI显示）
   bool _hasMoreToDisplay = true;
   bool _isLoadingMore = false;
-  int? _currentPlaylistId;
 
   // ✅ 台标加载控制
-  bool _isLogoLoadingPaused = false;
   int _loadingGeneration = 0;
 
   // ✅ 节流通知：防止频繁调用 notifyListeners() 阻塞主线程
@@ -133,13 +130,6 @@ class ChannelProvider extends ChangeNotifier {
     return result;
   }
 
-  // ✅ 重置UI显示状态
-  void _resetDisplay() {
-    _displayedChannels.clear();
-    _displayedCount = 0;
-    _hasMoreToDisplay = true;
-  }
-
   // ✅ 清空全局缓存（切换/刷新/删除 playlist 时调用）
   void clearCache() {
     // 1. 取消所有待通知主线程的队列
@@ -155,8 +145,7 @@ class ChannelProvider extends ChangeNotifier {
     _displayedChannels.clear();
     _displayedCount = 0;
     _hasMoreToDisplay = true;
-    _currentPlaylistId = null;
-    
+
     ServiceLocator.log.i('缓存已清空，台标加载已取消 (generation: $_loadingGeneration)', tag: 'ChannelProvider');
   }
 
@@ -170,7 +159,6 @@ class ChannelProvider extends ChangeNotifier {
     // 首次加载：清空缓存并重置状态
     ServiceLocator.log.i('加载所有频道到全局缓存: $playlistId', tag: 'ChannelProvider');
     clearCache();
-    _currentPlaylistId = playlistId;
     _isLoading = true;
     _error = null;
     _immediateNotify(); // 立即通知加载开始
@@ -610,12 +598,12 @@ class ChannelProvider extends ChangeNotifier {
 
   // ✅ 暂停台标加载（例如在快速滚动时）
   void pauseLogoLoading() {
-    _isLogoLoadingPaused = true;
+    // TODO: 实现台标加载暂停逻辑（当前为空操作，保留 API 兼容性）
   }
 
   // ✅ 恢复台标加载
   void resumeLogoLoading() {
-    _isLogoLoadingPaused = false;
+    // TODO: 实现台标加载恢复逻辑（当前为空操作，保留 API 兼容性）
   }
 
   // ✅ 清理台标加载队列（取消当前所有后台加载任务）

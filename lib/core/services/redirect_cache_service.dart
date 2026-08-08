@@ -124,7 +124,7 @@ class RedirectCacheService {
     
     // 如果当前URL已经是直接流媒体地址，不再继续重定向
     if (depth > 0 && _isDirectStreamUrl(url)) {
-      ServiceLocator.log.d('✓ 第${depth}层重定向后检测到直接流媒体URL: $url');
+      ServiceLocator.log.d('✓ 第$depth层重定向后检测到直接流媒体URL: $url');
       return url;
     }
 

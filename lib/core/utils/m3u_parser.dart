@@ -157,18 +157,18 @@ class M3UParser {
   static List<Channel> parse(String content, int playlistId,
       {String? mergeRule}) {
     // 注意：此方法可能在 isolate 中运行，不能使用 ServiceLocator.log
-    // 但我们可以使用 print 来调试（会输出到控制台）
-    print(
+    // 使用 debugPrint 来调试（isolate 安全，会输出到控制台）
+    debugPrint(
         'M3U Parser: 开始解析，播放列表ID: $playlistId, 合并规则: ${mergeRule ?? "name_group"}');
 
     final List<Channel> rawChannels = [];
     final lines = LineSplitter.split(content).toList();
     String? epgUrl;
 
-    print('M3U Parser: 内容总行数: ${lines.length}');
+    debugPrint('M3U Parser: 内容总行数: ${lines.length}');
 
     if (lines.isEmpty) {
-      print('M3U Parser: 内容为空，返回空频道列表');
+      debugPrint('M3U Parser: 内容为空，返回空频道列表');
       return rawChannels;
     }
 
@@ -176,29 +176,29 @@ class M3UParser {
     bool foundHeader = false;
     for (int i = 0; i < lines.length && i < 10; i++) {
       final line = lines[i].trim();
-      print(
+      debugPrint(
           'M3U Parser: 检查第${i + 1}行: ${line.length > 100 ? "${line.substring(0, 100)}..." : line}');
 
       if (line.startsWith(_extM3U)) {
         foundHeader = true;
-        print('M3U Parser: 找到M3U头部标记');
+        debugPrint('M3U Parser: 找到M3U头部标记');
 
         // Extract x-tvg-url from this line
         final extractedUrl = _extractEpgUrl(line);
-        print('M3U Parser: EPG URL 提取结果: ${extractedUrl ?? "(未找到)"}');
+        debugPrint('M3U Parser: EPG URL 提取结果: ${extractedUrl ?? "(未找到)"}');
 
         if (extractedUrl != null) {
           epgUrl = extractedUrl;
-          print('M3U Parser: 成功提取EPG URL: $epgUrl');
+          debugPrint('M3U Parser: 成功提取EPG URL: $epgUrl');
           break;
         }
       }
     }
 
     if (!foundHeader) {
-      print('M3U Parser: 警告 - 缺少M3U头部标记，尝试继续解析');
+      debugPrint('M3U Parser: 警告 - 缺少M3U头部标记，尝试继续解析');
     } else {
-      print('M3U Parser: M3U头部验证完成，EPG URL: ${epgUrl ?? "(未配置)"}');
+      debugPrint('M3U Parser: M3U头部验证完成，EPG URL: ${epgUrl ?? "(未配置)"}');
     }
 
     String? currentName;
@@ -272,7 +272,7 @@ class M3UParser {
     }
 
     // ServiceLocator.log.d('DEBUG: 原始解析完成 - 有效频道: $validChannelCount, 无效URL: $invalidUrlCount');
-    print(
+    debugPrint(
         'M3U Parser: 原始解析完成 - 有效频道: $validChannelCount, 无效URL: $invalidUrlCount');
 
     // Merge channels with same epgId (tvg-name) into single channel with multiple sources
@@ -280,12 +280,12 @@ class M3UParser {
         _mergeChannelSources(rawChannels, mergeRule: mergeRule);
 
     // ServiceLocator.log.d('DEBUG: 合并后频道数: ${mergedChannels.length} (原始: ${rawChannels.length})');
-    print(
+    debugPrint(
         'M3U Parser: 合并后频道数: ${mergedChannels.length} (原始: ${rawChannels.length})');
 
     // Save parse result with EPG URL
     _lastParseResult = M3UParseResult(channels: mergedChannels, epgUrl: epgUrl);
-    print('M3U Parser: 保存解析结果 - EPG URL: ${epgUrl ?? "(未配置)"}');
+    debugPrint('M3U Parser: 保存解析结果 - EPG URL: ${epgUrl ?? "(未配置)"}');
 
     return mergedChannels;
   }
@@ -358,8 +358,8 @@ class M3UParser {
   /// Extract EPG URL from M3U header line
   /// Supports: x-tvg-url="url" or url-tvg="url"
   static String? _extractEpgUrl(String headerLine) {
-    print(
-        'M3U Parser: _extractEpgUrl 输入: ${headerLine.length > 200 ? headerLine.substring(0, 200) + "..." : headerLine}');
+    debugPrint(
+        'M3U Parser: _extractEpgUrl 输入: ${headerLine.length > 200 ? '${headerLine.substring(0, 200)}...' : headerLine}');
 
     // Match x-tvg-url="..." or url-tvg="..."
     final patterns = [
@@ -372,22 +372,22 @@ class M3UParser {
     for (int i = 0; i < patterns.length; i++) {
       final pattern = patterns[i];
       final match = pattern.firstMatch(headerLine);
-      print('M3U Parser: 尝试模式 $i: ${pattern.pattern} - 匹配结果: ${match != null}');
+      debugPrint('M3U Parser: 尝试模式 $i: ${pattern.pattern} - 匹配结果: ${match != null}');
 
       if (match != null && match.groupCount >= 1) {
         final urls = match.group(1);
-        print('M3U Parser: 提取到URL字符串: $urls');
+        debugPrint('M3U Parser: 提取到URL字符串: $urls');
 
         if (urls != null && urls.isNotEmpty) {
           // If multiple URLs separated by comma, return the first one
           final firstUrl = urls.split(',').first.trim();
-          print('M3U Parser: 返回第一个URL: $firstUrl');
+          debugPrint('M3U Parser: 返回第一个URL: $firstUrl');
           return firstUrl;
         }
       }
     }
 
-    print('M3U Parser: 所有模式都未匹配到EPG URL');
+    debugPrint('M3U Parser: 所有模式都未匹配到EPG URL');
     return null;
   }
 

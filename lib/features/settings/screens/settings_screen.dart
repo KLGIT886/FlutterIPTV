@@ -729,7 +729,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => BackupScreen()),
+                    MaterialPageRoute(builder: (context) => const BackupScreen()),
                   );
                 },
               ),
@@ -2690,7 +2690,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   },
                   activeColor: AppTheme.getPrimaryColor(dialogContext),
                 );
-              }).toList(),
+              }),
             ],
           ),
         );

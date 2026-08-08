@@ -14,13 +14,13 @@ class InteractiveEpgWidget extends StatefulWidget {
   final EpgProgram? currentCatchupProgram;
 
   const InteractiveEpgWidget({
-    Key? key,
+    super.key,
     required this.channel,
     required this.onProgramSelected,
     required this.onBackToLive,
     this.isPlayingCatchup = false,
     this.currentCatchupProgram,
-  }) : super(key: key);
+  });
 
   @override
   State<InteractiveEpgWidget> createState() => _InteractiveEpgWidgetState();
@@ -379,8 +379,9 @@ class _InteractiveEpgWidgetState extends State<InteractiveEpgWidget> {
   }
 
   bool _isWithinCatchupRange(EpgProgram program) {
-    if (widget.channel.catchupDays == null)
+    if (widget.channel.catchupDays == null) {
       return true; // Default to true if not specified? Or false?
+    }
     // If catchupDays is set, check if program start is within days.
     // Assuming catchupDays means "last N days".
     final diff = DateTime.now().difference(program.start).inDays;

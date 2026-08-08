@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/i18n/app_strings.dart';
@@ -138,9 +137,9 @@ class _UserAgentDialogState extends State<UserAgentDialog> {
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 value: _selectedPreset,
-                decoration: InputDecoration(
-                  border: const OutlineInputBorder(),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
                 items: [
                   DropdownMenuItem(value: 'wget', child: Text(strings.userAgentPresetWget)),

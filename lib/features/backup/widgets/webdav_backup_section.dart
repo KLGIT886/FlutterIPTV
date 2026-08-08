@@ -330,7 +330,7 @@ class _WebDAVBackupSectionState extends State<WebDAVBackupSection> {
                                 ? SizedBox(
                                     width: style['iconSize'],
                                     height: style['iconSize'],
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: const CircularProgressIndicator(strokeWidth: 2),
                                   )
                                 : Icon(Icons.wifi_find_rounded, size: style['iconSize']),
                             label: Text(
@@ -447,7 +447,7 @@ class _WebDAVBackupSectionState extends State<WebDAVBackupSection> {
                                 ? SizedBox(
                                     width: style['iconSize'],
                                     height: style['iconSize'],
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: const CircularProgressIndicator(strokeWidth: 2),
                                   )
                                 : Icon(Icons.wifi_find_rounded, size: style['iconSize']),
                             label: Text(
@@ -516,7 +516,7 @@ class _WebDAVBackupSectionState extends State<WebDAVBackupSection> {
                       ? SizedBox(
                           width: style['iconSize'],
                           height: style['iconSize'],
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: const CircularProgressIndicator(strokeWidth: 2),
                         )
                       : Icon(Icons.refresh_rounded, size: style['iconSize']),
                   label: Text(
@@ -584,9 +584,9 @@ class _WebDAVBackupSectionState extends State<WebDAVBackupSection> {
               ),
             )
           else
-            ...provider.webdavBackups.asMap().entries.map((entry) => 
+            ...provider.localBackups.asMap().entries.map((entry) =>
               _buildBackupItem(context, entry.value, entry.key)
-            ).toList(),
+            ),
         ],
       ),
     );

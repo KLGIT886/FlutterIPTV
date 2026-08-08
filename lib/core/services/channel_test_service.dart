@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import '../models/channel.dart';
 import './service_locator.dart';
 

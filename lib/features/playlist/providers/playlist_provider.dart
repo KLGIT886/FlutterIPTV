@@ -290,9 +290,9 @@ class PlaylistProvider extends ChangeNotifier {
         }
         
         if (format == 'txt') {
-          channels = await TXTParser.parseFromUrl(url, playlistId!, mergeRule: effectiveMergeRule);
+          channels = await TXTParser.parseFromUrl(url, playlistId, mergeRule: effectiveMergeRule);
         } else {
-          channels = await M3UParser.parseFromUrl(url, playlistId!, mergeRule: effectiveMergeRule);
+          channels = await M3UParser.parseFromUrl(url, playlistId, mergeRule: effectiveMergeRule);
           epgUrl = M3UParser.lastParseResult?.epgUrl;
         }
       } else if (content != null) {
@@ -306,9 +306,9 @@ class PlaylistProvider extends ChangeNotifier {
         notifyListeners();
         
         if (format == 'txt') {
-          channels = TXTParser.parse(content, playlistId!, mergeRule: effectiveMergeRule);
+          channels = TXTParser.parse(content, playlistId, mergeRule: effectiveMergeRule);
         } else {
-          channels = M3UParser.parse(content, playlistId!, mergeRule: effectiveMergeRule);
+          channels = M3UParser.parse(content, playlistId, mergeRule: effectiveMergeRule);
           epgUrl = M3UParser.lastParseResult?.epgUrl;
         }
         
@@ -324,7 +324,7 @@ class PlaylistProvider extends ChangeNotifier {
         }
         
         // Clean up old files for this playlist before creating new one
-        await _cleanupOldPlaylistFiles(playlistDir, playlistId!);
+        await _cleanupOldPlaylistFiles(playlistDir, playlistId);
         
         final timestamp = DateTime.now().millisecondsSinceEpoch;
         // ✅ 根据检测到的格式使用正确的扩展名
@@ -353,9 +353,9 @@ class PlaylistProvider extends ChangeNotifier {
         }
         
         if (format == 'txt') {
-          channels = await TXTParser.parseFromFile(filePath, playlistId!, mergeRule: effectiveMergeRule);
+          channels = await TXTParser.parseFromFile(filePath, playlistId, mergeRule: effectiveMergeRule);
         } else {
-          channels = await M3UParser.parseFromFile(filePath, playlistId!, mergeRule: effectiveMergeRule);
+          channels = await M3UParser.parseFromFile(filePath, playlistId, mergeRule: effectiveMergeRule);
           epgUrl = M3UParser.lastParseResult?.epgUrl;
         }
       } else {
@@ -441,7 +441,7 @@ class PlaylistProvider extends ChangeNotifier {
       await loadPlaylists();
       
       // 创建备份文件（导入成功后立即创建）
-      if (playlistId != null && originalContent != null && originalContent.isNotEmpty) {
+      if (originalContent != null && originalContent.isNotEmpty) {
         try {
           final format = _detectPlaylistFormat(url ?? filePath ?? '', content: originalContent);
           await _updateBackupFile(playlistId, originalContent, format);
@@ -452,13 +452,11 @@ class PlaylistProvider extends ChangeNotifier {
       }
       
       // Run ANALYZE to update database statistics after large import
-      if (playlistId != null) {
-        try {
-          await ServiceLocator.database.db.execute('ANALYZE');
-          ServiceLocator.log.d('数据库统计信息已更新', tag: 'PlaylistProvider');
-        } catch (e) {
-          ServiceLocator.log.w('更新数据库统计信息失败: $e', tag: 'PlaylistProvider');
-        }
+      try {
+        await ServiceLocator.database.db.execute('ANALYZE');
+        ServiceLocator.log.d('数据库统计信息已更新', tag: 'PlaylistProvider');
+      } catch (e) {
+        ServiceLocator.log.w('更新数据库统计信息失败: $e', tag: 'PlaylistProvider');
       }
 
       _importProgress = 1.0;
@@ -493,7 +491,7 @@ class PlaylistProvider extends ChangeNotifier {
       
       if (tempFilePath != null) {
         try {
-          final file = File(tempFilePath!);
+          final file = File(tempFilePath);
           if (await file.exists()) {
             await file.delete();
           }
@@ -1268,9 +1266,7 @@ class PlaylistProvider extends ChangeNotifier {
       }
       
       // 如果上述方法都失败，尝试从旧的临时文件查找
-      if (sourceContent == null) {
-        sourceContent = await _tryFindOldTempFile(playlistId);
-      }
+      sourceContent ??= await _tryFindOldTempFile(playlistId);
     } catch (e) {
       ServiceLocator.log.w('获取播放列表内容失败: $e', tag: 'PlaylistProvider');
     }

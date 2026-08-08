@@ -124,9 +124,9 @@ class _ChannelItem extends StatelessWidget {
                 channels.indexWhere((c) => c.url == channel.url);
 
             // TV端原生分屏播放器也需要记录观看历史
-            if (channel.id != null && channel.playlistId != null) {
+            if (channel.id != null) {
               await ServiceLocator.watchHistory
-                  .addWatchHistory(channel.id!, channel.playlistId!);
+                  .addWatchHistory(channel.id!, channel.playlistId);
               ServiceLocator.log.d(
                   'ChannelsScreen: Recorded watch history for channel ${channel.name} (TV multi-screen)');
             }

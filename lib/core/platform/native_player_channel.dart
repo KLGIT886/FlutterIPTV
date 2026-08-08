@@ -168,14 +168,14 @@ class NativePlayerChannel {
     }
 
     final channel = channels[channelIndex];
-    if (channel.id == null || channel.playlistId == null) {
+    if (channel.id == null) {
       ServiceLocator.log.d(
-          'NativePlayerChannel: addWatchHistory - channel has no id or playlistId: ${channel.name}');
+          'NativePlayerChannel: addWatchHistory - channel has no id: ${channel.name}');
       return false;
     }
 
     try {
-      await ServiceLocator.watchHistory.addWatchHistory(channel.id!, channel.playlistId!);
+      await ServiceLocator.watchHistory.addWatchHistory(channel.id!, channel.playlistId);
       ServiceLocator.log.d(
           'NativePlayerChannel: addWatchHistory - success for channel: ${channel.name}');
       return true;

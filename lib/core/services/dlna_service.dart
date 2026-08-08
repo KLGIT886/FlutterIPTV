@@ -16,7 +16,7 @@ class DlnaService {
   static const int _ssdpPort = 1900;
 
   // 服务端口
-  int _httpPort = 8200;
+  final int _httpPort = 8200;
 
   // 设备信息
   String _deviceUuid = '';

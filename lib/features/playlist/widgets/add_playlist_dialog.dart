@@ -178,9 +178,9 @@ class _AddPlaylistDialogState extends State<AddPlaylistDialog> {
                   if (provider.isLoading)
                     Positioned.fill(
                       child: Container(
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: Colors.black54,
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
                         ),
                         child: Center(
                           child: Container(

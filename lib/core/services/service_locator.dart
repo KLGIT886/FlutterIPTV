@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
@@ -98,8 +99,8 @@ class ServiceLocator {
     try {
       await _logService.flush();
     } catch (e) {
-      // 使用 print 而不是 debugPrint，因为这是在 static 方法中
-      print('ServiceLocator: 刷新日志失败 - $e');
+      // 使用 debugPrint 而不是 ServiceLocator.log，因为在 dispose 中日志服务可能不可用
+      debugPrint('ServiceLocator: 刷新日志失败 - $e');
     }
     
     await _database.close();

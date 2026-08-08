@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import '../../../core/models/channel.dart';
 import '../../../core/services/service_locator.dart';

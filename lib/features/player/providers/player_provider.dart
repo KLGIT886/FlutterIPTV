@@ -842,9 +842,9 @@ class PlayerProvider extends ChangeNotifier {
         }
 
         // 记录错误和警告
-        if (log.level == MPVLogLevel.error) {
+        if (log.level == 'error') {
           ServiceLocator.log.e('MPV错误: ${log.text}', tag: 'PlayerProvider');
-        } else if (log.level == MPVLogLevel.warn) {
+        } else if (log.level == 'warn') {
           ServiceLocator.log.w('MPV警告: ${log.text}', tag: 'PlayerProvider');
         }
       });
@@ -990,7 +990,7 @@ class PlayerProvider extends ChangeNotifier {
       // 检测视频尺寸变化（可能表示解码成功）
       if (newWidth != _videoWidth || newHeight != _videoHeight) {
         if (newWidth > 0 && newHeight > 0) {
-          ServiceLocator.log.i('鉁?视嗛视ｇ爜鎴愬姛: ${newWidth}x${newHeight}',
+          ServiceLocator.log.i('鉁?视嗛视ｇ爜鎴愬姛: ${newWidth}x$newHeight',
               tag: 'PlayerProvider');
         } else if (_videoWidth > 0 && newWidth == 0) {
           ServiceLocator.log.w('鉁?视嗛视ｇ爜个㈠け', tag: 'PlayerProvider');
@@ -1233,7 +1233,7 @@ class PlayerProvider extends ChangeNotifier {
       // 记录观看历史
       final channelId = channel.id;
       final playlistId = channel.playlistId;
-      if (channelId != null && playlistId != null) {
+      if (channelId != null) {
         await ServiceLocator.watchHistory
             .addWatchHistory(channelId, playlistId);
       }

@@ -2,7 +2,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'color_scheme_data.dart';
 import 'color_scheme_manager.dart';
-import '../services/service_locator.dart';
 
 class AppTheme {
   // Lotus Theme - Brand Colors

@@ -115,15 +115,16 @@ class TXTParser {
   /// Merges channels with same name into single channel with multiple sources
   static List<Channel> parse(String content, int playlistId, {String? mergeRule}) {
     // 注意：此方法可能在 isolate 中运行，不能使用 ServiceLocator.log
-    print('TXT Parser: 开始解析，播放列表ID: $playlistId, 合并规则: ${mergeRule ?? "name_group"}');
+    // 使用 debugPrint 来调试（isolate 安全，会输出到控制台）
+    debugPrint('TXT Parser: 开始解析，播放列表ID: $playlistId, 合并规则: ${mergeRule ?? "name_group"}');
 
     final List<Channel> rawChannels = [];
     final lines = LineSplitter.split(content).toList();
 
-    print('TXT Parser: 内容总行数: ${lines.length}');
+    debugPrint('TXT Parser: 内容总行数: ${lines.length}');
 
     if (lines.isEmpty) {
-      print('TXT Parser: 内容为空，返回空频道列表');
+      debugPrint('TXT Parser: 内容为空，返回空频道列表');
       return rawChannels;
     }
 
@@ -163,12 +164,12 @@ class TXTParser {
       }
     }
 
-    print('TXT Parser: 原始解析完成，有效频道: ${rawChannels.length}');
+    debugPrint('TXT Parser: 原始解析完成，有效频道: ${rawChannels.length}');
 
     // Merge channels with same name into single channel with multiple sources
     final List<Channel> mergedChannels = _mergeChannelSources(rawChannels, mergeRule: mergeRule);
 
-    print('TXT Parser: 合并后频道数: ${mergedChannels.length} (原始: ${rawChannels.length})');
+    debugPrint('TXT Parser: 合并后频道数: ${mergedChannels.length} (原始: ${rawChannels.length})');
 
     return mergedChannels;
   }

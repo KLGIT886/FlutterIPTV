@@ -16,7 +16,7 @@ class BackupProvider extends ChangeNotifier {
   final RestoreService _restoreService = RestoreService();
   final WebDAVService _webdavService = WebDAVService();
 
-  bool _isLoading = false;
+  final bool _isLoading = false;
   double _progress = 0.0;
   String _progressMessage = '';
   String? _error;
