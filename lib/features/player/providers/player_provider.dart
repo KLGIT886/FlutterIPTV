@@ -407,7 +407,7 @@ class PlayerProvider extends ChangeNotifier {
     if (_audioCodec.isNotEmpty) {
       final audioPart = StringBuffer(_audioCodec);
       if (_audioChannels > 0) {
-        audioPart.write('|$_audioChannels声道');
+        audioPart.write(' | $_audioChannels声道');
       }
       parts.add(audioPart.toString());
     }
