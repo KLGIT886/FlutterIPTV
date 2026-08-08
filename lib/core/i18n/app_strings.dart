@@ -644,6 +644,39 @@ class AppStrings {
   String get deinterlaceEnabled => _localizedValues['deinterlaceEnabled']!;
   String get deinterlaceDisabled => _localizedValues['deinterlaceDisabled']!;
 
+  // 存储与缓存设置
+  String get storageCache => _localizedValues['storageCache']!;
+  String get logoCache => _localizedValues['logoCache']!;
+  String get logoCacheDesc => _localizedValues['logoCacheDesc']!;
+  String get logoCacheEnabled => _localizedValues['logoCacheEnabled']!;
+  String get logoCacheDisabled => _localizedValues['logoCacheDisabled']!;
+  String get logoCacheDays => _localizedValues['logoCacheDays']!;
+  String get logoCacheMaxObjects => _localizedValues['logoCacheMaxObjects']!;
+  String get logoCacheUsage => _localizedValues['logoCacheUsage']!;
+  String get clearLogoCache => _localizedValues['clearLogoCache']!;
+  String get clearLogoCacheDesc => _localizedValues['clearLogoCacheDesc']!;
+  String get clearLogoCacheConfirmTitle => _localizedValues['clearLogoCacheConfirmTitle']!;
+  String get clearLogoCacheConfirmDesc => _localizedValues['clearLogoCacheConfirmDesc']!;
+  String get logoCacheCleared => _localizedValues['logoCacheCleared']!;
+  String get logoCacheClearFailed => _localizedValues['logoCacheClearFailed']!;
+  String get logoCacheDaysHint1 => _localizedValues['logoCacheDaysHint1']!;
+  String get logoCacheDaysHint3 => _localizedValues['logoCacheDaysHint3']!;
+  String get logoCacheDaysHint7 => _localizedValues['logoCacheDaysHint7']!;
+  String get logoCacheDaysHint14 => _localizedValues['logoCacheDaysHint14']!;
+  String get logoCacheDaysHint30 => _localizedValues['logoCacheDaysHint30']!;
+  String get logoCacheDaysHint60 => _localizedValues['logoCacheDaysHint60']!;
+  String get logoCacheDaysHint90 => _localizedValues['logoCacheDaysHint90']!;
+  String get logoCacheHintSmall => _localizedValues['logoCacheHintSmall']!;
+  String get logoCacheHintBalanced => _localizedValues['logoCacheHintBalanced']!;
+  String get logoCacheHintLarge => _localizedValues['logoCacheHintLarge']!;
+  String get logoCacheHintXLarge => _localizedValues['logoCacheHintXLarge']!;
+  String get logoCacheHintMax => _localizedValues['logoCacheHintMax']!;
+  String get logoCacheDaysNever => _localizedValues['logoCacheDaysNever']!;
+  String get items => _localizedValues['items']!;
+  String get size => _localizedValues['size']!;
+  String get calculating => _localizedValues['calculating']!;
+  String get clear => _localizedValues['clear']!;
+
   // Map access for dynamic keys if needed
   String operator [](String key) => _localizedValues[key] ?? key;
 }
@@ -1222,6 +1255,39 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'deinterlaceDesc': '为隔行扫描源（480i/576i/1080i）应用去交错滤镜',
     'deinterlaceEnabled': '去交错已启用',
     'deinterlaceDisabled': '去交错已禁用',
+
+    // 存储与缓存设置 (中文)
+    'storageCache': '存储与缓存',
+    'logoCache': '台标图片缓存',
+    'logoCacheDesc': '将频道台标缓存到本地磁盘，减少流量消耗并加速加载',
+    'logoCacheEnabled': '台标缓存已启用',
+    'logoCacheDisabled': '台标缓存已禁用',
+    'logoCacheDays': '缓存保留时间',
+    'logoCacheMaxObjects': '最大缓存数量',
+    'logoCacheUsage': '缓存使用情况',
+    'clearLogoCache': '清空台标缓存',
+    'clearLogoCacheDesc': '删除本地磁盘上所有已缓存的台标图片',
+    'clearLogoCacheConfirmTitle': '确认清空台标缓存？',
+    'clearLogoCacheConfirmDesc': '所有已缓存的频道台标图片将被删除，下次需要时会重新从网络下载。',
+    'logoCacheCleared': '台标缓存已清空',
+    'logoCacheClearFailed': '清空台标缓存失败',
+    'logoCacheDaysHint1': '占用空间最小，每天刷新最新台标',
+    'logoCacheDaysHint3': '占用空间小，适合每周更新台标的源',
+    'logoCacheDaysHint7': '平衡方案（推荐）',
+    'logoCacheDaysHint14': '减少重复下载，占用更多空间',
+    'logoCacheDaysHint30': '每月刷新一次，缓存更大',
+    'logoCacheDaysHint60': '两月刷新，占用空间较大',
+    'logoCacheDaysHint90': '每季度刷新，最大缓存',
+    'logoCacheHintSmall': '小容量',
+    'logoCacheHintBalanced': '平衡（推荐）',
+    'logoCacheHintLarge': '大容量',
+    'logoCacheHintXLarge': '超大容量',
+    'logoCacheHintMax': '最大容量',
+    'logoCacheDaysNever': '永不失效',
+    'items': '张',
+    'size': '大小',
+    'calculating': '计算中...',
+    'clear': '清空',
   };
 
   static const Map<String, String> _enValues = {
@@ -1809,5 +1875,38 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'deinterlaceDesc': 'Apply deinterlacing filter for interlaced video (480i/576i/1080i)',
     'deinterlaceEnabled': 'Deinterlace enabled',
     'deinterlaceDisabled': 'Deinterlace disabled',
+
+    // Storage & Cache (English)
+    'storageCache': 'Storage & Cache',
+    'logoCache': 'Logo Image Cache',
+    'logoCacheDesc': 'Cache channel logos on disk to reduce data usage and speed up loading',
+    'logoCacheEnabled': 'Logo cache enabled',
+    'logoCacheDisabled': 'Logo cache disabled',
+    'logoCacheDays': 'Cache Retention',
+    'logoCacheMaxObjects': 'Max Cache Items',
+    'logoCacheUsage': 'Cache Usage',
+    'clearLogoCache': 'Clear Logo Cache',
+    'clearLogoCacheDesc': 'Delete all cached logo images from disk',
+    'clearLogoCacheConfirmTitle': 'Clear Logo Cache?',
+    'clearLogoCacheConfirmDesc': 'All cached channel logo images will be deleted. Logos will be re-downloaded the next time they are needed.',
+    'logoCacheCleared': 'Logo cache cleared',
+    'logoCacheClearFailed': 'Failed to clear logo cache',
+    'logoCacheDaysHint1': 'Minimal storage, fresh logos daily',
+    'logoCacheDaysHint3': 'Small storage, good for weekly updates',
+    'logoCacheDaysHint7': 'Balanced (recommended)',
+    'logoCacheDaysHint14': 'Less re-downloads, more storage',
+    'logoCacheDaysHint30': 'Monthly refresh, larger cache',
+    'logoCacheDaysHint60': 'Bi-monthly, large cache',
+    'logoCacheDaysHint90': 'Quarterly, maximum cache',
+    'logoCacheHintSmall': 'Small',
+    'logoCacheHintBalanced': 'Balanced (recommended)',
+    'logoCacheHintLarge': 'Large',
+    'logoCacheHintXLarge': 'Very large',
+    'logoCacheHintMax': 'Maximum',
+    'logoCacheDaysNever': 'Never expire',
+    'items': 'items',
+    'size': 'Size',
+    'calculating': 'Calculating...',
+    'clear': 'Clear',
   };
 }

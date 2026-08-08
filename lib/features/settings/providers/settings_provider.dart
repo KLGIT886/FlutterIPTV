@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/log_service.dart';
+import '../../../core/services/logo_cache_service.dart';
 
 class SettingsProvider extends ChangeNotifier {
   // Keys for SharedPreferences
@@ -70,6 +71,9 @@ class SettingsProvider extends ChangeNotifier {
       'page_transition_animation'; // 页面切换动画：fade, slide, scale, material, cupertino, none
   static const String _keyDeinterlaceEnabled =
       'deinterlace_enabled'; // 去交错（反隔行）开启
+  static const String _keyLogoCacheEnabled = 'logo_cache_enabled'; // 台标图片缓存开关
+  static const String _keyLogoCacheDays = 'logo_cache_days'; // 台标缓存保留天数
+  static const String _keyLogoCacheMaxObjects = 'logo_cache_max_objects'; // 台标最大缓存条数
 
   // Default User-Agent (same as current hardcoded value)
   static const String defaultUserAgent = 'Wget/1.21.3';
@@ -125,6 +129,9 @@ class SettingsProvider extends ChangeNotifier {
   bool _showUserAgent = false; // 是否在播放器OSD显示User-Agent - 默认不显示
   String _pageTransitionAnimation = 'fade'; // 页面切换动画
   bool _deinterlaceEnabled = true; // 去交错（反隔行）默认开启（应对480i/576i/1080i广电录屏源）
+  bool _logoCacheEnabled = true; // 台标图片缓存默认开启（减少流量消耗和加载延迟）
+  int _logoCacheDays = 7; // 台标缓存默认保留7天
+  int _logoCacheMaxObjects = 500; // 台标最大缓存500张图片（约 10-50MB）
 
   // Getters
   String get themeMode => _themeMode;
@@ -174,6 +181,9 @@ class SettingsProvider extends ChangeNotifier {
   bool get showUserAgent => _showUserAgent;
   String get pageTransitionAnimation => _pageTransitionAnimation;
   bool get deinterlaceEnabled => _deinterlaceEnabled;
+  bool get logoCacheEnabled => _logoCacheEnabled;
+  int get logoCacheDays => _logoCacheDays;
+  int get logoCacheMaxObjects => _logoCacheMaxObjects;
 
   /// 获取当前应该使用的配色方案
   String get currentColorScheme {
@@ -299,6 +309,20 @@ class SettingsProvider extends ChangeNotifier {
     // 加载去交错设置
     _deinterlaceEnabled = prefs.getBool(_keyDeinterlaceEnabled) ?? true;
 
+    // 加载台标缓存设置
+    _logoCacheEnabled = prefs.getBool(_keyLogoCacheEnabled) ?? true;
+    _logoCacheDays = prefs.getInt(_keyLogoCacheDays) ?? 7;
+    _logoCacheMaxObjects = prefs.getInt(_keyLogoCacheMaxObjects) ?? 500;
+
+    // 同步到 LogoCacheService
+    try {
+      ServiceLocator.logoCache.updateConfig(
+        stalePeriod: Duration(days: _logoCacheDays),
+        maxNrOfCacheObjects: _logoCacheMaxObjects,
+        enabled: _logoCacheEnabled,
+      );
+    } catch (_) {}
+
     // 不在构造函数中调用 notifyListeners()，避免 build 期间触发重建
   }
 
@@ -397,6 +421,9 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setString(
         _keyPageTransitionAnimation, _pageTransitionAnimation);
     await prefs.setBool(_keyDeinterlaceEnabled, _deinterlaceEnabled);
+    await prefs.setBool(_keyLogoCacheEnabled, _logoCacheEnabled);
+    await prefs.setInt(_keyLogoCacheDays, _logoCacheDays);
+    await prefs.setInt(_keyLogoCacheMaxObjects, _logoCacheMaxObjects);
   }
 
   // Setters with persistence
@@ -796,6 +823,51 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 设置台标图片缓存开关
+  Future<void> setLogoCacheEnabled(bool enabled) async {
+    ServiceLocator.log.d('SettingsProvider: 设置台标缓存开关 - $enabled');
+    _logoCacheEnabled = enabled;
+    await _saveSettings();
+    // 同步到 LogoCacheService 并重建 CacheManager
+    try {
+      await ServiceLocator.logoCache.updateConfig(enabled: enabled);
+      resetLogoCacheManager();
+    } catch (_) {}
+    notifyListeners();
+  }
+
+  /// 设置台标缓存保留天数
+  Future<void> setLogoCacheDays(int days) async {
+    // 合法值：1, 3, 7, 14, 30, 60, 90
+    const allowedDays = [1, 3, 7, 14, 30, 60, 90];
+    if (!allowedDays.contains(days)) return;
+    ServiceLocator.log.d('SettingsProvider: 设置台标缓存天数 - $days天');
+    _logoCacheDays = days;
+    await _saveSettings();
+    try {
+      await ServiceLocator.logoCache
+          .updateConfig(stalePeriod: Duration(days: days));
+      resetLogoCacheManager();
+    } catch (_) {}
+    notifyListeners();
+  }
+
+  /// 设置台标最大缓存条数
+  Future<void> setLogoCacheMaxObjects(int count) async {
+    // 合法值：200, 500, 1000, 2000, 5000
+    const allowedCounts = [200, 500, 1000, 2000, 5000];
+    if (!allowedCounts.contains(count)) return;
+    ServiceLocator.log.d('SettingsProvider: 设置台标最大缓存条数 - $count');
+    _logoCacheMaxObjects = count;
+    await _saveSettings();
+    try {
+      await ServiceLocator.logoCache
+          .updateConfig(maxNrOfCacheObjects: count);
+      resetLogoCacheManager();
+    } catch (_) {}
+    notifyListeners();
+  }
+
   // Reset all settings to defaults
   Future<void> resetSettings() async {
     _themeMode = 'dark';
@@ -835,8 +907,21 @@ class SettingsProvider extends ChangeNotifier {
     _showUserAgent = false; // 重置显示User-Agent开关为关闭
     _pageTransitionAnimation = 'fade';
     _deinterlaceEnabled = true;
+    _logoCacheEnabled = true;
+    _logoCacheDays = 7;
+    _logoCacheMaxObjects = 500;
 
     await _saveSettings();
+
+    // 重置台标缓存配置
+    try {
+      await ServiceLocator.logoCache.updateConfig(
+        stalePeriod: const Duration(days: 7),
+        maxNrOfCacheObjects: 500,
+        enabled: true,
+      );
+      resetLogoCacheManager();
+    } catch (_) {}
 
     // 重置日志级别为关闭（性能优化）
     await ServiceLocator.prefs.setString('log_level', 'off');

@@ -592,6 +592,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
             ),
 
+            // Storage & Cache Settings
+            CollapsibleSettingsSection(
+              title: AppStrings.of(context)?.storageCache ?? 'Storage & Cache',
+              icon: Icons.storage_rounded,
+              initiallyExpanded: false,
+              children: [
+                _buildSwitchTile(
+                  context,
+                  title: AppStrings.of(context)?.logoCache ?? 'Logo Image Cache',
+                  subtitle: AppStrings.of(context)?.logoCacheDesc ?? 'Cache channel logos on disk to reduce data usage and speed up loading',
+                  icon: Icons.image_rounded,
+                  value: settings.logoCacheEnabled,
+                  onChanged: (value) async {
+                    await settings.setLogoCacheEnabled(value);
+                    final strings = AppStrings.of(context);
+                    _showSuccess(
+                      context,
+                      value
+                          ? (strings?.logoCacheEnabled ?? 'Logo cache enabled')
+                          : (strings?.logoCacheDisabled ?? 'Logo cache disabled'),
+                    );
+                  },
+                ),
+                if (settings.logoCacheEnabled) ...[
+                  _buildDivider(),
+                  _buildSelectTile(
+                    context,
+                    title: AppStrings.of(context)?.logoCacheDays ?? 'Cache Retention',
+                    subtitle: _getLogoCacheDaysLabel(context, settings.logoCacheDays),
+                    icon: Icons.schedule_rounded,
+                    onTap: () => _showLogoCacheDaysDialog(context, settings),
+                  ),
+                  _buildDivider(),
+                  _buildSelectTile(
+                    context,
+                    title: AppStrings.of(context)?.logoCacheMaxObjects ?? 'Max Cache Items',
+                    subtitle: _getLogoCacheMaxObjectsLabel(context, settings.logoCacheMaxObjects),
+                    icon: Icons.inventory_2_rounded,
+                    onTap: () => _showLogoCacheMaxObjectsDialog(context, settings),
+                  ),
+                ],
+                _buildDivider(),
+                _LogoCacheInfoTile(),
+                _buildDivider(),
+                _buildActionTile(
+                  context,
+                  title: AppStrings.of(context)?.clearLogoCache ?? 'Clear Logo Cache',
+                  subtitle: AppStrings.of(context)?.clearLogoCacheDesc ?? 'Delete all cached logo images from disk',
+                  icon: Icons.delete_sweep_rounded,
+                  isDestructive: true,
+                  onTap: () async => await _clearLogoCacheAction(context),
+                ),
+              ],
+            ),
+
             // Playlist Settings
             CollapsibleSettingsSection(
               title: AppStrings.of(context)?.playlists ?? 'Playlists',
@@ -3037,6 +3092,344 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         );
       },
+    );
+  }
+
+  // =========================================
+  // Logo Cache helpers
+  // =========================================
+
+  String _getLogoCacheDaysLabel(BuildContext context, int days) {
+    final strings = AppStrings.of(context);
+    if (days <= 0) return strings?.logoCacheDaysNever ?? 'Never expire';
+    if (days == 1) return '1 ${strings?.day ?? 'day'}';
+    return '$days ${strings?.days ?? 'days'}';
+  }
+
+  String _getLogoCacheMaxObjectsLabel(BuildContext context, int count) {
+    if (count >= 1000) {
+      return '${(count / 1000).toStringAsFixed(count % 1000 == 0 ? 0 : 1)}k ${AppStrings.of(context)?.items ?? 'items'}';
+    }
+    return '$count ${AppStrings.of(context)?.items ?? 'items'}';
+  }
+
+  /// Dialog: 台标缓存保留天数
+  void _showLogoCacheDaysDialog(BuildContext context, SettingsProvider settings) {
+    final style = _getDialogStyle(context);
+    const dayOptions = [1, 3, 7, 14, 30, 60, 90];
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppTheme.getSurfaceColor(dialogContext),
+        shape: style['shape'],
+        contentPadding: style['contentPadding'],
+        titlePadding: style['titlePadding'],
+        title: Text(
+          AppStrings.of(context)?.logoCacheDays ?? 'Cache Retention',
+          style: TextStyle(fontSize: style['titleFontSize']),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: dayOptions.map((days) => RadioListTile<int>(
+              title: Text(
+                _getLogoCacheDaysLabel(context, days),
+                style: TextStyle(fontSize: style['itemFontSize']),
+              ),
+              subtitle: Text(
+                _getLogoCacheDaysHint(context, days),
+                style: TextStyle(fontSize: style['subtitleFontSize']),
+              ),
+              value: days,
+              groupValue: settings.logoCacheDays,
+              onChanged: (value) async {
+                if (value != null) {
+                  await settings.setLogoCacheDays(value);
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext);
+                    _showSuccess(
+                      context,
+                      '${AppStrings.of(context)?.logoCacheDays ?? 'Cache Retention'}: ${_getLogoCacheDaysLabel(context, value)}',
+                    );
+                  }
+                }
+              },
+              activeColor: AppTheme.getPrimaryColor(dialogContext),
+              contentPadding: style['itemPadding'],
+              visualDensity: style['visualDensity'],
+            )).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(
+              AppStrings.of(context)?.cancel ?? 'Cancel',
+              style: TextStyle(fontSize: style['itemFontSize']),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getLogoCacheDaysHint(BuildContext context, int days) {
+    final strings = AppStrings.of(context);
+    switch (days) {
+      case 1:
+        return strings?.logoCacheDaysHint1 ?? 'Minimal storage, fresh logos daily';
+      case 3:
+        return strings?.logoCacheDaysHint3 ?? 'Small storage, good for weekly updates';
+      case 14:
+        return strings?.logoCacheDaysHint14 ?? 'Less re-downloads, more storage';
+      case 30:
+        return strings?.logoCacheDaysHint30 ?? 'Monthly refresh, larger cache';
+      case 60:
+        return strings?.logoCacheDaysHint60 ?? 'Bi-monthly, large cache';
+      case 90:
+        return strings?.logoCacheDaysHint90 ?? 'Quarterly, maximum cache';
+      case 7:
+      default:
+        return strings?.logoCacheDaysHint7 ?? 'Balanced (recommended)';
+    }
+  }
+
+  /// Dialog: 最大缓存条数
+  void _showLogoCacheMaxObjectsDialog(BuildContext context, SettingsProvider settings) {
+    final style = _getDialogStyle(context);
+    const objectOptions = [200, 500, 1000, 2000, 5000];
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppTheme.getSurfaceColor(dialogContext),
+        shape: style['shape'],
+        contentPadding: style['contentPadding'],
+        titlePadding: style['titlePadding'],
+        title: Text(
+          AppStrings.of(context)?.logoCacheMaxObjects ?? 'Max Cache Items',
+          style: TextStyle(fontSize: style['titleFontSize']),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: objectOptions.map((count) => RadioListTile<int>(
+              title: Text(
+                _getLogoCacheMaxObjectsLabel(context, count),
+                style: TextStyle(fontSize: style['itemFontSize']),
+              ),
+              subtitle: Text(
+                _getLogoCacheMaxObjectsHint(context, count),
+                style: TextStyle(fontSize: style['subtitleFontSize']),
+              ),
+              value: count,
+              groupValue: settings.logoCacheMaxObjects,
+              onChanged: (value) async {
+                if (value != null) {
+                  await settings.setLogoCacheMaxObjects(value);
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext);
+                    _showSuccess(
+                      context,
+                      '${AppStrings.of(context)?.logoCacheMaxObjects ?? 'Max Cache Items'}: ${_getLogoCacheMaxObjectsLabel(context, value)}',
+                    );
+                  }
+                }
+              },
+              activeColor: AppTheme.getPrimaryColor(dialogContext),
+              contentPadding: style['itemPadding'],
+              visualDensity: style['visualDensity'],
+            )).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(
+              AppStrings.of(context)?.cancel ?? 'Cancel',
+              style: TextStyle(fontSize: style['itemFontSize']),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getLogoCacheMaxObjectsHint(BuildContext context, int count) {
+    final strings = AppStrings.of(context);
+    const estKbPerLogo = 50; // ~50KB per logo average
+    final estMb = (count * estKbPerLogo / 1024).toStringAsFixed(0);
+    switch (count) {
+      case 200:
+        return '${strings?.logoCacheHintSmall ?? 'Small'} (~${estMb}MB)';
+      case 1000:
+        return '${strings?.logoCacheHintLarge ?? 'Large'} (~${estMb}MB)';
+      case 2000:
+        return '${strings?.logoCacheHintXLarge ?? 'Very large'} (~${estMb}MB)';
+      case 5000:
+        return '${strings?.logoCacheHintMax ?? 'Maximum'} (~${estMb}MB)';
+      case 500:
+      default:
+        return '${strings?.logoCacheHintBalanced ?? 'Balanced (recommended)'} (~${estMb}MB)';
+    }
+  }
+
+  /// Action: 清空台标缓存（带确认）
+  Future<void> _clearLogoCacheAction(BuildContext context) async {
+    final strings = AppStrings.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppTheme.getSurfaceColor(dialogContext),
+        title: Text(strings?.clearLogoCacheConfirmTitle ?? 'Clear Logo Cache?'),
+        content: Text(strings?.clearLogoCacheConfirmDesc ?? 'All cached channel logo images will be deleted. Logos will be re-downloaded the next time they are needed.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(strings?.cancel ?? 'Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppTheme.errorColor),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(strings?.clear ?? 'Clear'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    try {
+      await ServiceLocator.logoCache.clearAllCache();
+      if (context.mounted) {
+        _showSuccess(context, strings?.logoCacheCleared ?? 'Logo cache cleared');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        _showError(context, '${strings?.logoCacheClearFailed ?? 'Failed to clear logo cache'}: $e');
+      }
+    }
+  }
+}
+
+/// Widget: 显示台标缓存当前使用情况（大小 + 数量）
+/// 支持点击刷新
+class _LogoCacheInfoTile extends StatefulWidget {
+  @override
+  State<_LogoCacheInfoTile> createState() => _LogoCacheInfoTileState();
+}
+
+class _LogoCacheInfoTileState extends State<_LogoCacheInfoTile> {
+  String _size = '--';
+  String _count = '--';
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    if (!mounted) return;
+    setState(() => _loading = true);
+    try {
+      // 诊断：记录缓存目录路径
+      await ServiceLocator.logoCache.logCachePaths();
+      final sizeFuture = ServiceLocator.logoCache.getCacheSizeFormatted();
+      final countFuture = ServiceLocator.logoCache.getCacheObjectCount();
+      final results = await Future.wait<Object>([sizeFuture, countFuture]);
+      if (!mounted) return;
+      setState(() {
+        _size = results[0] as String;
+        _count = '${results[1]}';
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _size = 'Err';
+        _count = '?';
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = PlatformDetector.isMobile;
+    final isLandscape = isMobile && MediaQuery.of(context).size.width > 600;
+    final strings = AppStrings.of(context);
+
+    return TVFocusable(
+      onSelect: _refresh,
+      focusScale: 1.0,
+      showFocusBorder: false,
+      builder: (context, isFocused, child) {
+        return Container(
+          decoration: BoxDecoration(
+            color: isFocused ? AppTheme.getFocusBackgroundColor(context) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: child,
+        );
+      },
+      child: InkWell(
+        onTap: _refresh,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: isLandscape ? 12 : 16,
+            vertical: isLandscape ? 8 : 14,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                _loading ? Icons.hourglass_empty_rounded : Icons.data_saver_on_rounded,
+                color: AppTheme.getPrimaryColor(context),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      strings?.logoCacheUsage ?? 'Cache Usage',
+                      style: TextStyle(
+                        color: AppTheme.getTextPrimary(context),
+                        fontSize: isLandscape ? 13 : 15,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    _loading
+                        ? Text(
+                            strings?.calculating ?? 'Calculating...',
+                            style: TextStyle(
+                              color: AppTheme.getTextMuted(context),
+                              fontSize: isLandscape ? 10 : 12,
+                            ),
+                          )
+                        : Text(
+                            '${strings?.size ?? 'Size'}: $_size  ·  ${strings?.items ?? 'Items'}: $_count',
+                            style: TextStyle(
+                              color: AppTheme.getTextMuted(context),
+                              fontSize: isLandscape ? 10 : 12,
+                            ),
+                          ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.refresh_rounded,
+                color: AppTheme.getTextMuted(context),
+                size: isLandscape ? 18 : 24,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -10,6 +10,7 @@ import 'log_service.dart';
 import 'channel_logo_service.dart';
 import 'redirect_cache_service.dart';
 import 'watch_history_service.dart';
+import 'logo_cache_service.dart';
 import '../managers/update_manager.dart';
 import '../../features/settings/providers/settings_provider.dart';
 
@@ -24,6 +25,7 @@ class ServiceLocator {
   static late ChannelLogoService _channelLogoService;
   static late RedirectCacheService _redirectCache;
   static late WatchHistoryService _watchHistory;
+  static late LogoCacheService _logoCache;
   static SettingsProvider? _settings; // Nullable because it's initialized later
 
   static SharedPreferences get prefs => _prefs;
@@ -35,6 +37,7 @@ class ServiceLocator {
   static ChannelLogoService get channelLogo => _channelLogoService;
   static RedirectCacheService get redirectCache => _redirectCache;
   static WatchHistoryService get watchHistory => _watchHistory;
+  static LogoCacheService get logoCache => _logoCache;
   static SettingsProvider? get settings => _settings;
   
   /// Check if log service is initialized
@@ -87,6 +90,18 @@ class ServiceLocator {
     
     // Initialize redirect cache service
     _redirectCache = RedirectCacheService();
+
+    // Initialize logo cache service (before SettingsProvider 因为 channel_logo_widget 可能先访问)
+    // 使用用户保存的配置（如果 prefs 中有），否则使用默认值
+    final enabled = _prefs.getBool('logo_cache_enabled') ?? LogoCacheService.defaultEnabled;
+    final days = _prefs.getInt('logo_cache_days') ?? LogoCacheService.defaultStalePeriod.inDays;
+    final maxObjects = _prefs.getInt('logo_cache_max_objects') ?? LogoCacheService.defaultMaxNrOfCacheObjects;
+    _logoCache = LogoCacheService(
+      stalePeriod: Duration(days: days),
+      maxNrOfCacheObjects: maxObjects,
+      enabled: enabled,
+    );
+    log.i('[ServiceLocator] LogoCacheService 已初始化: enabled=$enabled, $days天, max=$maxObjects');
   }
 
   /// Register settings provider (called from main.dart after SettingsProvider is created)

@@ -7,6 +7,7 @@ import 'package:http/io_client.dart' as io_client;
 import 'dart:io';
 import '../models/channel.dart';
 import '../services/service_locator.dart';
+import '../services/logo_cache_service.dart';
 import '../utils/throttled_state_mixin.dart';
 
 // ========================================
@@ -119,6 +120,9 @@ class _TimeoutHttpClient extends http.BaseClient {
 }
 
 /// Custom cache manager with short timeout for logo loading
+///
+/// 配置从 LogoCacheService 读取（用户可在设置中调整）
+/// 调用 resetLogoCacheManager() 可重建实例（使用新配置）
 class LogoCacheManager extends CacheManager {
   static const key = 'logoCache';
   static LogoCacheManager? _instance;
@@ -128,12 +132,22 @@ class LogoCacheManager extends CacheManager {
     return _instance!;
   }
 
+  /// 内部重置：清理单例，下次使用时会按最新配置重建
+  static void resetInstance() {
+    try {
+      _instance?.dispose();
+    } catch (_) {}
+    _instance = null;
+    ServiceLocator.log.i('[LogoCacheManager] 实例已重置，下次访问时重建');
+  }
+
   LogoCacheManager._()
       : super(
           Config(
             key,
-            stalePeriod: const Duration(days: 7),
-            maxNrOfCacheObjects: 500,
+            // 从 LogoCacheService 读取配置（ServiceLocator 可能尚未注册，使用默认值兜底）
+            stalePeriod: _safeReadStalePeriod(),
+            maxNrOfCacheObjects: _safeReadMaxObjects(),
             repo: JsonCacheInfoRepository(databaseName: key),
             fileService: HttpFileService(
               httpClient: _TimeoutHttpClient(
@@ -145,8 +159,43 @@ class LogoCacheManager extends CacheManager {
         ) {
     // 初始化连接池
     _HttpConnectionPool().initialize();
-    ServiceLocator.log.i('[LogoCache] 缓存管理器已初始化，使用连接池');
+    final s = _tryGetService();
+    ServiceLocator.log.i('[LogoCache] 缓存管理器已初始化 - '
+        'enabled=${s?.enabled ?? true}, '
+        'stalePeriod=${s?.stalePeriod.inDays ?? LogoCacheService.defaultStalePeriod.inDays}天, '
+        'maxObjects=${s?.maxNrOfCacheObjects ?? LogoCacheService.defaultMaxNrOfCacheObjects}');
   }
+
+  static Duration _safeReadStalePeriod() {
+    final s = _tryGetService();
+    if (s == null) return LogoCacheService.defaultStalePeriod;
+    // 禁用时：立即过期
+    if (!s.enabled) return Duration.zero;
+    return s.stalePeriod;
+  }
+
+  static int _safeReadMaxObjects() {
+    final s = _tryGetService();
+    if (s == null) return LogoCacheService.defaultMaxNrOfCacheObjects;
+    // 禁用时：只保留最少的 10 条
+    if (!s.enabled) return 10;
+    return s.maxNrOfCacheObjects;
+  }
+
+  static LogoCacheService? _tryGetService() {
+    try {
+      return ServiceLocator.logoCache;
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+// ✅ 实现 resetLogoCacheManager：覆盖 logo_cache_service.dart 中的空桩函数
+// 由于 Dart 的库级函数在同编译单元内优先，这里会 shadow 导入的 stub
+void resetLogoCacheManager() {
+  LogoCacheManager.resetInstance();
+  ServiceLocator.log.i('[LogoCache] 通过公开函数重置 LogoCacheManager 实例');
 }
 
 /// Global logo state manager to persist logo loading states across widget rebuilds
