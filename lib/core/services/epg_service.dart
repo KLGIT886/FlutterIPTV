@@ -64,8 +64,10 @@ class EpgService {
   // 频道名称映射 (用于匹配)
   final Map<String, String> _channelNames = {};
 
-  // 频道名称索引 (normalizedName -> channelId) 用于快速查找
-  final Map<String, String> _nameIndex = {};
+  // 频道名称索引 (normalizedName -> channelId 候选列表) 用于快速查找
+  // 同一显示名可能对应多个频道 id（如"湖南卫视"=HUNANSTV 与 HUNANWEISHI50P），
+  // 用列表保存全部候选，避免被后解析的重复频道覆盖。
+  final Map<String, List<String>> _nameIndex = {};
 
   // EPG 查询缓存 (channelKey -> channelId)
   final Map<String, String?> _lookupCache = {};
@@ -119,9 +121,6 @@ class EpgService {
     final endOfDay = startOfDay.add(const Duration(days: 1));
 
     return programs.where((p) {
-      // Include programs that start today
-      // OR programs that are currently running (start < endOfDay AND end > startOfDay)
-      // Actually simpler: Overlap logic
       // Program interval: [start, end]
       // Day interval: [startOfDay, endOfDay]
       // Overlap if start < endOfDay AND end > startOfDay
@@ -133,13 +132,30 @@ class EpgService {
     // 生成缓存 key
     final cacheKey = '${channelId ?? ''}_${channelName ?? ''}';
 
-    // 检查缓存
+    // 诊断：湖南卫视匹配过程
+    // if (channelName != null && channelName.contains('湖南')) {
+    //   final normKey = _normalizeName('HUNANSTV');
+    //   ServiceLocator.log.d(
+    //       '_findPrograms 输入: channelId=$channelId, channelName=$channelName');
+    //   ServiceLocator.log.d(
+    //       '  _nameIndex 含"湖南卫视"=${_nameIndex.containsKey(_normalizeName('湖南卫视'))}, '
+    //       '含"HUNANSTV"=${_nameIndex.containsKey(normKey)}');
+    //   ServiceLocator.log.d(
+    //       '  _programs 含"HUNANSTV"=${_programs.containsKey(normKey)}, '
+    //       '_nameIndex大小=${_nameIndex.length}, _programs大小=${_programs.length}');
+    //   ServiceLocator.log.d(
+    //       '  normalize(湖南卫视)=${_normalizeName('湖南卫视')}, _nameIndex[湖南卫视]=${_nameIndex[_normalizeName('湖南卫视')]}');
+    // }
+
+    // 检查缓存（仅缓存"命中"的映射，不缓存"未找到"的 null 结果）。
+    // 原实现把 null 缓存进 _lookupCache，导致 EPG 数据加载完成前被查询过的
+    // 频道，在数据就绪后仍被旧的空缓存锁死，一直显示"暂无节目单"。
     if (_lookupCache.containsKey(cacheKey)) {
       final cachedId = _lookupCache[cacheKey];
       if (cachedId != null && _programs.containsKey(cachedId)) {
         return _programs[cachedId];
       }
-      return null;
+      // 命中缓存但 id 已失效（数据被替换），当作未命中重新匹配
     }
 
     // 先用 channelId 查找
@@ -155,24 +171,36 @@ class EpgService {
       final normalizedName = _normalizeName(channelName);
 
       if (_nameIndex.containsKey(normalizedName)) {
-        final foundId = _nameIndex[normalizedName]!;
-        _lookupCache[cacheKey] = foundId;
-        return _programs[foundId];
+        // 同一显示名可能映射到多个频道 id（如"湖南卫视"=HUNANSTV 与
+        // HUNANWEISHI50P），遍历候选，优先返回真正有节目数据的那个。
+        for (final foundId in _nameIndex[normalizedName]!) {
+          final list = _programs[foundId];
+          if (list != null && list.isNotEmpty) {
+            _lookupCache[cacheKey] = foundId;
+            return list;
+          }
+        }
+        // 所有候选均无节目数据，返回 null（不缓存，数据就绪后可重新命中）
+        return null;
       }
 
       // 尝试用 channelId 作为名称查找
       if (channelId != null && channelId.isNotEmpty) {
         final normalizedId = _normalizeName(channelId);
         if (_nameIndex.containsKey(normalizedId)) {
-          final foundId = _nameIndex[normalizedId]!;
-          _lookupCache[cacheKey] = foundId;
-          return _programs[foundId];
+          for (final foundId in _nameIndex[normalizedId]!) {
+            final list = _programs[foundId];
+            if (list != null && list.isNotEmpty) {
+              _lookupCache[cacheKey] = foundId;
+              return list;
+            }
+          }
+          return null;
         }
       }
     }
 
-    // 缓存未找到的结果
-    _lookupCache[cacheKey] = null;
+    // 未匹配：不缓存 null 结果，数据就绪后重新查询即可命中
     return null;
   }
 
@@ -250,21 +278,47 @@ class EpgService {
       final result = await compute(_parseXmlTvInBackground, computeData);
 
       if (result != null) {
-        // Use scheduleMicrotask to ensure we're on the main thread
-        scheduleMicrotask(() {
-          _programs.clear();
-          _channelNames.clear();
-          _nameIndex.clear();
-          _lookupCache.clear();
+        // compute 返回后已回到主 isolate，直接同步应用数据。
+        // 不能用 scheduleMicrotask 异步写入：否则 loadFromUrl 返回 true 时
+        // 数据尚未就绪，调用方随后查询会拿到空数据（节目单看似加载不全）。
+        // 先清空查询缓存，避免用旧数据的频道 id 映射去匹配新数据。
+        _lookupCache.clear();
+        _programs.clear();
+        _channelNames.clear();
+        _nameIndex.clear();
 
-          _programs.addAll(result['programs'] as Map<String, List<EpgProgram>>);
-          _channelNames.addAll(result['channelNames'] as Map<String, String>);
-          _nameIndex.addAll(result['nameIndex'] as Map<String, String>);
+        _programs.addAll(result['programs'] as Map<String, List<EpgProgram>>);
+        _channelNames.addAll(result['channelNames'] as Map<String, String>);
+        _nameIndex.addAll(result['nameIndex'] as Map<String, List<String>>);
 
-          _lastUpdate = DateTime.now();
-          ServiceLocator.log.d(
-              'EPG: Loaded ${_programs.length} channels, ${_programs.values.fold(0, (sum, list) => sum + list.length)} programs');
-        });
+        _lastUpdate = DateTime.now();
+        ServiceLocator.log.d(
+            'EPG: Loaded ${_programs.length} channels, ${_programs.values.fold(0, (sum, list) => sum + list.length)} programs');
+
+        // 诊断日志：打印湖南卫视等频道的节目数与日期范围，定位"节目单被截断"
+        // for (final id in const ['hunanstv', 'HUNANSTV', 'jiangxistv']) {
+        //   final list = _programs[id];
+        //   if (list == null || list.isEmpty) continue;
+        //   final minStart = list
+        //       .map((p) => p.start)
+        //       .reduce((a, b) => a.isBefore(b) ? a : b);
+        //   final maxEnd = list
+        //       .map((p) => p.end)
+        //       .reduce((a, b) => a.isAfter(b) ? a : b);
+        //   ServiceLocator.log.d(
+        //       'EPG诊断: id=$id 共${list.length}条, 最早=$minStart, 最晚=$maxEnd');
+        //   // 按天分布（programme 开始日期）
+        //   final byDay = <String, int>{};
+        //   for (final p in list) {
+        //     final d = p.start;
+        //     final key = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+        //     byDay[key] = (byDay[key] ?? 0) + 1;
+        //   }
+        //   final sorted = byDay.entries.toList()
+        //     ..sort((a, b) => a.key.compareTo(b.key));
+        //   ServiceLocator.log.d(
+        //       'EPG诊断: id=$id 按天分布: ${sorted.map((e) => '${e.key}=${e.value}').join(', ')}');
+        // }
         return true;
       }
       return false;
@@ -297,12 +351,18 @@ class EpgService {
 
       final programs = <String, List<EpgProgram>>{};
       final channelNames = <String, String>{};
-      final nameIndex = <String, String>{};
+      final nameIndex = <String, List<String>>{};
 
       // 解析频道
       for (final channel in tv.findElements('channel')) {
         final id = channel.getAttribute('id');
         if (id == null) continue;
+
+        // 统一规范化频道 id，保证与 <programme channel="..."> 的 key 一致。
+        // 某些 EPG 源中 <channel id="HUNANSTV"> 与 <programme channel="hunanstv">
+        // 大小写不一致，若不做规范化，nameIndex 指向的 id 在 _programs 中找不到，
+        // 导致该频道节目单一直返回 0 条。
+        final normId = _normalizeNameStatic(id);
 
         // 支持两种格式：
         // 1. <channel id="11"><display-name>CCTV1</display-name></channel>
@@ -312,9 +372,13 @@ class EpgService {
         displayName ??= channel.getAttribute('display-name');
 
         if (displayName != null) {
-          channelNames[id] = displayName;
-          nameIndex[_normalizeNameStatic(displayName)] = id;
-          nameIndex[_normalizeNameStatic(id)] = id;
+          channelNames[normId] = displayName;
+          // 同一显示名可能对应多个频道 id，全部加入候选列表
+          final nameKey = _normalizeNameStatic(displayName);
+          nameIndex.putIfAbsent(nameKey, () => <String>[]).add(normId);
+          if (nameKey != normId) {
+            nameIndex.putIfAbsent(normId, () => <String>[]).add(normId);
+          }
         }
       }
 
@@ -323,11 +387,16 @@ class EpgService {
       programmes.addAll(tv.findElements('program'));
 
       for (final programme in programmes) {
-        final channelId = programme.getAttribute('channel');
+        final rawChannelId = programme.getAttribute('channel');
         final startStr = programme.getAttribute('start');
         final stopStr = programme.getAttribute('stop');
 
-        if (channelId == null || startStr == null || stopStr == null) continue;
+        if (rawChannelId == null || startStr == null || stopStr == null) {
+          continue;
+        }
+
+        // 与 <channel id> 使用相同的规范化，解决大小写不一致导致的匹配失败
+        final channelId = _normalizeNameStatic(rawChannelId);
 
         final start = _parseDateTimeStatic(startStr);
         final end = _parseDateTimeStatic(stopStr);

@@ -336,25 +336,47 @@ class LogService {
   }
 
   /// 清空所有日志
-  Future<void> clearLogs() async {
+  /// 返回是否真正删除成功。删除前先清空待写入缓冲区并释放对日志文件的引用，
+  /// 避免 Windows 上删除活动日志文件时因瞬时占用而失败（否则需多次点击才生效）。
+  Future<bool> clearLogs() async {
     try {
+      // 先清空待写入缓冲区，避免残留日志在重新初始化后被重新写回
+      _logBuffer.clear();
+      _lastFlushTime = null;
+
+      // 释放对日志文件的引用并重建 logger，避免删除时被占用
+      _logger = null;
+      _file = null;
+
       final logDir = await getLogDirectory();
-      if (logDir == null || !await logDir.exists()) return;
+      if (logDir == null || !await logDir.exists()) return false;
 
       final files = await logDir.list().toList();
+      var allDeleted = true;
       for (final file in files) {
-        if (file is File && file.path.endsWith('.log')) {
-          await file.delete();
+        if (file is! File || !file.path.endsWith('.log')) continue;
+        var deleted = false;
+        // 删除带重试，应对 Windows 上短暂的句柄占用
+        for (int attempt = 0; attempt < 3 && !deleted; attempt++) {
+          try {
+            await file.delete();
+            deleted = true;
+          } catch (_) {
+            await Future.delayed(const Duration(milliseconds: 100));
+          }
         }
+        if (!deleted) allDeleted = false;
       }
 
       debugPrint('LogService: 已清空所有日志');
-      
+
       // 重新初始化以创建新日志文件
       _initialized = false;
       await init();
+      return allDeleted;
     } catch (e) {
       debugPrint('LogService: 清空日志失败 - $e');
+      return false;
     }
   }
 }

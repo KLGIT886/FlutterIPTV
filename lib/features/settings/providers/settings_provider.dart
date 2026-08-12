@@ -3,6 +3,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/log_service.dart';
 import '../../../core/services/logo_cache_service.dart';
+import '../../../core/services/local_server_service.dart';
 
 class SettingsProvider extends ChangeNotifier {
   // Keys for SharedPreferences
@@ -74,6 +75,7 @@ class SettingsProvider extends ChangeNotifier {
   static const String _keyLogoCacheEnabled = 'logo_cache_enabled'; // 台标图片缓存开关
   static const String _keyLogoCacheDays = 'logo_cache_days'; // 台标缓存保留天数
   static const String _keyLogoCacheMaxObjects = 'logo_cache_max_objects'; // 台标最大缓存条数
+  static const String _keyWebLogEnabled = 'web_log_enabled'; // 网页日志开关
 
   // Default User-Agent (same as current hardcoded value)
   static const String defaultUserAgent = 'Wget/1.21.3';
@@ -132,6 +134,7 @@ class SettingsProvider extends ChangeNotifier {
   bool _logoCacheEnabled = true; // 台标图片缓存默认开启（减少流量消耗和加载延迟）
   int _logoCacheDays = 7; // 台标缓存默认保留7天
   int _logoCacheMaxObjects = 500; // 台标最大缓存500张图片（约 10-50MB）
+  bool _webLogEnabled = false; // 网页日志服务开关 - 默认关闭
 
   // Getters
   String get themeMode => _themeMode;
@@ -184,6 +187,7 @@ class SettingsProvider extends ChangeNotifier {
   bool get logoCacheEnabled => _logoCacheEnabled;
   int get logoCacheDays => _logoCacheDays;
   int get logoCacheMaxObjects => _logoCacheMaxObjects;
+  bool get webLogEnabled => _webLogEnabled;
 
   /// 获取当前应该使用的配色方案
   String get currentColorScheme {
@@ -314,6 +318,9 @@ class SettingsProvider extends ChangeNotifier {
     _logoCacheDays = prefs.getInt(_keyLogoCacheDays) ?? 7;
     _logoCacheMaxObjects = prefs.getInt(_keyLogoCacheMaxObjects) ?? 500;
 
+    // 加载网页日志设置
+    _webLogEnabled = prefs.getBool(_keyWebLogEnabled) ?? false;
+
     // 同步到 LogoCacheService
     try {
       ServiceLocator.logoCache.updateConfig(
@@ -322,6 +329,13 @@ class SettingsProvider extends ChangeNotifier {
         enabled: _logoCacheEnabled,
       );
     } catch (_) {}
+
+    // 若网页日志开关已开启，应用启动后自动拉起本地日志服务
+    if (_webLogEnabled) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _applyWebLogServer(true);
+      });
+    }
 
     // 不在构造函数中调用 notifyListeners()，避免 build 期间触发重建
   }
@@ -424,6 +438,7 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setBool(_keyLogoCacheEnabled, _logoCacheEnabled);
     await prefs.setInt(_keyLogoCacheDays, _logoCacheDays);
     await prefs.setInt(_keyLogoCacheMaxObjects, _logoCacheMaxObjects);
+    await prefs.setBool(_keyWebLogEnabled, _webLogEnabled);
   }
 
   // Setters with persistence
@@ -868,6 +883,55 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 设置网页日志服务开关
+  Future<void> setWebLogEnabled(bool enabled) async {
+    ServiceLocator.log.d('SettingsProvider: 设置网页日志 - $enabled');
+    _webLogEnabled = enabled;
+    await _saveSettings();
+    _applyWebLogServer(enabled);
+    notifyListeners();
+  }
+
+  /// 根据开关状态启停本地日志服务器（网页日志）
+  void _applyWebLogServer(bool enabled) {
+    final server = LocalServerService();
+    if (enabled) {
+      // 设置动态日志提供者，使 /logs 每次请求实时读取最新日志
+      server.logContentProvider = _buildWebLogContent;
+      server.start().then((ok) {
+        if (!ok) {
+          ServiceLocator.log
+              .w('网页日志服务器启动失败: ${server.lastError}', tag: 'WebLog');
+        }
+      });
+    } else {
+      server.logContentProvider = null;
+      server.stop();
+    }
+  }
+
+  /// 生成网页日志内容（合并当前所有日志文件）
+  Future<String> _buildWebLogContent() async {
+    try {
+      await ServiceLocator.log.flush();
+      final files = await ServiceLocator.log.getLogFiles();
+      if (files.isEmpty) return '没有可用的日志内容';
+
+      final buffer = StringBuffer();
+      buffer.writeln('========================================');
+      buffer.writeln('Lotus IPTV 实时日志 (${DateTime.now()})');
+      buffer.writeln('========================================\n');
+      for (final file in files) {
+        buffer.writeln(
+            '\n========== ${file.path.split('/').last.split('\\').last} ==========\n');
+        buffer.writeln(await file.readAsString());
+      }
+      return buffer.toString();
+    } catch (e) {
+      return '读取日志失败: $e';
+    }
+  }
+
   // Reset all settings to defaults
   Future<void> resetSettings() async {
     _themeMode = 'dark';
@@ -910,6 +974,8 @@ class SettingsProvider extends ChangeNotifier {
     _logoCacheEnabled = true;
     _logoCacheDays = 7;
     _logoCacheMaxObjects = 500;
+    _webLogEnabled = false;
+    _applyWebLogServer(false); // 停止网页日志服务
 
     await _saveSettings();
 

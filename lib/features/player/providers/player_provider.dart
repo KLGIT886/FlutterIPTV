@@ -553,7 +553,7 @@ class PlayerProvider extends ChangeNotifier {
     _configuredHwdec = hwdecMode ?? 'default';
     ServiceLocator.log.i('硬件解码模式: ${hwdecMode ?? "默认"}', tag: 'PlayerProvider');
     ServiceLocator.log
-        .i('确欢加犻€? ${!effectiveSoftware}', tag: 'PlayerProvider');
+        .i('硬件加速: ${!effectiveSoftware}', tag: 'PlayerProvider');
 
     VideoControllerConfiguration config = VideoControllerConfiguration(
       hwdec: hwdecMode,
@@ -894,49 +894,33 @@ class PlayerProvider extends ChangeNotifier {
         ServiceLocator.log.d('MPV log: ${log.text}', tag: 'PlayerProvider');
       }
 
-        // // 检测并记录解码信息
-        if (message.contains('using hardware decoding') ||
-            message.contains('hwdec') ||
-            message.contains('d3d11va') ||
-            message.contains('nvdec') ||
-            message.contains('dxva2') ||
-            message.contains('qsv')) {
-          ServiceLocator.log.i('使用硬件解码: ${log.text}', tag: 'PlayerProvider');
-          _updateHwdecFromLog(message);
+        // 检测并记录解码信息：统一使用 [Decoder] 前缀，精确解析实际解码器。
+      // 之前用多个互斥 if 分支按关键字模糊匹配（hwdec→"硬件解码"、d3d11→
+      // "软件解码"等），同一条 MPV 日志常命中多个分支，被重复打上互相矛盾的
+      // 标签（如 "使用硬件解码" 与 "使用软件解码" 同时出现），严重误导排查。
+      // 现在只在实际解码器/输出驱动变化时记录一条统一标签的日志。
+      if (message.contains('using hardware decoding') ||
+          message.contains('software decoding') ||
+          message.contains('hwdec') ||
+          message.contains('video output driver') ||
+          message.contains('vo:')) {
+        final hwdecBefore = _hwdecMode;
+        final voBefore = _vo;
+        _updateHwdecFromLog(message);
+        _updateVoFromLog(message);
+        if (_hwdecMode != hwdecBefore || _vo != voBefore) {
+          ServiceLocator.log.i(
+              '[Decoder] hwdec: $_hwdecMode, vo: $_vo (${log.text})',
+              tag: 'PlayerProvider');
         }
+      }
 
-        // // 检测到 GPU 解码
-        if (message.contains('gpu') ||
-            message.contains('nvidia') ||
-            message.contains('intel') ||
-            message.contains('amd') ||
-            message.contains('adapter') ||
-            message.contains('device')) {
-          ServiceLocator.log.i('使用 GPU 解码: ${log.text}', tag: 'PlayerProvider');
-        }
-
-        // // 检测到软件解码
-        if (message.contains('vo/gpu') ||
-            message.contains('opengl') ||
-            message.contains('d3d11') ||
-            message.contains('vulkan') ||
-            message.contains('video output') ||
-            message.contains('vo:')) {
-          ServiceLocator.log.i('使用软件解码 ${log.text}', tag: 'PlayerProvider');
-          _updateVoFromLog(message);
-        }
-
-        // // 检测到解码选项
-        if (message.contains('decoder') || message.contains('codec')) {
-          ServiceLocator.log.d('检测解码方式 ${log.text}', tag: 'PlayerProvider');
-        }
-
-        // 记录错误和警告
-        if (log.level == 'error') {
-          ServiceLocator.log.e('MPV错误: ${log.text}', tag: 'PlayerProvider');
-        } else if (log.level == 'warn') {
-          ServiceLocator.log.w('MPV警告: ${log.text}', tag: 'PlayerProvider');
-        }
+      // 记录错误和警告
+      if (log.level == 'error') {
+        ServiceLocator.log.e('MPV错误: ${log.text}', tag: 'PlayerProvider');
+      } else if (log.level == 'warn') {
+        ServiceLocator.log.w('MPV警告: ${log.text}', tag: 'PlayerProvider');
+      }
       });
 
     _mediaKitPlayer!.stream.playing.listen((playing) {
@@ -984,7 +968,7 @@ class PlayerProvider extends ChangeNotifier {
 
     _mediaKitPlayer!.stream.tracks.listen((tracks) {
       ServiceLocator.log.d(
-          '轨道信息更新: 视频轨?${tracks.video.length}, 音频轨?${tracks.audio.length}',
+          '轨道信息更新: 视频轨:${tracks.video.length}, 音频轨:${tracks.audio.length}',
           tag: 'PlayerProvider');
 
       for (final track in tracks.video) {

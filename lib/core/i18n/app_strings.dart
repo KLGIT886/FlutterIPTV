@@ -500,6 +500,12 @@ class AppStrings {
   String get clearLogsConfirm => _localizedValues['clearLogsConfirm']!;
   String get clearLogsConfirmMessage =>
       _localizedValues['clearLogsConfirmMessage']!;
+  String get webLogEnabledTitle => _localizedValues['webLogEnabledTitle']!;
+  String get webLogEnabledSubtitleOn =>
+      _localizedValues['webLogEnabledSubtitleOn']!;
+  String get webLogEnabledSubtitleOff =>
+      _localizedValues['webLogEnabledSubtitleOff']!;
+  String get webLogEnabledMsg => _localizedValues['webLogEnabledMsg']!;
   String get bufferSizeNotImplemented =>
       _localizedValues['bufferSizeNotImplemented']!;
   String get volumeBoostSet => _localizedValues['volumeBoostSet']!;
@@ -1222,6 +1228,10 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'logsCleared': '日志已清空',
     'clearLogsConfirm': '清空日志',
     'clearLogsConfirmMessage': '确定要删除所有日志文件吗？',
+    'webLogEnabledTitle': '网页日志',
+    'webLogEnabledSubtitleOn': '已启用，浏览器访问 {logsUrl} 实时查看',
+    'webLogEnabledSubtitleOff': '开启后可通过浏览器实时查看日志',
+    'webLogEnabledMsg': '网页日志已开启: {logsUrl}',
     'errorTimeout': '连接超时，请检查网络或链接',
     'errorNetwork': '网络连接失败，请检查网络',
     'usingCachedSource': '远程源不可用，使用缓存源',
@@ -1842,6 +1852,10 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'logsCleared': 'Logs cleared',
     'clearLogsConfirm': 'Clear Logs',
     'clearLogsConfirmMessage': 'Are you sure you want to delete all log files?',
+    'webLogEnabledTitle': 'Web Log',
+    'webLogEnabledSubtitleOn': 'Enabled. Open {logsUrl} in a browser to view live logs',
+    'webLogEnabledSubtitleOff': 'View logs in a browser in real-time',
+    'webLogEnabledMsg': 'Web log enabled: {logsUrl}',
     'errorTimeout': 'Connection timeout, please check network or URL',
     'errorNetwork': 'Network connection failed, please check network',
     'usingCachedSource': 'Remote source unavailable, using cached source',

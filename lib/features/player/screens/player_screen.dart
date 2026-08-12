@@ -87,6 +87,11 @@ class _PlayerScreenState extends State<PlayerScreen>
   bool _errorShown = false;
   Timer? _errorHideTimer; // 错误提示自动隐藏定时器
 
+  // 提前保存 ScaffoldMessengerState 引用，供 dispose 中安全清除 SnackBar。
+  // dispose() 阶段 element 已从树中移除，此时调用 ScaffoldMessenger.of(context)
+  // 会触发 "Looking up a deactivated widget's ancestor is unsafe" 错误。
+  ScaffoldMessengerState? _scaffoldMessenger;
+
   // Windows 全屏状态
   bool _isFullScreen = false;
   DateTime? _lastFullScreenToggle; // 记录上次切换时间
@@ -145,6 +150,9 @@ class _PlayerScreenState extends State<PlayerScreen>
       _playerProvider = context.read<PlayerProvider>();
       _playerProvider!.addListener(_onProviderUpdate);
       _isLoading = _playerProvider!.isLoading;
+
+      // 提前保存 ScaffoldMessengerState，供 dispose 中安全清除 SnackBar
+      _scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
 
       // 保存 settings 和 multi-screen provider 引用（用于 dispose 时保存状态）
       _settingsProvider = context.read<SettingsProvider>();
@@ -607,8 +615,10 @@ class _PlayerScreenState extends State<PlayerScreen>
     _errorShown = false;
 
     // 立即清除所有 SnackBar（包括错误提示）
+    // 使用 didChangeDependencies 中提前保存的引用，避免在 dispose 阶段
+    // 调用 ScaffoldMessenger.of(context) 触发 deactivated ancestor 错误。
     try {
-      ScaffoldMessenger.of(context).clearSnackBars();
+      _scaffoldMessenger?.clearSnackBars();
     } catch (e) {
       ServiceLocator.log
           .d('PlayerScreen: Error clearing SnackBars in dispose: $e');
@@ -1653,7 +1663,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                       ),
                     ),
 
-                  // FPS 显示 - 只充笂视掔孩鑹诧紙杩蜂綘模式紡启曠嫭显示锛?
+                  // FPS 显示 - 仅在遥控模式单独显示
                   Builder(
                     builder: (context) {
                       final settings = context.watch<SettingsProvider>();
@@ -1726,7 +1736,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // 缃戦€熸樉绀?- 已胯壊 (浠?TV 绔樉绀猴紝Windows 绔笉显示)
+                              // 网速显示（仅TV端显示，Windows端不显示）
                               if (settings.showNetworkSpeed &&
                                   player.downloadSpeed > 0 &&
                                   PlatformDetector.isTV)
@@ -2036,7 +2046,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
   }
 
-  // 杩蜂綘模式紡个嬬殑绠€鍖栨帶切?
+  // 遥控器模式的简化控制
   Widget _buildMiniControlsOverlay() {
     return GestureDetector(
       // 整个区域可拖动
@@ -2531,7 +2541,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                 size: 18,
               ),
             ),
-            // 缃《按挳 - 浠呭湪杩蜂綘模式紡个嬫樉绀?
+            // 图钉按钮 - 仅在遥控模式显示
             if (isInPip) ...[
               const SizedBox(width: 8),
               TVFocusable(
@@ -3208,7 +3218,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   void _toggleFullScreen() {
     if (!PlatformDetector.isWindows) return;
 
-    // 绠€启曠殑闃叉姈
+    // 简单的防抖
     final now = DateTime.now();
     if (_lastFullScreenToggle != null &&
         now.difference(_lastFullScreenToggle!).inMilliseconds < 200) {

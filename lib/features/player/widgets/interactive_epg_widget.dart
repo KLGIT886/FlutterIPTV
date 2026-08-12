@@ -177,6 +177,13 @@ class _InteractiveEpgWidgetState extends State<InteractiveEpgWidget> {
                       _selectedDate,
                     );
 
+                    // 诊断日志：打印实际返回条数与首末节目，定位"节目单被截断"
+                    // ServiceLocator.log.d(
+                    //     'EPG诊断 InteractiveEpgWidget: ${widget.channel.name} '
+                    //     '(epgId=${widget.channel.epgId}) 查询日=$_selectedDate '
+                    //     '返回${programs.length}条'
+                    //     '${programs.isNotEmpty ? ', 首=${programs.first.title}@${programs.first.start}, 末=${programs.last.title}@${programs.last.end}' : ''}');
+
                     if (programs.isEmpty) {
                       return const Center(
                         child: Text(

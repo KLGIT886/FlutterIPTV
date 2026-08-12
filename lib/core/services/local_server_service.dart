@@ -26,11 +26,16 @@ class LocalServerService {
   // Log content for viewing
   String? _logContent;
 
+  /// 动态日志内容提供者。若设置，则每次访问 /logs 都会实时读取最新日志；
+  /// 若不设置，则使用 [setLogContent] 设置的静态快照。
+  Future<String> Function()? logContentProvider;
+
   bool get isRunning => _server != null;
   String get serverUrl => 'http://$_localIp:$_port';
   String get importUrl => 'http://$_localIp:$_port/import';
   String get searchUrl => 'http://$_localIp:$_port/search';
   String get userAgentUrl => 'http://$_localIp:$_port/user-agent';
+  String get logsUrl => 'http://$_localIp:$_port/logs';
   String? get localIp => _localIp;
   int get port => _port;
 
@@ -184,6 +189,10 @@ class LocalServerService {
         // Serve the logs page
         ServiceLocator.log.d('提供日志查看页面');
         await _serveLogsPage(request);
+      } else if (request.uri.path == '/api/logs/clear' && request.method == 'POST') {
+        // Clear all logs
+        ServiceLocator.log.d('清空日志请求');
+        await _handleClearLogs(request);
       } else if (request.uri.path == '/webdav-config' && request.method == 'GET') {
         // Serve the WebDAV config page
         ServiceLocator.log.d('提供 WebDAV 配置页面');
@@ -235,8 +244,35 @@ class LocalServerService {
   /// Serve the logs viewing page
   Future<void> _serveLogsPage(HttpRequest request) async {
     request.response.headers.contentType = ContentType.html;
-    final html = _getLogsPageHtml();
+
+    // 动态模式：每次请求实时读取最新日志；否则使用 setLogContent 的快照
+    String content;
+    if (logContentProvider != null) {
+      try {
+        content = await logContentProvider!();
+      } catch (_) {
+        content = _logContent ?? '没有可用的日志内容';
+      }
+    } else {
+      content = _logContent ?? '没有可用的日志内容';
+    }
+
+    final html = _getLogsPageHtml(content);
     request.response.write(html);
+    await request.response.close();
+  }
+
+  /// Handle clearing all logs from the web logs page
+  Future<void> _handleClearLogs(HttpRequest request) async {
+    request.response.headers.contentType = ContentType.json;
+    try {
+      final ok = await ServiceLocator.log.clearLogs();
+      request.response.write(jsonEncode({'success': ok}));
+    } catch (e) {
+      ServiceLocator.log.d('清空日志失败: $e');
+      request.response.statusCode = 500;
+      request.response.write(jsonEncode({'success': false, 'error': '$e'}));
+    }
     await request.response.close();
   }
 
@@ -574,8 +610,7 @@ class LocalServerService {
   }
 
   /// Generate the logs viewing HTML page
-  String _getLogsPageHtml() {
-    final logContent = _logContent ?? '没有可用的日志内容';
+  String _getLogsPageHtml(String logContent) {
     final escapedContent = const HtmlEscape().convert(logContent);
     
     return '''
@@ -652,6 +687,14 @@ class LocalServerService {
         }
         .btn-secondary:hover {
             background: rgba(255, 255, 255, 0.15);
+        }
+        .btn-danger {
+            background: rgba(244, 67, 54, 0.25);
+            color: white;
+            border: 1px solid rgba(244, 67, 54, 0.5);
+        }
+        .btn-danger:hover {
+            background: rgba(244, 67, 54, 0.4);
         }
         .log-container {
             background: rgba(0, 0, 0, 0.3);
@@ -745,6 +788,9 @@ class LocalServerService {
             <button class="btn btn-secondary" onclick="downloadLogs()">
                 💾 下载日志
             </button>
+            <button class="btn btn-danger" onclick="clearLogs()">
+                🗑 清空日志
+            </button>
         </div>
         
         <div class="log-container">
@@ -831,6 +877,24 @@ class LocalServerService {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             showToast('✓ 日志已下载！');
+        }
+
+        function clearLogs() {
+            if (!confirm('确定要清空所有日志吗？此操作不可恢复。')) return;
+            fetch('/api/logs/clear', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('logContent').textContent = '';
+                        showToast('✓ 日志已清空！');
+                    } else {
+                        showToast('✗ 清空失败：' + (data.error || '未知错误'));
+                    }
+                })
+                .catch(err => {
+                    console.error('清空日志失败:', err);
+                    showToast('✗ 清空失败，请重试');
+                });
         }
     </script>
 </body>

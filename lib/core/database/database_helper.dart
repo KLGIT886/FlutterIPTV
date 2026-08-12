@@ -11,6 +11,9 @@ class DatabaseHelper {
   static const String _databaseName = 'flutter_iptv.db';
   static const int _databaseVersion = 9; // Added catchup support to channels
 
+  /// 当前数据库 schema 版本（供备份元数据等引用，避免硬编码漂移）
+  static int get databaseVersion => _databaseVersion;
+
   Future<void> initialize() async {
     ServiceLocator.log.d('DatabaseHelper: 开始初始化数据库');
     final startTime = DateTime.now();

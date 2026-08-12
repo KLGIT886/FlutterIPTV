@@ -12,6 +12,7 @@ import '../../../core/widgets/color_scheme_dialog.dart';
 import '../../../core/platform/platform_detector.dart';
 import '../../../core/i18n/app_strings.dart';
 import '../../../core/services/service_locator.dart';
+import '../../../core/services/local_server_service.dart';
 import '../../../core/constants/user_agent_presets.dart';
 import '../../player/providers/player_provider.dart';
 import '../../multi_screen/providers/multi_screen_provider.dart';
@@ -797,6 +798,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
               icon: Icons.bug_report_rounded,
               initiallyExpanded: false,
               children: [
+              _buildSwitchTile(
+                context,
+                title: AppStrings.of(context)?.webLogEnabledTitle ?? '网页日志',
+                subtitle: settings.webLogEnabled
+                    ? (AppStrings.of(context)?.webLogEnabledSubtitleOn ?? '已启用，浏览器访问 ${LocalServerService().logsUrl}')
+                    : (AppStrings.of(context)?.webLogEnabledSubtitleOff ?? '开启后可通过浏览器实时查看日志'),
+                icon: Icons.language_rounded,
+                value: settings.webLogEnabled,
+                onChanged: (value) async {
+                  await settings.setWebLogEnabled(value);
+                  if (value) {
+                    _showSuccess(context, AppStrings.of(context)?.webLogEnabledMsg ?? '网页日志已开启: ${LocalServerService().logsUrl}');
+                  }
+                },
+              ),
+              _buildDivider(),
               _buildSelectTile(
                 context,
                 title: AppStrings.of(context)?.logLevel ?? 'Log Level',

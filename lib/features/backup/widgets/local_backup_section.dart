@@ -171,7 +171,7 @@ class _LocalBackupSectionState extends State<LocalBackupSection> {
     final textSecondary = AppTheme.getTextSecondary(context);
     final primaryColor = AppTheme.getPrimaryColor(context);
 
-    // 获取响应式样�?
+    // 获取响应式样式
     final style = _getResponsiveStyle(context);
 
     return Container(
@@ -308,7 +308,7 @@ class _LocalBackupSectionState extends State<LocalBackupSection> {
 
           SizedBox(height: style['sectionSpacing']),
 
-          // 备份列表标题和操�?
+          // 备份列表标题和操作
           Row(
             children: [
               Text(
@@ -609,7 +609,7 @@ class _LocalBackupSectionState extends State<LocalBackupSection> {
       return;
     }
 
-    // 显示确认对话�?
+    // 显示确认对话框
     if (context.mounted) {
       final cardColor = AppTheme.getCardColor(context);
       final textPrimary = AppTheme.getTextPrimary(context);

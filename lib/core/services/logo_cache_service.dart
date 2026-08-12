@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'service_locator.dart';
+import '../widgets/channel_logo_widget.dart';
 
 /// 台标图片缓存服务
 ///
@@ -230,8 +231,6 @@ class LogoCacheService {
 
   /// 重置 LogoCacheManager 单例（下次访问时重建）
   void _resetLogoCacheManagerInstance() {
-    // 通过导入 channel_logo_widget.dart 中的私有类不方便，
-    // 这里采用公开函数方式，channel_logo_widget.dart 中实现清理逻辑
     resetLogoCacheManager();
   }
 
@@ -249,9 +248,8 @@ class LogoCacheService {
   }
 }
 
-// 外部可见的重置函数（在 channel_logo_widget.dart 中实现，避免循环依赖）
+// 真正的重置实现：重置 LogoCacheManager 单例，使下次访问时按最新配置重建
 void resetLogoCacheManager() {
-  ServiceLocator.log.d('[LogoCacheService] 请求重置 LogoCacheManager 实例');
-  // 实际实现在 channel_logo_widget.dart 中，通过扩展覆盖
-  // 默认空实现，由 channel_logo_widget.dart 中的同名函数 shadow
+  ServiceLocator.log.d('[LogoCacheService] 重置 LogoCacheManager 实例');
+  LogoCacheManager.resetInstance();
 }

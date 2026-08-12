@@ -6,6 +6,7 @@ import 'package:path/path.dart' as path;
 import 'package:package_info_plus/package_info_plus.dart';
 import '../models/backup_metadata.dart';
 import '../models/backup_file.dart';
+import '../database/database_helper.dart';
 import 'service_locator.dart';
 
 /// 备份服务
@@ -262,7 +263,7 @@ class BackupService {
     return BackupMetadata(
       timestamp: DateTime.now().toIso8601String(),
       appVersion: packageInfo.version,
-      databaseVersion: 8, // 从 database_helper.dart 获取
+      databaseVersion: DatabaseHelper.databaseVersion, // 与数据库 schema 版本保持一致
       platform: Platform.operatingSystem,
       fileSize: dbSize,
     );

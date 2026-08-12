@@ -222,88 +222,8 @@ class MultiScreenProvider extends ChangeNotifier {
       if (screen.player == null) {
         ServiceLocator.log.d('MultiScreenProvider: Creating new player for screen $screenIndex');
         _createPlayerForScreen(screenIndex, useSoftwareDecoding: false);
-        
-        // 监听播放状态
-        screen.player!.stream.playing.listen((playing) {
-          ServiceLocator.log.d('MultiScreenProvider: Screen $screenIndex playing=$playing');
-          screen.isPlaying = playing;
-          // 播放开始后确保音量正确（使用当前的 _activeScreenIndex）
-          if (playing) {
-            _applyVolumeToScreen(screenIndex);
-          }
-          notifyListeners();
-        });
-        
-        // 监听视频尺寸
-        screen.player!.stream.width.listen((width) {
-          screen.videoWidth = width ?? 0;
-          notifyListeners();
-        });
-        
-        screen.player!.stream.height.listen((height) {
-          screen.videoHeight = height ?? 0;
-          notifyListeners();
-        });
-
-        screen.player!.stream.position.listen((position) {
-          screen.position = position;
-          notifyListeners();
-        });
-
-        screen.player!.stream.duration.listen((duration) {
-          screen.duration = duration;
-          notifyListeners();
-        });
-
-        // 监听 mpv 日志，过滤冗余 FFmpeg 输出
-        screen.player!.stream.log.listen((log) {
-          final message = log.text.toLowerCase();
-
-          // 过滤 FFmpeg 噪音日志（SEI truncated、mmco、reference frames 等）
-          if (message.contains('sei type') ||
-              message.contains('truncated at') ||
-              message.contains('mmco') ||
-              message.contains('reference frames') ||
-              message.contains('exceeds max') ||
-              message.contains('discarding one') ||
-              message.contains('deprecated pixel format') ||
-              message.contains("skip ('#ext") ||
-              (message.contains('hls @') && message.contains('skip')) ||
-              message.contains('no such filter') ||
-              message.contains('error creating filters')) {
-            return;
-          }
-
-          // 根据当前日志级别决定是否转发
-          if (ServiceLocator.log.currentLevel != LogLevel.off) {
-            ServiceLocator.log.d(
-                'MultiScreen MPV log [screen $screenIndex]: ${log.text}',
-                tag: 'MultiScreenProvider');
-          }
-        });
-        
-        // 监听错误
-        screen.player!.stream.error.listen((error) async {
-          if (error.isNotEmpty) {
-            ServiceLocator.log.d('MultiScreenProvider: Screen $screenIndex error=$error');
-            if (_shouldTrySoftwareFallback(error, screen)) {
-              _attemptSoftwareFallback(screenIndex);
-              return;
-            }
-            final switched =
-                await _tryNextSourceOnError(screenIndex, screen, error);
-            if (switched) return;
-            screen.error = error;
-            screen.isLoading = false;
-            notifyListeners();
-          }
-        });
-        
-        // 监听缓冲状态
-        screen.player!.stream.buffering.listen((buffering) {
-          screen.isLoading = buffering;
-          notifyListeners();
-        });
+        // 为新播放器挂接流监听（首次创建时）
+        _setupPlayerListeners(screenIndex, screen);
       }
       
       // 设置音量（只有活动屏幕有声音，使用有效音量包含音量增强）
@@ -355,6 +275,97 @@ class MultiScreenProvider extends ChangeNotifier {
       screen.isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// 为指定屏幕的播放器挂接流监听（播放状态/尺寸/进度/日志/错误/缓冲）。
+  ///
+  /// 首次创建播放器与软件解码回退替换播放器后都必须调用，否则新的播放器
+  /// 的状态变化（尤其是错误与缓冲）无法被捕获，UI 不会更新、错误会静默。
+  void _setupPlayerListeners(int screenIndex, ScreenPlayerState screen) {
+    final player = screen.player;
+    if (player == null) return;
+
+    // 监听播放状态
+    player.stream.playing.listen((playing) {
+      ServiceLocator.log.d('MultiScreenProvider: Screen $screenIndex playing=$playing');
+      screen.isPlaying = playing;
+      // 播放开始后确保音量正确（使用当前的 _activeScreenIndex）
+      if (playing) {
+        _applyVolumeToScreen(screenIndex);
+      }
+      notifyListeners();
+    });
+
+    // 监听视频尺寸
+    player.stream.width.listen((width) {
+      screen.videoWidth = width ?? 0;
+      notifyListeners();
+    });
+
+    player.stream.height.listen((height) {
+      screen.videoHeight = height ?? 0;
+      notifyListeners();
+    });
+
+    player.stream.position.listen((position) {
+      screen.position = position;
+      notifyListeners();
+    });
+
+    player.stream.duration.listen((duration) {
+      screen.duration = duration;
+      notifyListeners();
+    });
+
+    // 监听 mpv 日志，过滤冗余 FFmpeg 输出
+    player.stream.log.listen((log) {
+      final message = log.text.toLowerCase();
+
+      // 过滤 FFmpeg 噪音日志（SEI truncated、mmco、reference frames 等）
+      if (message.contains('sei type') ||
+          message.contains('truncated at') ||
+          message.contains('mmco') ||
+          message.contains('reference frames') ||
+          message.contains('exceeds max') ||
+          message.contains('discarding one') ||
+          message.contains('deprecated pixel format') ||
+          message.contains("skip ('#ext") ||
+          (message.contains('hls @') && message.contains('skip')) ||
+          message.contains('no such filter') ||
+          message.contains('error creating filters')) {
+        return;
+      }
+
+      // 根据当前日志级别决定是否转发
+      if (ServiceLocator.log.currentLevel != LogLevel.off) {
+        ServiceLocator.log.d(
+            'MultiScreen MPV log [screen $screenIndex]: ${log.text}',
+            tag: 'MultiScreenProvider');
+      }
+    });
+
+    // 监听错误
+    player.stream.error.listen((error) async {
+      if (error.isNotEmpty) {
+        ServiceLocator.log.d('MultiScreenProvider: Screen $screenIndex error=$error');
+        if (_shouldTrySoftwareFallback(error, screen)) {
+          _attemptSoftwareFallback(screenIndex);
+          return;
+        }
+        final switched =
+            await _tryNextSourceOnError(screenIndex, screen, error);
+        if (switched) return;
+        screen.error = error;
+        screen.isLoading = false;
+        notifyListeners();
+      }
+    });
+
+    // 监听缓冲状态
+    player.stream.buffering.listen((buffering) {
+      screen.isLoading = buffering;
+      notifyListeners();
+    });
   }
 
   Future<void> _createPlayerForScreen(int screenIndex, {required bool useSoftwareDecoding}) async {
@@ -720,6 +731,8 @@ class MultiScreenProvider extends ChangeNotifier {
     if (screen.channel == null) return;
     screen.softwareFallbackAttempted = true;
     _createPlayerForScreen(screenIndex, useSoftwareDecoding: true);
+    // 回退会替换播放器，必须重新挂接流监听，否则新播放器的状态/错误无法被捕获
+    _setupPlayerListeners(screenIndex, screen);
     await playChannelOnScreen(screenIndex, screen.channel!, skipHistory: true);
   }
 

@@ -191,13 +191,6 @@ class LogoCacheManager extends CacheManager {
   }
 }
 
-// ✅ 实现 resetLogoCacheManager：覆盖 logo_cache_service.dart 中的空桩函数
-// 由于 Dart 的库级函数在同编译单元内优先，这里会 shadow 导入的 stub
-void resetLogoCacheManager() {
-  LogoCacheManager.resetInstance();
-  ServiceLocator.log.i('[LogoCache] 通过公开函数重置 LogoCacheManager 实例');
-}
-
 /// Global logo state manager to persist logo loading states across widget rebuilds
 class _LogoStateManager {
   static final _LogoStateManager _instance = _LogoStateManager._();

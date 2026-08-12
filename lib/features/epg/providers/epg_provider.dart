@@ -84,10 +84,10 @@ class EpgProvider extends ChangeNotifier {
       success = false;
     } finally {
       _isLoading = false;
-      // Only notify if not silent (user-initiated refresh)
-      if (!silent) {
-        notifyListeners();
-      }
+      // 无论是否 silent，加载完成后都通知 UI 刷新。
+      // 此前后台加载（silent=true）不通知，导致加载完成前被查询过、
+      // 显示"暂无节目单"的频道在数据就绪后不会重新匹配，一直空白。
+      notifyListeners();
     }
 
     return success;
