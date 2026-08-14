@@ -177,6 +177,28 @@ jobs:
           | [flutteriptv-Windows-x64-Setup.exe](${BASE_URL}/flutteriptv-Windows-x64-Setup.exe) | Windows 64位安装包 |
           EOF
       
+      - name: Delete Existing Release (if any)
+        if: steps.version.outputs.CREATE_RELEASE == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.TAG }}
+        run: |
+          # 删除已存在的同名 release 和 tag，避免 softprops 复用旧 release 而不上传资产
+          # 依赖 gh CLI（ubuntu-latest 自带）
+          gh release delete "$TAG" --yes --cleanup-tag || true
+          echo "已清理 tag $TAG 的旧 release（若存在）"
+
+      - name: Locate Installer
+        run: |
+          # actions/download-artifact@v7 的目录结构因版本而异（可能是子目录或直接在根目录）
+          # 用 find 定位实际的 exe 并复制到固定路径，避免路径硬编码导致的资产丢失
+          find ./release-assets -name "flutteriptv-Windows-x64-Setup.exe" -exec cp {} ./flutteriptv-Windows-x64-Setup.exe \;
+          if [ ! -f ./flutteriptv-Windows-x64-Setup.exe ]; then
+            echo "::error::无法找到 flutteriptv-Windows-x64-Setup.exe"
+            exit 1
+          fi
+          ls -lh ./flutteriptv-Windows-x64-Setup.exe
+
       - name: Create Release
         if: steps.version.outputs.CREATE_RELEASE == 'true'
         uses: softprops/action-gh-release@v3
@@ -187,7 +209,7 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            release-assets/windows-release/flutteriptv-Windows-x64-Setup.exe
+            ./flutteriptv-Windows-x64-Setup.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -254,6 +254,31 @@ jobs:
           | [flutteriptv-AndroidTV-x86_64.apk](${BASE_URL}/flutteriptv-AndroidTV-x86_64.apk) | x86_64 电视模拟器 |
           EOF
       
+      - name: Delete Existing Release (if any)
+        if: steps.version.outputs.CREATE_RELEASE == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.TAG }}
+        run: |
+          # 删除已存在的同名 release 和 tag，避免 softprops 复用旧 release 而不上传资产
+          # 依赖 gh CLI（ubuntu-latest 自带）
+          gh release delete "$TAG" --yes --cleanup-tag || true
+          echo "已清理 tag $TAG 的旧 release（若存在）"
+
+      - name: Locate Assets
+        run: |
+          # actions/download-artifact@v7 的目录结构因版本而异（可能是子目录或直接在根目录）
+          # 用 find 定位实际的安装包并复制到固定路径，避免路径硬编码导致的资产丢失
+          mkdir -p ./release-assets/staged
+          find ./release-assets -name "flutteriptv-Windows-x64-Setup.exe" -exec cp {} ./release-assets/staged/ \;
+          find ./release-assets -name "*.apk" -exec cp {} ./release-assets/staged/ \;
+          echo "定位到的资产:"
+          ls -lh ./release-assets/staged/
+          if ! ls ./release-assets/staged/*.exe >/dev/null 2>&1; then
+            echo "::error::无法找到 Windows 安装包"
+            exit 1
+          fi
+
       - name: Create Release
         if: steps.version.outputs.CREATE_RELEASE == 'true'
         uses: softprops/action-gh-release@v3
@@ -264,13 +289,13 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            release-assets/windows-release/flutteriptv-Windows-x64-Setup.exe
-            release-assets/android-release/flutteriptv-Android-Mobile-arm64-v8a.apk
-            release-assets/android-release/flutteriptv-Android-Mobile-armeabi-v7a.apk
-            release-assets/android-release/flutteriptv-Android-Mobile-x86_64.apk
-            release-assets/android-release/flutteriptv-AndroidTV-arm64-v8a.apk
-            release-assets/android-release/flutteriptv-AndroidTV-armeabi-v7a.apk
-            release-assets/android-release/flutteriptv-AndroidTV-x86_64.apk
+            release-assets/staged/flutteriptv-Windows-x64-Setup.exe
+            release-assets/staged/flutteriptv-Android-Mobile-arm64-v8a.apk
+            release-assets/staged/flutteriptv-Android-Mobile-armeabi-v7a.apk
+            release-assets/staged/flutteriptv-Android-Mobile-x86_64.apk
+            release-assets/staged/flutteriptv-AndroidTV-arm64-v8a.apk
+            release-assets/staged/flutteriptv-AndroidTV-armeabi-v7a.apk
+            release-assets/staged/flutteriptv-AndroidTV-x86_64.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
