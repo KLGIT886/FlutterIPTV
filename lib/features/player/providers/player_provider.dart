@@ -659,6 +659,14 @@ class PlayerProvider extends ChangeNotifier {
     await _safeSetProperty('video-sync', 'display-resample', 'video-sync');
     await _safeSetProperty('framedrop', 'vo', 'framedrop');
 
+    // 允许 RTSP 协议：media_kit 默认 protocol-whitelist 不含 rtsp，
+    // 会导致 avformat_open_input() 失败并报 "Protocol 'rtsp' not on whitelist"
+    // 覆盖为包含 rtsp（及底层 udp/rtp/tcp）的安全白名单
+    await _safeSetProperty(
+        'protocol-whitelist',
+        'udp,rtp,rtsp,tcp,tls,data,file,http,https,crypto',
+        'protocol-whitelist');
+
     // ═══════════════════════════════════════════════
     // 同步阶段（open() 之前）：设置解码器启动参数
     // ═══════════════════════════════════════════════

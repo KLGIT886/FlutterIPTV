@@ -511,6 +511,15 @@ class MultiScreenProvider extends ChangeNotifier {
     await _safeSetProperty(player, 'video-sync', 'display-resample', 'video-sync');
     await _safeSetProperty(player, 'framedrop', 'vo', 'framedrop');
 
+    // 允许 RTSP 协议：media_kit 默认 protocol-whitelist 不含 rtsp，
+    // 会导致 avformat_open_input() 失败并报 "Protocol 'rtsp' not on whitelist"
+    // 覆盖为包含 rtsp（及底层 udp/rtp/tcp）的安全白名单
+    await _safeSetProperty(
+        player,
+        'protocol-whitelist',
+        'udp,rtp,rtsp,tcp,tls,data,file,http,https,crypto',
+        'protocol-whitelist');
+
     // 查找该播放器对应的屏幕状态
     final screen = _screens.where((s) => s.player == player).firstOrNull;
     if (screen == null) return;

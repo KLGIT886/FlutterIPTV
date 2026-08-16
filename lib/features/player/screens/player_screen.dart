@@ -1086,6 +1086,9 @@ class _PlayerScreenState extends State<PlayerScreen>
   String? _generateCatchupUrl(Channel channel, EpgProgram program) {
     if (channel.catchupSource == null) return null;
 
+    // catchup 模式：default（占位符替换）、append（URL 追加）、shift（偏移）
+    final catchupMode = channel.catchup?.toLowerCase() ?? 'default';
+
     // IMPORTANT: program.start and program.end are LOCAL time (converted in EPG parser)
     // They match what user sees in EPG UI.
     final startLocal = program.start;
@@ -1164,6 +1167,21 @@ class _PlayerScreenState extends State<PlayerScreen>
     url = url.replaceAll(RegExp(r'\{start\}'), startIsoClean);
     url = url.replaceAll(RegExp(r'\{stop\}'), endIsoClean);
     url = url.replaceAll(RegExp(r'\{end\}'), endIsoClean);
+
+    // Step 3: append 模式 — 在直播 URL 上追加 catchup-source 参数片段
+    // Xtream 规范：catchup="append" 时，catchup-source 是待追加的参数模板
+    // （如 &starttime={utc}&endtime={utcend}），其中的 {utc}/{utcend} 占位符
+    // 会被替换为 Unix 秒级时间戳，然后拼接到原始直播地址末尾形成回看 URL。
+    if (catchupMode == 'append') {
+      final template = channel.catchupSource!;
+      final startSec = startUtc.millisecondsSinceEpoch ~/ 1000;
+      final endSec = endUtc.millisecondsSinceEpoch ~/ 1000;
+      final replaced = template
+          .replaceAll('{utc}', startSec.toString())
+          .replaceAll('{utcend}', endSec.toString());
+      // 基础为原始直播 URL，catchup-source 只是参数片段时也能正确拼接
+      return channel.url + replaced;
+    }
 
     return url;
   }
