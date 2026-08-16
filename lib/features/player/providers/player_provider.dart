@@ -51,6 +51,7 @@ class PlayerProvider extends ChangeNotifier {
   bool _noVideoFallbackAttempted = false;
   bool _allowSoftwareFallback = true;
   String _windowsHwdecMode = 'auto-safe';
+  String _d3d11vppMode = 'bob';
   bool _isDisposed = false;
   StreamSubscription<VideoParams>? _videoParamsSubscription;
   bool _deinterlaceConfiguredForCurrentStream = false;
@@ -475,6 +476,12 @@ class PlayerProvider extends ChangeNotifier {
     final prefs = ServiceLocator.prefs;
     final decodingMode = prefs.getString('decoding_mode') ?? 'auto';
     _windowsHwdecMode = prefs.getString('windows_hwdec_mode') ?? 'auto-safe';
+    // d3d11vpp 去交错模式：校验合法性，避免残留非法值
+    final savedD3d11vpp = prefs.getString('d3d11vpp_mode');
+    _d3d11vppMode =
+        (savedD3d11vpp != null && SettingsProvider.d3d11vppModes.contains(savedD3d11vpp))
+            ? savedD3d11vpp
+            : 'bob';
     _allowSoftwareFallback = prefs.getBool('allow_software_fallback') ?? true;
     _videoOutput = prefs.getString('video_output') ?? 'auto';
     final effectiveSoftware = useSoftwareDecoding || decodingMode == 'software';
@@ -600,6 +607,45 @@ class PlayerProvider extends ChangeNotifier {
       ServiceLocator.log.d('读取 $label 失败: $e', tag: 'PlayerProvider');
       return null;
     }
+  }
+
+  /// 验证滤镜链/去交错是否真正生效（修复验证盲区）
+  ///
+  /// mpv 设置 `vf` 或 `deinterlace` 后是异步重建滤镜链，失败时（如硬件格式
+  /// 不兼容）会输出 "Disabling filter ... because it has failed"，或通过 error
+  /// 流抛 "Error parsing option ..." 等异常。仅检查属性/只监听 log 流都可能在
+  /// 异常经 error 流抛出时漏判。因此同时监听 log 流与 error 流：两者均无失败
+  /// 信号则视为生效。
+  Future<bool> _verifyFilterChainActive(String label) async {
+    final failureSignaled = Completer<bool>();
+
+    void checkFailure(String msg) {
+      if (msg.contains('Disabling filter') ||
+          msg.contains('Impossible to convert') ||
+          msg.contains('failed to configure the filter graph') ||
+          msg.contains('no such filter') ||
+          msg.contains('error creating filters') ||
+          msg.contains('Error parsing option') ||
+          msg.contains('option not found')) {
+        if (!failureSignaled.isCompleted) failureSignaled.complete(true);
+      }
+    }
+
+    final logSub = _mediaKitPlayer!.stream.log.listen((log) => checkFailure(log.text));
+    final errSub = _mediaKitPlayer!.stream.error.listen((err) {
+      if (err.isNotEmpty) checkFailure(err);
+    });
+
+    final failed = await failureSignaled.future.timeout(
+      const Duration(milliseconds: 350),
+      onTimeout: () => false, // 超时未出现失败信号 => 视为滤镜链生效
+    );
+    await logSub.cancel();
+    await errSub.cancel();
+    if (failed) {
+      ServiceLocator.log.d('滤镜链验证失败($label): 检测到 mpv 滤镜配置错误', tag: 'PlayerProvider');
+    }
+    return !failed;
   }
 
   /// 返回用户配置的 hwdec 模式，考虑软解码设置
@@ -793,71 +839,104 @@ class PlayerProvider extends ChangeNotifier {
         // 第二步：去交错增量配置 — 根据源类型选择性调整 hwdec
         // ════════════════════════════════════════════
         if (is1080i && !_isSoftwareDecoding) {
-          // 分支 A: 1080i 隔行源 → 软件去交错优先
-          // 策略：先用当前 hwdec 尝试 vf 滤镜（如果上一流也是 1080i，hwdec 已是
-          // d3d11va-copy，滤镜可直接生效，无需 hwdec 切换触发解码器重建）。
-          // 仅当当前 hwdec 不支持软件 vf 时（如从 4K 切来，hwdec=auto-safe），
-          // 才切换为 d3d11va-copy 并重试。
-          await _safeSetProperty('deinterlace', 'no', 'deinterlace');
+          // 分支 A: 1080i 隔行源 — 按所选硬解方案分流
+          //
+          // auto-safe（safe 系）：mpv 自动选 direct 解码（d3d11va）。direct 帧是
+          //   d3d11 硬件表面，软件 bwdif 无法消费，因此用 vf=d3d11vpp（参数可配置）
+          //   或 deinterlace=yes 硬件去交错，不碰 copy，避免解码器重建。
+          // d3d11va/dxva2（非 safe direct 系）：deinterlace=yes 硬件去交错。
+          // auto-copy（copy 系）：帧是软件可消费的 copy-back 帧，走软件 bwdif，
+          //   失败再回退硬件去交错。
+          final isSafeFlow = _windowsHwdecMode == 'auto-safe';
+          final isDirectFlow = _windowsHwdecMode == 'd3d11va' ||
+              _windowsHwdecMode == 'dxva2';
+          final isCopyFlow = _windowsHwdecMode == 'auto-copy';
 
-          const filters = [
-            'bwdif=mode=1:parity=tff',
-            'yadif=mode=1:parity=tff',
-            'lavfi:yadif=mode=1:parity=tff',
-          ];
-
-          String? workingFilter;
-
-          // 第一轮尝试：用当前 hwdec 试 vf 滤镜
-          for (final vf in filters) {
+          if (isSafeFlow) {
+            // —— auto-safe 流：vf=d3d11vpp 硬件去交错（参数可配置，非 safe 不生效） ——
+            await _safeSetProperty('deinterlace', 'no', 'deinterlace');
             await _safeSetProperty('vf', '', 'clear_vf');
-            final success = await _safeSetProperty('vf', vf, 'try_vf');
-            if (success) {
-              final currentVf = await _safeGetProperty('vf', 'verify_vf');
-              if (currentVf != null && currentVf.isNotEmpty) {
-                workingFilter = vf;
+            if (_d3d11vppMode == 'off') {
+              // 用户关闭 d3d11vpp → 回退硬件 VPP
+              await _safeSetProperty('deinterlace', 'yes', 'deinterlace');
+              ServiceLocator.log.i(
+                  '1080i: auto-safe 流 d3d11vpp 关闭，使用 deinterlace=yes',
+                  tag: 'PlayerProvider');
+            } else {
+              final vfStr = 'd3d11vpp=mode=$_d3d11vppMode:deint=yes:interlaced-only=yes';
+              await _safeSetProperty('vf', vfStr, 'vf_d3d11vpp');
+              final ok = await _verifyFilterChainActive('vf=$vfStr');
+              if (ok) {
                 ServiceLocator.log.i(
-                    '1080i: 软件滤镜 $vf (hwdec=d3d11va-copy)',
+                    '1080i: auto-safe 流使用 d3d11vpp ($_d3d11vppMode) 硬件去交错',
                     tag: 'PlayerProvider');
-                break;
+              } else {
+                await _safeSetProperty('vf', '', 'clear_vf');
+                await _safeSetProperty('deinterlace', 'yes', 'deinterlace');
+                ServiceLocator.log.i(
+                    '1080i: auto-safe 流 d3d11vpp 不可用，退回 deinterlace=yes',
+                    tag: 'PlayerProvider');
               }
             }
-          }
+          } else if (isDirectFlow) {
+            // —— 非 safe direct 流：deinterlace=yes 硬件去交错，零重建 ——
+            await _safeSetProperty('vf', '', 'clear_vf');
+            await _safeSetProperty('deinterlace', 'yes', 'deinterlace');
+            ServiceLocator.log.i(
+                '1080i: direct 流($_windowsHwdecMode) 使用硬件去交错 (deinterlace=yes)',
+                tag: 'PlayerProvider');
+          } else if (isCopyFlow) {
+            // —— copy 流：软件 bwdif 优先，硬件兜底 ——
+            await _safeSetProperty('deinterlace', 'no', 'deinterlace');
+            await _safeSetProperty('vf', '', 'clear_vf');
 
-          // 如果当前 hwdec 不支持软件 vf（如 auto-safe 硬解模式无法挂载 vf 滤镜链），
-          // 切换为 d3d11va-copy 后重试
-          if (workingFilter == null) {
-            await _safeSetProperty('hwdec', 'd3d11va-copy', 'hwdec_1080i');
-            // hwdec 切换后解码器重建，需等待重建完成再设置 vf 滤镜
-            // 采用轮询方式：反复尝试设置并验证 vf，直到成功或超时
+            // 读取当前实际 hwdec 配置，判断是否需强制切到 copy-back 模式。
+            // 反转判断：仅当明确读到 direct 模式（d3d11va/dxva2）才强制切 d3d11va-copy；
+            // 读到 null/未知/auto/copy 一律不切换，避免在 videoParams 回调属性未就绪时
+            // 误判为"非 copy"而反复触发解码器重建（造成约 1s 缓冲波动）。
+            final currentHwdec = await _safeGetProperty('hwdec', 'hwdec');
+            final needCopyForSoftwareFilter = currentHwdec == 'd3d11va' || currentHwdec == 'dxva2';
+            if (needCopyForSoftwareFilter) {
+              // 仅在 direct 模式时切换到 d3d11va-copy，使软件滤镜能消费帧
+              await _safeSetProperty('hwdec', 'd3d11va-copy', 'hwdec_1080i');
+            }
+
+            const filters = [
+              'bwdif=mode=1:parity=tff',
+              'lavfi:yadif=mode=1:parity=tff',
+            ];
+
+            String? workingFilter;
             for (int retry = 0; retry < 5 && workingFilter == null; retry++) {
-              await Future.delayed(const Duration(milliseconds: 50));
+              if (retry > 0) await Future.delayed(const Duration(milliseconds: 50));
               for (final vf in filters) {
                 await _safeSetProperty('vf', '', 'clear_vf');
-                final success = await _safeSetProperty('vf', vf, 'try_vf');
-                if (success) {
-                  final currentVf = await _safeGetProperty('vf', 'verify_vf');
-                  if (currentVf != null && currentVf.isNotEmpty) {
-                    workingFilter = vf;
-                    ServiceLocator.log.i(
-                        '1080i: 软件滤镜 $vf (hwdec=d3d11va-copy, 第二轮)',
-                        tag: 'PlayerProvider');
-                    break;
-                  }
+                // 只有 setProperty 真正成功才做日志/error 联动验证；
+                // 若 setProperty 直接抛异常（如非法滤镜 "Error parsing option"），
+                // 直接跳过该滤镜尝试，不进入验证窗口。
+                final setOk = await _safeSetProperty('vf', vf, 'try_vf');
+                if (!setOk) continue;
+                if (await _verifyFilterChainActive('vf=$vf')) {
+                  workingFilter = vf;
+                  ServiceLocator.log.i(
+                      '1080i: 软件滤镜 $vf 生效 (hwdec=$currentHwdec)',
+                      tag: 'PlayerProvider');
+                  break;
                 }
               }
             }
-          }
 
-          if (workingFilter == null) {
-            // 软件滤镜全部不可用 → 切换回用户配置的 hwdec 并启用硬件去交错
-            ServiceLocator.log.i(
-                '1080i: 软件滤镜不可用，退回硬件去交错 (deinterlace=yes)',
-                tag: 'PlayerProvider');
-            await _safeSetProperty('vf', '', 'clear_vf');
-            await _safeSetProperty('hwdec', _getConfiguredHwdecMode(), 'hwdec');
-            await _safeSetProperty('deinterlace', 'yes', 'deinterlace');
+            if (workingFilter == null) {
+              // 软件滤镜全部不可用 → 回退到硬件去交错
+              await _safeSetProperty('vf', '', 'clear_vf');
+              await _safeSetProperty('hwdec', _getConfiguredHwdecMode(), 'hwdec');
+              await _safeSetProperty('deinterlace', 'yes', 'deinterlace');
+              ServiceLocator.log.i(
+                  '1080i: 软件滤镜不可用，退回硬件去交错 (deinterlace=yes)',
+                  tag: 'PlayerProvider');
+            }
           }
+          // 其它未知配置：不干预，保持现状（用户配置指定）
         } else {
           // 分支 B: 逐行源（1080p / 2160p SDR / 2160p HDR 等）
           // 显式重置 hwdec 为用户配置模式，清除上一流可能设置的 d3d11va-copy

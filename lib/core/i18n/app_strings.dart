@@ -461,6 +461,15 @@ class AppStrings {
   String get windowsHwdecAutoCopy => _localizedValues['windowsHwdecAutoCopy']!;
   String get windowsHwdecD3d11va => _localizedValues['windowsHwdecD3d11va']!;
   String get windowsHwdecDxva2 => _localizedValues['windowsHwdecDxva2']!;
+
+  // d3d11vpp 去交错参数（仅 auto-safe 生效）
+  String get d3d11vppMode => _localizedValues['d3d11vppMode']!;
+  String get d3d11vppModeDesc => _localizedValues['d3d11vppModeDesc']!;
+  String get d3d11vppOff => _localizedValues['d3d11vppOff']!;
+  String get d3d11vppBob => _localizedValues['d3d11vppBob']!;
+  String get d3d11vppAdaptive => _localizedValues['d3d11vppAdaptive']!;
+  String get d3d11vppMocomp => _localizedValues['d3d11vppMocomp']!;
+
   String get windowsHwdecAutoSafeDesc =>
       _localizedValues['windowsHwdecAutoSafeDesc']!;
   String get windowsHwdecAutoCopyDesc =>
@@ -1087,6 +1096,12 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'windowsHwdecAutoCopyDesc': '兼容性更好，但拷回会更慢。',
     'windowsHwdecD3d11vaDesc': '优先 D3D11VA，部分显卡可能失败。',
     'windowsHwdecDxva2Desc': '优先 DXVA2，适合旧显卡。',
+    'd3d11vppMode': 'D3D11VPP 去交错参数',
+    'd3d11vppModeDesc': '仅适用自动（安全）硬解方案。',
+    'd3d11vppOff': '关闭（硬件 VPP）',
+    'd3d11vppBob': 'Bob（最稳）',
+    'd3d11vppAdaptive': '自适应（画质好）',
+    'd3d11vppMocomp': '运动补偿（画质最好）',
     'allowSoftwareFallback': '允许软解回退',
     'allowSoftwareFallbackDesc': '硬解失败时自动切换到软解。',
     'allowSoftwareFallbackEnabled': '已开启软解回退',
@@ -1705,7 +1720,14 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
         'More compatible, but slower due to copy-back.',
     'windowsHwdecD3d11vaDesc': 'Prefer D3D11VA. Can fail on some GPUs.',
     'windowsHwdecDxva2Desc': 'Prefer DXVA2. Legacy path for older GPUs.',
-    'allowSoftwareFallback': 'Allow Software Fallback',
+    'd3d11vppMode': 'D3D11VPP Deinterlace',
+    'd3d11vppModeDesc':
+        'Only applies to Auto (Safe) hardware decode mode.',
+    'd3d11vppOff': 'Off (hardware VPP)',
+    'd3d11vppBob': 'Bob (most stable)',
+    'd3d11vppAdaptive': 'Adaptive (better quality)',
+    'd3d11vppMocomp': 'Motion compensation (best quality)',
+    'allowSoftwareFallback': 'Allow software fallback',
     'allowSoftwareFallbackDesc':
         'If hardware decode fails, automatically switch to software decoding.',
     'allowSoftwareFallbackEnabled': 'Software fallback enabled',

@@ -234,6 +234,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.speed_rounded,
                   onTap: () => _showWindowsHwdecDialog(context, settings),
                 ),
+                // d3d11vpp 去交错参数：仅 auto-safe 方案下显示并生效
+                if (settings.windowsHwdecMode == 'auto-safe') ...[
+                  _buildDivider(),
+                  _buildSelectTile(
+                    context,
+                    title: AppStrings.of(context)?.d3d11vppMode ??
+                        'D3D11VPP Deinterlace',
+                    subtitle: AppStrings.of(context)?.d3d11vppModeDesc ??
+                        'Only applies to Auto (Safe)',
+                    icon: Icons.layers_rounded,
+                    onTap: () => _showD3d11vppDialog(context, settings),
+                  ),
+                ],
                 _buildDivider(),
                 _buildSwitchTile(
                   context,
@@ -1414,6 +1427,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  String _getD3d11vppLabel(BuildContext context, String mode) {
+    final strings = AppStrings.of(context);
+    switch (mode) {
+      case 'off':
+        return strings?.d3d11vppOff ?? 'Off';
+      case 'adaptive':
+        return strings?.d3d11vppAdaptive ?? 'Adaptive';
+      case 'mocomp':
+        return strings?.d3d11vppMocomp ?? 'Motion compensation';
+      case 'bob':
+      default:
+        return strings?.d3d11vppBob ?? 'Bob';
+    }
+  }
+
+  void _showD3d11vppDialog(BuildContext context, SettingsProvider settings) {
+    const options = SettingsProvider.d3d11vppModes;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppTheme.getSurfaceColor(dialogContext),
+          title: Text(
+            AppStrings.of(context)?.d3d11vppMode ?? 'D3D11VPP Deinterlace',
+            style: TextStyle(color: AppTheme.getTextPrimary(context)),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: options.map((mode) {
+                return RadioListTile<String>(
+                  title: Text(
+                    _getD3d11vppLabel(context, mode),
+                    style: TextStyle(
+                      color: AppTheme.getTextPrimary(context),
+                    ),
+                  ),
+                  value: mode,
+                  groupValue: settings.d3d11vppMode,
+                  onChanged: (value) async {
+                    if (value != null) {
+                      await settings.setD3d11vppMode(value);
+                      await _reinitMediaKitPlayer(context, settings);
+                      Navigator.pop(dialogContext);
+                      _showSuccess(
+                        context,
+                        '${AppStrings.of(context)?.d3d11vppMode ?? 'D3D11VPP Deinterlace'}: ${_getD3d11vppLabel(context, value)}',
+                      );
+                    }
+                  },
+                  activeColor: AppTheme.getPrimaryColor(dialogContext),
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _reinitMediaKitPlayer(BuildContext context, SettingsProvider settings) async {
     // 延迟到下一个事件循环，避免与当前帧的 build phase 冲突
     // 不使用 endOfFrame/addPostFrameCallback，避免引入额外帧调度
@@ -1431,6 +1505,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await context.read<MultiScreenProvider>().reinitializePlayers(
         videoOutput: settings.videoOutput,
         windowsHwdecMode: settings.windowsHwdecMode,
+        d3d11vppMode: settings.d3d11vppMode,
         allowSoftwareFallback: settings.allowSoftwareFallback,
         decodingMode: settings.decodingMode,
         bufferStrength: settings.bufferStrength,

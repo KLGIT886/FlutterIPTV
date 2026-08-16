@@ -1,23 +1,23 @@
 {
-  "version": "1.6.0",
-  "build": 184,
-  "releaseDate": "2026-08-01",
+  "version": "1.6.1",
+  "build": 185,
+  "releaseDate": "2026-08-17",
   "assets": {
-     "windows": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.0/flutteriptv-Windows-x64-Setup.exe",
+     "windows": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.1/flutteriptv-Windows-x64-Setup.exe",
     "android_mobile": {
-      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.0/flutteriptv-Android-Mobile-arm64-v8a.apk",
-      "armeabi-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.0/flutteriptv-Android-Mobile-armeabi-v7a.apk",
-      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.0/flutteriptv-Android-Mobile-x86_64.apk"
+      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.1/flutteriptv-Android-Mobile-arm64-v8a.apk",
+      "armeabi-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.1/flutteriptv-Android-Mobile-armeabi-v7a.apk",
+      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.1/flutteriptv-Android-Mobile-x86_64.apk"
     },
     "android_tv": {
-      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.0/flutteriptv-AndroidTV-arm64-v8a.apk",
-      "armeabi-v7a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.0/flutteriptv-AndroidTV-armeabi-v7a.apk",
-      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.0/flutteriptv-AndroidTV-x86_64.apk"
+      "arm64-v8a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.1/flutteriptv-AndroidTV-arm64-v8a.apk",
+      "armeabi-v7a": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.1/flutteriptv-AndroidTV-armeabi-v7a.apk",
+      "x86_64": "https://gh-proxy.org/https://github.com/shnulaa/FlutterIPTV/releases/download/v1.6.1/flutteriptv-AndroidTV-x86_64.apk"
     }
   },
   "changelog": {
-    "zh": "- 重构：去交错功能改用 videoParams 流动态检测源类型（1080i/1080p/2160p），按源分流配置\n- 新增：1080i 隔行源软件去交错支持（bwdif→yadif→lavfi:yadif 优先级链，自动回退硬件去交错）\n- 修复：4K SDR 画面过曝泛白问题，改用动态 HDR/SDR 色彩空间检测\n- 修复：Flutter 帧调度断言失败（schedulerPhase == midFrameMicrotasks）\n- 优化：Provider 在 build 阶段的 notifyListeners 调用包裹 addPostFrameCallback，避免 setState during build\n- 移除：去交错模式选择器（因 mpv 构建限制，改用自动检测）\n- 升级：切换至完整版 libmpv（zhongfly/mpv-winbuild），支持 libavfilter 和 msg-level",
-    "en": "- Refactor: Deinterlace now dynamically detects source type (1080i/1080p/2160p) via videoParams stream for per-source configuration\n- New: Software deinterlacing for 1080i sources (bwdif→yadif→lavfi:yadif priority chain with automatic hardware fallback)\n- Fix: 4K SDR overexposure/washed-out issue by dynamic HDR/SDR color space detection\n- Fix: Flutter frame scheduling assertion failure (schedulerPhase == midFrameMicrotasks)\n- Optimization: Wrap notifyListeners in addPostFrameCallback during build phase to prevent setState during build\n- Removed: Deinterlace mode selector (replaced by automatic detection due to mpv build limitations)\n- Upgrade: Switch to full libmpv build (zhongfly/mpv-winbuild) with libavfilter and msg-level support"
+    "zh": "- 修复：RTSP 流报 Protocol 'rtsp' not on whitelist 无法播放，将 rtsp 加入 mpv protocol-whitelist\n- 新增：回看（catchup）时间参数支持，对齐 Kodi pvr.iptvsimple 标准与 rtp2httpd（${utc}/${utcend}/${timestamp}/${duration}、${(b/e)yyyyMMddHHmmss:UTC}、${offset}、{utc:格式} 等）\n- 新增：自动（安全）硬解方案下可配置 vf=d3d11vpp 去交错参数（bob/adaptive/mocomp/off），非安全方案隐藏且不生效\n- 移除：Vulkan 硬解方案（RTX 3080 Ti 上 h264 Vulkan 解码初始化崩溃）\n- 优化：避免硬解非法模式残留（windows_hwdec_mode 校验回退 auto-safe）",
+    "en": "- Fix: RTSP streams failed with Protocol 'rtsp' not on whitelist; added rtsp to mpv protocol-whitelist\n- New: Catchup time parameter support aligned with Kodi pvr.iptvsimple and rtp2httpd (${utc}/${utcend}/${timestamp}/${duration}, ${(b/e)yyyyMMddHHmmss:UTC}, ${offset}, {utc:format}, etc.)\n- New: Configurable vf=d3d11vpp deinterlace parameters (bob/adaptive/mocomp/off) under Auto (Safe) hardware decode mode; hidden/inactive for non-safe modes\n- Removed: Vulkan hardware decode mode (h264 Vulkan init crashed on RTX 3080 Ti)\n- Optimization: Guard against invalid hardware decode mode residue (windows_hwdec_mode validated back to auto-safe)"
   },
   "minVersion": "1.0.0"
 }

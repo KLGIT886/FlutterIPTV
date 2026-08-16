@@ -1102,25 +1102,48 @@ class _PlayerScreenState extends State<PlayerScreen>
     final endIso = endUtc.toIso8601String();
     final endIsoClean = endIso.replaceAll(RegExp(r'\.\d+Z$'), 'Z');
 
+    // Unix 秒级 UTC 时间戳（Kodi pvr.iptvsimple 事实标准）for ${utc}, ${utcend}, {utc}, {utcend}
+    final startSec = startUtc.millisecondsSinceEpoch ~/ 1000;
+    final endSec = endUtc.millisecondsSinceEpoch ~/ 1000;
+    // 时长（秒）for ${duration}
+    final durationSec = endUtc.difference(startUtc).inSeconds;
+
+    // 当前时刻（UTC）— 对齐 rtp2httpd 的 ${lutc}/${now}/${timestamp}/${offset}
+    final now = DateTime.now().toUtc();
+    final nowSec = now.millisecondsSinceEpoch ~/ 1000;
+    final nowIso = now.toIso8601String().replaceAll(RegExp(r'\.\d+Z$'), 'Z');
+    // 距节目开始的偏移（秒）for ${offset}
+    final offsetSec = nowSec - startSec;
+
     var url = channel.catchupSource!;
 
     // Step 1: Handle custom date format patterns with timezone support
     // Pattern variations:
-    //   ${(b)yyyyMMddHHmmss}   -> begin/start, LOCAL time (matches EPG display)
-    //   ${(e)yyyyMMddHHmmss}   -> end, LOCAL time
-    //   ${(bu)yyyyMMddHHmmss}  -> begin/start, UTC time (explicit UTC)
-    //   ${(eu)yyyyMMddHHmmss}  -> end, UTC time
-    //   ${(B)...} / ${(E)...}  -> uppercase variants as aliases
-    final customFormatRegex = RegExp(r'\$\{\(([bBeE])([uU]?)\)([^}]+)\}');
+    //   ${(b)yyyyMMddHHmmss}        -> begin/start, LOCAL time (matches EPG display)
+    //   ${(e)yyyyMMddHHmmss}        -> end, LOCAL time
+    //   ${(bu)yyyyMMddHHmmss}       -> begin/start, UTC time (explicit UTC, prefix u)
+    //   ${(eu)yyyyMMddHHmmss}       -> end, UTC time
+    //   ${(b)yyyyMMddHHmmss:UTC}    -> begin/start, UTC time (Kodi :UTC suffix)
+    //   ${(e)yyyyMMddHHmmss:UTC}    -> end, UTC time
+    //   ${(B)...} / ${(E)...}       -> uppercase variants as aliases
+    // 匹配前缀 u 或后缀 :UTC 两种时区标记，并将 `:UTC` 从格式串中剔除
+    final customFormatRegex =
+        RegExp(r'\$\{\(([bBeE])([uU]?)\)([A-Za-z:"\u0027]+)(?::UTC)?\}');
     final customMatches = customFormatRegex.allMatches(url);
     for (final match in customMatches) {
       final timeMarker = match.group(1)!.toLowerCase(); // 'b' or 'e'
       final tzMarker = match.group(2)!.toLowerCase();   // 'u' or ''
-      final formatStr = match.group(3)!;                 // e.g. 'yyyyMMddHHmmss'
+      // 格式串可能自带 :UTC 后缀（如 yyyyMMddHHmmss:UTC），需剔除后再格式化
+      var formatStr = match.group(3)!;
+      final hasUtcSuffix = formatStr.endsWith(':UTC');
+      if (hasUtcSuffix) {
+        formatStr = formatStr.substring(0, formatStr.length - 4);
+      }
 
-      // Choose local or UTC datetime based on 'u' suffix
+      // Choose local or UTC datetime: 前缀 u 或后缀 :UTC 均按 UTC 处理
+      final useUtc = tzMarker == 'u' || hasUtcSuffix;
       DateTime dateTime;
-      if (tzMarker == 'u') {
+      if (useUtc) {
         // Explicit UTC requested
         dateTime = (timeMarker == 'b') ? startUtc : endUtc;
       } else {
@@ -1137,15 +1160,21 @@ class _PlayerScreenState extends State<PlayerScreen>
       }
     }
 
-    // Also handle brace-only version: {(b)yyyyMMddHHmmss}, {(bu)yyyyMMddHHmmss}
-    final braceFormatRegex = RegExp(r'\{\(([bBeE])([uU]?)\)([^}]+)\}');
+    // Also handle brace-only version: {(b)yyyyMMddHHmmss}, {(bu)yyyyMMddHHmmss}, {(b)...:UTC}
+    final braceFormatRegex =
+        RegExp(r'\{\(([bBeE])([uU]?)\)([^}]+)\}');
     final braceMatches = braceFormatRegex.allMatches(url);
     for (final match in braceMatches) {
       final timeMarker = match.group(1)!.toLowerCase();
       final tzMarker = match.group(2)!.toLowerCase();
-      final formatStr = match.group(3)!;
+      var formatStr = match.group(3)!;
+      final hasUtcSuffix = formatStr.endsWith(':UTC');
+      if (hasUtcSuffix) {
+        formatStr = formatStr.substring(0, formatStr.length - 4);
+      }
+      final useUtc = tzMarker == 'u' || hasUtcSuffix;
       DateTime dateTime;
-      if (tzMarker == 'u') {
+      if (useUtc) {
         dateTime = (timeMarker == 'b') ? startUtc : endUtc;
       } else {
         dateTime = (timeMarker == 'b') ? startLocal : endLocal;
@@ -1157,7 +1186,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       } catch (_) {}
     }
 
-    // Step 2: Handle standard ${start}/${stop}/${end} patterns with ISO 8601 (UTC)
+    // Step 2: Handle standard ${start}/${stop}/${end} patterns. 保持 ISO 8601 (UTC) 兼容
     // ISO format with 'Z' suffix always means UTC - this is the standard behavior
     url = url.replaceAll(RegExp(r'\$\{start\}'), startIsoClean);
     url = url.replaceAll(RegExp(r'\$\{stop\}'), endIsoClean);
@@ -1168,19 +1197,85 @@ class _PlayerScreenState extends State<PlayerScreen>
     url = url.replaceAll(RegExp(r'\{stop\}'), endIsoClean);
     url = url.replaceAll(RegExp(r'\{end\}'), endIsoClean);
 
+    // Step 2.4: 对齐 rtp2httpd 的「关键字:格式」占位符 — 用指定格式串渲染时间
+    //   ${utc:yyyyMMdd} / {utc:yyyyMMdd}   -> 节目开始时间（UTC）
+    //   ${utcend:yyyyMMdd} / {utcend:...}  -> 节目结束时间（UTC）
+    //   ${start:格式} / ${end:格式}         -> 开始/结束（UTC）
+    //   ${lutc:格式} / ${now:格式} / ${timestamp:格式} -> 当前时刻（UTC）
+    void applyKeywordFormat(RegExp regex) {
+      for (final match in regex.allMatches(url).toList()) {
+        final keyword = match.group(1)!.toLowerCase();
+        final fmt = match.group(2)!;
+        DateTime? target;
+        if (keyword == 'utc' || keyword == 'start' || keyword == 'yyyy' || keyword == 'MM' ||
+            keyword == 'dd' || keyword == 'HH' || keyword == 'mm' || keyword == 'ss') {
+          target = startUtc;
+        } else if (keyword == 'utcend' || keyword == 'end') {
+          target = endUtc;
+        } else if (keyword == 'lutc' || keyword == 'now' || keyword == 'timestamp') {
+          target = now;
+        }
+        if (target == null) continue;
+        try {
+          final formatted = DateFormat(fmt).format(target);
+          url = url.replaceFirst(match.group(0)!, formatted);
+        } catch (_) {}
+      }
+    }
+    applyKeywordFormat(RegExp(r'\$\{(\w+):([^}]+)\}'));
+    applyKeywordFormat(RegExp(r'\{(\w+):([^}]+)\}'));
+
+    // Step 2.5: 行业标准占位符（Kodi pvr.iptvsimple 规范）— Unix 秒级 UTC 时间戳
+    //   ${utc}        -> 节目开始时间（Unix 秒，UTC）
+    //   ${utcend}     -> 节目结束时间（Unix 秒，UTC）
+    //   ${timestamp}  -> 当前时刻（Unix 秒，UTC）— 对齐 rtp2httpd
+    //   ${duration}   -> 节目时长（秒）
+    //   ${offset}     -> 当前时刻 - 节目开始（秒）— 对齐 rtp2httpd
+    //   ${lutc}/${now}-> 当前时刻（完整 ISO+Z）— 对齐 rtp2httpd
+    url = url.replaceAll(RegExp(r'\$\{utc\}'), startSec.toString());
+    url = url.replaceAll(RegExp(r'\$\{utcend\}'), endSec.toString());
+    url = url.replaceAll(RegExp(r'\$\{timestamp\}'), nowSec.toString());
+    url = url.replaceAll(RegExp(r'\$\{duration\}'), durationSec.toString());
+    url = url.replaceAll(RegExp(r'\$\{offset\}'), offsetSec.toString());
+    url = url.replaceAll(RegExp(r'\$\{lutc\}'), nowIso);
+    url = url.replaceAll(RegExp(r'\$\{now\}'), nowIso);
+    // 大括号版本
+    url = url.replaceAll(RegExp(r'\{utc\}'), startSec.toString());
+    url = url.replaceAll(RegExp(r'\{utcend\}'), endSec.toString());
+    url = url.replaceAll(RegExp(r'\{timestamp\}'), nowSec.toString());
+    url = url.replaceAll(RegExp(r'\{duration\}'), durationSec.toString());
+    url = url.replaceAll(RegExp(r'\{offset\}'), offsetSec.toString());
+    url = url.replaceAll(RegExp(r'\{lutc\}'), nowIso);
+    url = url.replaceAll(RegExp(r'\{now\}'), nowIso);
+
+    // Step 2.6: 时间分量占位符（对齐 rtp2httpd）— 均取节目开始时间（UTC）
+    //   长格式：${yyyy}/${MM}/${dd}/${HH}/${mm}/${ss}
+    //   短格式（brace-only）：{Y}/{m}/{d}/{H}/{M}/{S}
+    final compYear = DateFormat('yyyy').format(startUtc);
+    final compMonth = DateFormat('MM').format(startUtc);
+    final compDay = DateFormat('dd').format(startUtc);
+    final compHour = DateFormat('HH').format(startUtc);
+    final compMinute = DateFormat('mm').format(startUtc);
+    final compSecond = DateFormat('ss').format(startUtc);
+    url = url.replaceAll(RegExp(r'\$\{yyyy\}'), compYear);
+    url = url.replaceAll(RegExp(r'\$\{MM\}'), compMonth);
+    url = url.replaceAll(RegExp(r'\$\{dd\}'), compDay);
+    url = url.replaceAll(RegExp(r'\$\{HH\}'), compHour);
+    url = url.replaceAll(RegExp(r'\$\{mm\}'), compMinute);
+    url = url.replaceAll(RegExp(r'\$\{ss\}'), compSecond);
+    url = url.replaceAll(RegExp(r'\{Y\}'), compYear);
+    url = url.replaceAll(RegExp(r'\{m\}'), compMonth);
+    url = url.replaceAll(RegExp(r'\{d\}'), compDay);
+    url = url.replaceAll(RegExp(r'\{H\}'), compHour);
+    url = url.replaceAll(RegExp(r'\{M\}'), compMinute);
+    url = url.replaceAll(RegExp(r'\{S\}'), compSecond);
+
     // Step 3: append 模式 — 在直播 URL 上追加 catchup-source 参数片段
     // Xtream 规范：catchup="append" 时，catchup-source 是待追加的参数模板
-    // （如 &starttime={utc}&endtime={utcend}），其中的 {utc}/{utcend} 占位符
-    // 会被替换为 Unix 秒级时间戳，然后拼接到原始直播地址末尾形成回看 URL。
+    // （如 &starttime={utc}&endtime={utcend}），拼接到原始直播地址末尾形成回看 URL。
+    // 注意：{utc}/{utcend}/{duration}/{timestamp} 等占位符已由 Step 1/2/2.5 统一替换
     if (catchupMode == 'append') {
-      final template = channel.catchupSource!;
-      final startSec = startUtc.millisecondsSinceEpoch ~/ 1000;
-      final endSec = endUtc.millisecondsSinceEpoch ~/ 1000;
-      final replaced = template
-          .replaceAll('{utc}', startSec.toString())
-          .replaceAll('{utcend}', endSec.toString());
-      // 基础为原始直播 URL，catchup-source 只是参数片段时也能正确拼接
-      return channel.url + replaced;
+      return channel.url + url;
     }
 
     return url;

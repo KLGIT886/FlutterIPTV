@@ -16,6 +16,9 @@ class SettingsProvider extends ChangeNotifier {
       'decoding_mode'; // New: auto, hardware, software
   static const String _keyWindowsHwdecMode =
       'windows_hwdec_mode'; // auto-safe, auto-copy, d3d11va, dxva2
+  // d3d11vpp 去交错模式：off, bob, adaptive, mocomp（仅在 auto-safe 下生效）
+  static const String _keyD3d11vppMode = 'd3d11vpp_mode';
+  static const List<String> d3d11vppModes = ['off', 'bob', 'adaptive', 'mocomp'];
   static const String _keyAllowSoftwareFallback = 'allow_software_fallback';
   static const String _keyVideoOutput = 'video_output'; // auto, libmpv, gpu
   static const String _keyChannelMergeRule =
@@ -88,6 +91,7 @@ class SettingsProvider extends ChangeNotifier {
   bool _hardwareDecoding = true;
   String _decodingMode = 'auto'; // New: auto, hardware, software
   String _windowsHwdecMode = 'auto-safe';
+  String _d3d11vppMode = 'bob';
   bool _allowSoftwareFallback = true;
   String _videoOutput = 'auto';
   String _channelMergeRule = 'name_group'; // New: name, name_group
@@ -144,6 +148,7 @@ class SettingsProvider extends ChangeNotifier {
   bool get hardwareDecoding => _hardwareDecoding;
   String get decodingMode => _decodingMode;
   String get windowsHwdecMode => _windowsHwdecMode;
+  String get d3d11vppMode => _d3d11vppMode;
   bool get allowSoftwareFallback => _allowSoftwareFallback;
   String get videoOutput => _videoOutput;
   String get channelMergeRule => _channelMergeRule;
@@ -213,6 +218,12 @@ class SettingsProvider extends ChangeNotifier {
     _hardwareDecoding = prefs.getBool(_keyHardwareDecoding) ?? true;
     _decodingMode = prefs.getString(_keyDecodingMode) ?? 'auto';
     _windowsHwdecMode = prefs.getString(_keyWindowsHwdecMode) ?? 'auto-safe';
+    // d3d11vpp 模式：校验是否为合法值，避免残留非法值导致 vf 参数错误
+    final savedD3d11vpp = prefs.getString(_keyD3d11vppMode);
+    _d3d11vppMode =
+        (savedD3d11vpp != null && d3d11vppModes.contains(savedD3d11vpp))
+            ? savedD3d11vpp
+            : 'bob';
     _allowSoftwareFallback = prefs.getBool(_keyAllowSoftwareFallback) ?? true;
     _videoOutput = prefs.getString(_keyVideoOutput) ?? 'auto';
     _channelMergeRule = prefs.getString(_keyChannelMergeRule) ?? 'name_group';
@@ -378,6 +389,7 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setBool(_keyHardwareDecoding, _hardwareDecoding);
     await prefs.setString(_keyDecodingMode, _decodingMode);
     await prefs.setString(_keyWindowsHwdecMode, _windowsHwdecMode);
+    await prefs.setString(_keyD3d11vppMode, _d3d11vppMode);
     await prefs.setBool(_keyAllowSoftwareFallback, _allowSoftwareFallback);
     await prefs.setString(_keyVideoOutput, _videoOutput);
     await prefs.setString(_keyChannelMergeRule, _channelMergeRule);
@@ -482,6 +494,12 @@ class SettingsProvider extends ChangeNotifier {
 
   Future<void> setWindowsHwdecMode(String mode) async {
     _windowsHwdecMode = mode;
+    await _saveSettings();
+    notifyListeners();
+  }
+
+  Future<void> setD3d11vppMode(String mode) async {
+    _d3d11vppMode = mode;
     await _saveSettings();
     notifyListeners();
   }
@@ -942,6 +960,7 @@ class SettingsProvider extends ChangeNotifier {
     _channelMergeRule = 'name_group';
     _decodingMode = 'auto';
     _windowsHwdecMode = 'auto-safe';
+    _d3d11vppMode = 'bob';
     _allowSoftwareFallback = true;
     _videoOutput = 'auto';
     _bufferSize = 30;
