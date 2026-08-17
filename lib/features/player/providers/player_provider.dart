@@ -59,7 +59,6 @@ class PlayerProvider extends ChangeNotifier {
   int _deinterlaceGeneration = 0; // 代际计数器，用于检测过时的 videoParams 回调
   String _videoOutput = 'auto';
   String _vo = 'unknown';
-  String _configuredVo = 'auto';
 
   // Override duration for catchup playback
   Duration? _overrideDuration;
@@ -416,10 +415,6 @@ class PlayerProvider extends ChangeNotifier {
     if (hwdecInfo.isNotEmpty) {
       parts.add('hwdec: $hwdecInfo');
     }
-    final voInfo = _formatVoInfo();
-    if (voInfo.isNotEmpty) {
-      parts.add('vo: $voInfo');
-    }
     // 码率显示（基于预估下载速度）
     if (_downloadSpeed > 0) {
       final bitrateMbps = _downloadSpeed * 8 / 1000000;
@@ -514,12 +509,17 @@ class PlayerProvider extends ChangeNotifier {
         vo = null;
         break;
     }
-    _configuredVo = _videoOutput;
 
     _mediaKitPlayer = Player(
       configuration: PlayerConfiguration(
         bufferSize: bufferSize,
         vo: vo,
+        // 协议白名单：media_kit 默认不含 rtsp，需在此加入以支持 RTSP 播放
+        // （media_kit 通过 demuxer-lavf-o=protocol_whitelist 传给 mpv，
+        //  运行时的 setProperty('protocol-whitelist') 无法覆盖该层）
+        protocolWhitelist: const [
+          'udp', 'rtp', 'rtsp', 'tcp', 'tls', 'data', 'file', 'http', 'https', 'crypto',
+        ],
         // 设置网络超时（可选）
         // timeout: 3 秒连接最长超时
         // 根据日志级别启用 mpv 日志
@@ -939,15 +939,24 @@ class PlayerProvider extends ChangeNotifier {
           // 其它未知配置：不干预，保持现状（用户配置指定）
         } else {
           // 分支 B: 逐行源（1080p / 2160p SDR / 2160p HDR 等）
-          // 显式重置 hwdec 为用户配置模式，清除上一流可能设置的 d3d11va-copy
-          // 同步阶段跳过 hwdec 设置（_initialHwdecSet 已为 true），
-          // 因此由异步阶段在此处确保 hwdec 正确
-          await _safeSetProperty('hwdec', _getConfiguredHwdecMode(), 'hwdec_progressive');
+          // 仅当 hwdec 类别与用户配置不一致时才重置，清除上一流可能残留的
+          // d3d11va-copy；若类别一致（如同为 copy 系）则不重置，
+          // 避免 1080i→4K 切换时 hwdec 值变动触发解码器重建导致播放器重置
+          final targetHwdec = _getConfiguredHwdecMode();
+          // 读取当前实际 hwdec（hwdec-current），未知时按空处理
+          final readHwdec = await _safeGetProperty('hwdec-current', 'hwdec-current');
+          final currentHwdec = readHwdec ?? '';
+          // 目标与当前的 copy/direct 类别是否一致（copy-back 语义相同时无需重建）
+          final isCopyTarget = targetHwdec == 'auto-copy' || targetHwdec.endsWith('-copy');
+          final isCopyActual = currentHwdec.endsWith('-copy') || currentHwdec == 'auto-copy';
+          if (readHwdec == null || readHwdec.isEmpty || isCopyTarget != isCopyActual) {
+            // 类别不一致或未知：显式重置为用户配置的 hwdec
+            await _safeSetProperty('hwdec', targetHwdec, 'hwdec_progressive');
+          }
           await _safeSetProperty('deinterlace', 'no', 'deinterlace');
           await _safeSetProperty('vf', '', 'clear_vf');
           final label = h > 0 ? '${h}p 逐行源' : '源（默认按逐行处理）';
-          final currentHwdec = _isSoftwareDecoding ? '软解(no)' : _getConfiguredHwdecMode();
-          ServiceLocator.log.i('$label: $currentHwdec 硬解, 无去交错', tag: 'PlayerProvider');
+          ServiceLocator.log.i('$label: $targetHwdec 硬解(当前$currentHwdec), 无去交错', tag: 'PlayerProvider');
         }
       });
     }
@@ -1154,6 +1163,15 @@ class PlayerProvider extends ChangeNotifier {
         }
       });
 
+      // 实时读取 vo 属性，显示实际视频输出驱动（如 libmpv/gpu-next）
+      // 避免仅显示配置值（auto），日志解析存在覆盖/缺失的不可靠情况
+      _safeGetProperty('vo', 'vo').then((current) {
+        if (current != null && current.isNotEmpty && current != _vo) {
+          _vo = current.split(',').first.trim();
+          notifyListeners();
+        }
+      });
+
       // 实时读取音频信息
       _safeGetProperty('audio-params/codec', 'audio-codec').then((codec) {
         if (codec != null && codec.isNotEmpty && codec != _audioCodec) {
@@ -1295,7 +1313,7 @@ class PlayerProvider extends ChangeNotifier {
 
     // e.g. "VO: [gpu] 1920x1080"
     final voMatch =
-        RegExp(r'vo:\s*\[?([a-z0-9_\-]+)\]?').firstMatch(lowerMessage);
+        RegExp(r'vo:\s*\[([a-z0-9_\-]+)\]').firstMatch(lowerMessage);
     if (voMatch != null) {
       detected = voMatch.group(1);
     }
@@ -1316,18 +1334,6 @@ class PlayerProvider extends ChangeNotifier {
   String _formatHwdecInfo() {
     final configured = _configuredHwdec.trim();
     final actual = _hwdecMode.trim();
-    if (configured.isEmpty || configured == 'unknown') {
-      return actual == 'unknown' ? '' : actual;
-    }
-    if (actual.isEmpty || actual == 'unknown' || actual == configured) {
-      return configured;
-    }
-    return '$configured -> $actual';
-  }
-
-  String _formatVoInfo() {
-    final configured = _configuredVo.trim();
-    final actual = _vo.trim();
     if (configured.isEmpty || configured == 'unknown') {
       return actual == 'unknown' ? '' : actual;
     }

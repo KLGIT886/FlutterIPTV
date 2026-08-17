@@ -402,6 +402,11 @@ class MultiScreenProvider extends ChangeNotifier {
       configuration: PlayerConfiguration(
         bufferSize: bufferSize,
         vo: vo,
+        // 协议白名单：media_kit 默认不含 rtsp，此处在创建时加入以支持 RTSP 播放
+        // （media_kit 通过 demuxer-lavf-o=protocol_whitelist 传给 mpv）
+        protocolWhitelist: const [
+          'udp', 'rtp', 'rtsp', 'tcp', 'tls', 'data', 'file', 'http', 'https', 'crypto',
+        ],
       ),
     );
     screen.player = player;
@@ -777,15 +782,24 @@ class MultiScreenProvider extends ChangeNotifier {
           // 其它未知配置：不干预，保持现状（用户配置指定）
         } else {
           // 分支 B: 逐行源（1080p / 2160p SDR / 2160p HDR 等）
-          // 显式重置 hwdec 为用户配置模式，清除上一流可能设置的 d3d11va-copy
-          // 同步阶段跳过 hwdec 设置（initialHwdecSet 已为 true），
-          // 因此由异步阶段在此处确保 hwdec 正确
-          await _safeSetProperty(player, 'hwdec', _getConfiguredHwdecMode(), 'hwdec_progressive');
+          // 仅当 hwdec 类别与用户配置不一致时才重置，清除上一流可能残留的
+          // d3d11va-copy；若类别一致（如同为 copy 系）则不重置，
+          // 避免 1080i→4K 切换时 hwdec 值变动触发解码器重建导致播放器重置
+          final targetHwdec = _getConfiguredHwdecMode();
+          // 读取当前实际 hwdec（hwdec-current），未知时按空处理
+          final readHwdec = await _safeGetProperty(player, 'hwdec-current', 'hwdec-current');
+          final currentHwdec = readHwdec ?? '';
+          // 目标与当前的 copy/direct 类别是否一致（copy-back 语义相同时无需重建）
+          final isCopyTarget = targetHwdec == 'auto-copy' || targetHwdec.endsWith('-copy');
+          final isCopyActual = currentHwdec.endsWith('-copy') || currentHwdec == 'auto-copy';
+          if (readHwdec == null || readHwdec.isEmpty || isCopyTarget != isCopyActual) {
+            // 类别不一致或未知：显式重置为用户配置的 hwdec
+            await _safeSetProperty(player, 'hwdec', targetHwdec, 'hwdec_progressive');
+          }
           await _safeSetProperty(player, 'deinterlace', 'no', 'deinterlace');
           await _safeSetProperty(player, 'vf', '', 'clear_vf');
           final label = h > 0 ? '${h}p 逐行源' : '源（默认按逐行处理）';
-          final currentHwdec = _decodingMode == 'software' ? '软解(no)' : _getConfiguredHwdecMode();
-          ServiceLocator.log.i('MultiScreenProvider: $label: $currentHwdec 硬解, 无去交错');
+          ServiceLocator.log.i('MultiScreenProvider: $label: $targetHwdec 硬解(当前$currentHwdec), 无去交错');
         }
       });
     }
