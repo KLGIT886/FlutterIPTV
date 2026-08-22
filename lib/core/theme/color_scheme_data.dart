@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 配色方案数据模型
 /// 定义单个配色方案的所有颜色信息

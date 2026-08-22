@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:provider/provider.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
@@ -760,12 +760,14 @@ class _DlnaAwareAppState extends State<_DlnaAwareApp> with WindowListener {
             Locale('en', ''),
             Locale('zh', ''),
           ],
-          localizationsDelegates: const [
+          localizationsDelegates: [
             AppStrings.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
+            ...GlobalMaterialLocalizations.delegates,
+            ...GlobalCupertinoLocalizations.delegates,
           ],
+          // 兼容仍使用 flutter/material 的第三方依赖
+          builder: (context, child) =>
+              MaterialUiCompatibilityBridge(child: child!),
           home: DisclaimerScreen(
             onAccepted: _handleDisclaimerAccepted,
           ),
@@ -811,11 +813,10 @@ class _DlnaAwareAppState extends State<_DlnaAwareApp> with WindowListener {
               Locale('en', ''),
               Locale('zh', ''),
             ],
-            localizationsDelegates: const [
+            localizationsDelegates: [
               AppStrings.delegate,
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
+              ...GlobalMaterialLocalizations.delegates,
+              ...GlobalCupertinoLocalizations.delegates,
             ],
             // Use shortcuts for TV remote support
             shortcuts: <ShortcutActivator, Intent>{
@@ -828,18 +829,21 @@ class _DlnaAwareAppState extends State<_DlnaAwareApp> with WindowListener {
             onGenerateRoute: AppRouter.generateRoute,
             initialRoute: AppRouter.splash,
             builder: (context, child) {
-              return MediaQuery(
-                data: MediaQuery.of(context).copyWith(
-                  textScaler: const TextScaler.linear(1.0),
+              // 兼容仍使用 flutter/material 的第三方依赖
+              return MaterialUiCompatibilityBridge(
+                child: MediaQuery(
+                  data: MediaQuery.of(context).copyWith(
+                    textScaler: const TextScaler.linear(1.0),
+                  ),
+                  child: Platform.isWindows
+                      ? Stack(
+                          children: [
+                            child!,
+                            const WindowTitleBar(),
+                          ],
+                        )
+                      : child!,
                 ),
-                child: Platform.isWindows
-                    ? Stack(
-                        children: [
-                          child!,
-                          const WindowTitleBar(),
-                        ],
-                      )
-                    : child!,
               );
             },
           ),

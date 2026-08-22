@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 免责声明对话框
 /// 首次启动时显示，用户必须同意才能继续使用
