@@ -894,11 +894,11 @@ class _AddPlaylistDialogState extends State<AddPlaylistDialog> {
         allowedExtensions: ['m3u', 'm3u8', 'txt'],
       );
 
-      if (result != null && result.files.single.path != null) {
+      if (result.isNotEmpty && result.first.path != null) {
         if (!mounted) return;
 
-        final filePath = result.files.single.path!;
-        final fileName = result.files.single.name.replaceAll(RegExp(r'\.(m3u8?|txt)$'), '');
+        final filePath = result.first.path!;
+        final fileName = result.first.name.replaceAll(RegExp(r'\.(m3u8?|txt)$'), '');
 
         try {
           final settings = context.read<SettingsProvider>();

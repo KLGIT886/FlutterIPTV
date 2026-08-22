@@ -350,11 +350,11 @@ class BackupProvider extends ChangeNotifier {
         dialogTitle: '选择备份文件',
       );
 
-      if (result == null || result.files.isEmpty) {
+      if (result.isEmpty) {
         return false; // 用户取消选择
       }
 
-      final filePath = result.files.first.path;
+      final filePath = result.first.path;
       if (filePath == null) {
         _error = '无法获取文件路径';
         notifyListeners();
