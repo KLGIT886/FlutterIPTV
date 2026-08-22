@@ -128,6 +128,33 @@ class EpgService {
     }).toList();
   }
 
+  /// 获取某频道 EPG 数据覆盖的日历日列表（按天去重、升序）。
+  /// 日期窗口完全由数据反推：最早节目日 = 可回看的最早一天，
+  /// 最晚节目日 = 预览/可看的最晚一天。无节目数据时返回单天（今天）。
+  List<DateTime> getAvailableDates(
+      String? channelId, String? channelName) {
+    final programs = _findPrograms(channelId, channelName);
+    if (programs == null || programs.isEmpty) return [DateTime.now()];
+
+    DateTime min = programs.first.start;
+    DateTime max = programs.first.end;
+    for (final p in programs) {
+      if (p.start.isBefore(min)) min = p.start;
+      if (p.end.isAfter(max)) max = p.end;
+    }
+
+    final minDay = DateTime(min.year, min.month, min.day);
+    final maxDay = DateTime(max.year, max.month, max.day);
+
+    final dates = <DateTime>[];
+    for (var d = minDay;
+        !d.isAfter(maxDay);
+        d = DateTime(d.year, d.month, d.day + 1)) {
+      dates.add(d);
+    }
+    return dates;
+  }
+
   List<EpgProgram>? _findPrograms(String? channelId, String? channelName) {
     // 生成缓存 key
     final cacheKey = '${channelId ?? ''}_${channelName ?? ''}';

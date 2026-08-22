@@ -114,6 +114,12 @@ class EpgProvider extends ChangeNotifier {
     return _epgService.getTodayPrograms(channelId, channelName);
   }
 
+  /// 获取频道 EPG 数据覆盖的可用日历日列表（由数据反推）
+  List<DateTime> getAvailableDates(
+      String? channelId, String? channelName) {
+    return _epgService.getAvailableDates(channelId, channelName);
+  }
+
   void clear() {
     _epgService.clear();
     _lastUpdate = null;
