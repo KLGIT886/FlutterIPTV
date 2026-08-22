@@ -56,6 +56,9 @@ class _ChannelItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 读取首页字体缩放设置（分类页与首页保持一致）
+    final fontScale = context.watch<SettingsProvider>().homeFontScale;
+
     // ✅ 使用 select 替代 watch，只监听特定频道的数据变化
     final isFavorite = context.select<FavoritesProvider, bool>(
       (provider) => provider.isFavorite(channel.id ?? 0),
@@ -84,6 +87,7 @@ class _ChannelItem extends StatelessWidget {
       nextProgram: nextProgram?.title,
       isFavorite: isFavorite,
       isUnavailable: isUnavailable,
+      fontScale: fontScale,
       autofocus: false, // 移除 autofocus，由 focusNode 控制
       focusNode: focusNode,
       onFocused: onFocused,

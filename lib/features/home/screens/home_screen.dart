@@ -1962,6 +1962,8 @@ class _OptimizedChannelCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 读取首页字体缩放设置（变化时触发重建）
+    final fontScale = context.watch<SettingsProvider>().homeFontScale;
     // 使用 Selector 监听收藏状态和 EPG 数据变化
     return Selector2<FavoritesProvider, EpgProvider, _ChannelCardData>(
       selector: (_, favProvider, epgProvider) {
@@ -1984,6 +1986,7 @@ class _OptimizedChannelCard extends StatelessWidget {
           currentProgram: data.currentProgram,
           nextProgram: data.nextProgram,
           isFavorite: data.isFavorite,
+          fontScale: fontScale,
           onFavoriteToggle: () =>
               context.read<FavoritesProvider>().toggleFavorite(channel),
           onTap: onTap,

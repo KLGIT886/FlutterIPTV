@@ -43,6 +43,9 @@ class AppStrings {
   String get fontFamily => _localizedValues['fontFamily']!;
   String get fontFamilyDesc => _localizedValues['fontFamilyDesc']!;
   String get fontChanged => _localizedValues['fontChanged']!;
+  String get homeFontSize => _localizedValues['homeFontSize']!;
+  String get homeFontSizeDesc => _localizedValues['homeFontSizeDesc']!;
+  String get homeFontSizeSet => _localizedValues['homeFontSizeSet']!;
   String get unknown => _localizedValues['unknown']!;
   String get save => _localizedValues['save']!;
   String get error => _localizedValues['error']!;
@@ -749,6 +752,9 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'fontFamily': '字体',
     'fontFamilyDesc': '选择应用显示字体',
     'fontChanged': '字体已更改为 {font}',
+    'homeFontSize': '首页字体大小',
+    'homeFontSizeDesc': '调整首页节目名称和EPG节目单字体大小',
+    'homeFontSizeSet': '首页字体大小已设置为 {value}',
     'unknown': '未知',
     'save': '保存',
     'error': '错误',
@@ -1346,6 +1352,9 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'fontFamily': 'Font Family',
     'fontFamilyDesc': 'Choose application display font',
     'fontChanged': 'Font changed to {font}',
+    'homeFontSize': 'Home Font Size',
+    'homeFontSizeDesc': 'Adjust font size of home channel names and EPG program list',
+    'homeFontSizeSet': 'Home font size set to {value}',
     'unknown': 'Unknown',
     'save': 'Save',
     'error': 'Error',

@@ -58,6 +58,7 @@ class SettingsProvider extends ChangeNotifier {
   static const String _keyDarkColorScheme = 'dark_color_scheme';
   static const String _keyLightColorScheme = 'light_color_scheme';
   static const String _keyFontFamily = 'font_family';
+  static const String _keyHomeFontScale = 'home_font_scale'; // 首页节目名称/EPG字体大小
   static const String _keySimpleMenu = 'simple_menu';
   static const String _keyLogLevel = 'log_level'; // debug, release, off
   static const String _keyMobileOrientation =
@@ -124,6 +125,7 @@ class SettingsProvider extends ChangeNotifier {
   String _darkColorScheme = 'ocean'; // 黑暗模式配色方案（默认海洋）
   String _lightColorScheme = 'sky'; // 明亮模式配色方案（默认天空）
   String _fontFamily = 'Arial'; // 字体设置（默认Arial，英文环境）
+  double _homeFontScale = 1.0; // 首页节目名称/EPG字体缩放（默认100%）
   bool _simpleMenu = true; // 是否使用简单菜单栏（不展开）- 默认启用
   String _logLevel = 'off'; // 日志级别：debug, release, off - 默认关闭
   String _mobileOrientation =
@@ -180,6 +182,7 @@ class SettingsProvider extends ChangeNotifier {
   String get darkColorScheme => _darkColorScheme;
   String get lightColorScheme => _lightColorScheme;
   String get fontFamily => _fontFamily;
+  double get homeFontScale => _homeFontScale;
   bool get simpleMenu => _simpleMenu;
   String get logLevel => _logLevel;
   String get mobileOrientation => _mobileOrientation;
@@ -300,6 +303,9 @@ class SettingsProvider extends ChangeNotifier {
 
     // 加载字体设置
     _fontFamily = prefs.getString(_keyFontFamily) ?? 'System';
+
+    // 加载首页字体缩放设置
+    _homeFontScale = prefs.getDouble(_keyHomeFontScale) ?? 1.0;
 
     // 加载简单菜单设置
     _simpleMenu = prefs.getBool(_keySimpleMenu) ?? true;
@@ -437,6 +443,7 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setString(_keyDarkColorScheme, _darkColorScheme);
     await prefs.setString(_keyLightColorScheme, _lightColorScheme);
     await prefs.setString(_keyFontFamily, _fontFamily);
+    await prefs.setDouble(_keyHomeFontScale, _homeFontScale);
     await prefs.setBool(_keySimpleMenu, _simpleMenu);
     await prefs.setString(_keyLogLevel, _logLevel);
     await prefs.setString(_keyMobileOrientation, _mobileOrientation);
@@ -749,6 +756,13 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 设置首页字体缩放
+  Future<void> setHomeFontScale(double scale) async {
+    _homeFontScale = scale;
+    await _saveSettings();
+    notifyListeners();
+  }
+
   /// 设置字体
   Future<void> setFontFamily(String fontFamily) async {
     ServiceLocator.log.d('SettingsProvider: 设置字体 - $fontFamily');
@@ -986,6 +1000,7 @@ class SettingsProvider extends ChangeNotifier {
     _darkColorScheme = 'ocean';
     _lightColorScheme = 'sky';
     _fontFamily = 'System';
+    _homeFontScale = 1.0;
     _userAgent = defaultUserAgent; // 重置 User-Agent 为默认值 Wget/1.21.3
     _showUserAgent = false; // 重置显示User-Agent开关为关闭
     _pageTransitionAnimation = 'fade';

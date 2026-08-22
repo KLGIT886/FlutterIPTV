@@ -148,6 +148,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: () => _showFontFamilyDialog(context, settings),
               ),
               _buildDivider(),
+              _buildSelectTile(
+                context,
+                title: AppStrings.of(context)?.homeFontSize ?? '首页字体大小',
+                subtitle: _getHomeFontSizeLabel(context, settings),
+                icon: Icons.format_size_rounded,
+                onTap: () => _showHomeFontSizeDialog(context, settings),
+              ),
+              _buildDivider(),
               _buildSwitchTile(
                 context,
                 title: AppStrings.of(context)?.simpleMenu ?? 'Simple Menu',
@@ -2263,6 +2271,165 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (db == 0) return strings?.volumeBoostNormal ?? 'Keep original volume';
     if (db <= 10) return strings?.volumeBoostSlightHigh ?? 'Slightly higher volume';
     return strings?.volumeBoostHigh ?? 'Significantly higher volume';
+  }
+
+  /// 首页字体大小显示文本
+  String _getHomeFontSizeLabel(BuildContext context, SettingsProvider settings) {
+    final percent = (settings.homeFontScale * 100).round();
+    if (percent == 100) return '$percent%（默认）';
+    return '$percent%';
+  }
+
+  /// 首页字体大小设置对话框（仅影响首页节目名称与EPG节目单）
+  void _showHomeFontSizeDialog(
+      BuildContext context, SettingsProvider settings) {
+    const minScale = 0.8;
+    const maxScale = 1.2; // 范围：80%~120%
+    const divisions = 8; // 步长 0.05
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        final strings = AppStrings.of(context);
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: Container(
+            width: 300,
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+            decoration: BoxDecoration(
+              color: AppTheme.getSurfaceColor(context),
+              borderRadius: BorderRadius.circular(18),
+              border:
+                  Border.all(color: AppTheme.getGlassBorderColor(context)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 标题行
+                Row(
+                  children: [
+                    Icon(Icons.format_size_rounded,
+                        color: AppTheme.getPrimaryColor(context), size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        strings?.homeFontSize ?? '首页字体大小',
+                        style: TextStyle(
+                          color: AppTheme.getTextPrimary(context),
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                // 描述 + 当前值
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        strings?.homeFontSizeDesc ??
+                            '调整首页节目名称和EPG节目单字体大小',
+                        style: TextStyle(
+                          color: AppTheme.getTextMuted(context),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${(settings.homeFontScale * 100).round()}%',
+                      style: TextStyle(
+                        color: AppTheme.getPrimaryColor(context),
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                // 滑块
+                StatefulBuilder(
+                  builder: (context, setState) {
+                    final scale =
+                        settings.homeFontScale.clamp(minScale, maxScale);
+                    final percent = (scale * 100).round();
+                    return SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        trackHeight: 4,
+                        thumbShape: const RoundSliderThumbShape(
+                            enabledThumbRadius: 8),
+                        overlayShape: const RoundSliderOverlayShape(
+                            overlayRadius: 14),
+                      ),
+                      child: Slider(
+                        value: scale,
+                        min: minScale,
+                        max: maxScale,
+                        divisions: divisions,
+                        label: '$percent%',
+                        activeColor: AppTheme.getPrimaryColor(context),
+                        inactiveColor: AppTheme.getTextMuted(context)
+                            .withOpacity(0.2),
+                        onChanged: (value) {
+                          setState(() {
+                            settings.setHomeFontScale(value);
+                          });
+                        },
+                      ),
+                    );
+                  },
+                ),
+                // 操作按钮
+                Row(
+                  children: [
+                    TextButton.icon(
+                      onPressed: () {
+                        settings.setHomeFontScale(1.0);
+                        Navigator.pop(dialogContext);
+                        final s = AppStrings.of(context);
+                        _showSuccess(
+                            context,
+                            (s?.homeFontSizeSet ?? '首页字体大小已设置为 {value}')
+                                .replaceFirst('{value}', '100%'));
+                      },
+                      icon: Icon(Icons.restart_alt_rounded,
+                          color: AppTheme.getTextMuted(context), size: 15),
+                      label: Text(
+                        strings?.reset ?? '重置',
+                        style: TextStyle(
+                          color: AppTheme.getTextMuted(context),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppTheme.getPrimaryColor(context),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        strings?.close ?? '关闭',
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _showRefreshIntervalDialog(BuildContext context, SettingsProvider settings) {

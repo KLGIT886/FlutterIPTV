@@ -39,6 +39,7 @@ class ChannelCard extends StatefulWidget {
   final VoidCallback? onFocused; // 获得焦点时的回调
   final bool autofocus;
   final FocusNode? focusNode;
+  final double fontScale; // 节目名称/EPG字体缩放系数，仅影响文本部分
 
   const ChannelCard({
     super.key,
@@ -61,6 +62,7 @@ class ChannelCard extends StatefulWidget {
     this.onFocused,
     this.autofocus = false,
     this.focusNode,
+    this.fontScale = 1.0,
   });
 
   @override
@@ -234,6 +236,7 @@ class _ChannelCardState extends State<ChannelCard> {
               ),
             ),
             // 内容区域 - 固定占40%高度，内容自适应
+            // 使用 FittedBox 缩放：字体放大后若超出高度则整体等比缩小，避免 RenderFlex overflow
             Expanded(
               flex: 40,
               child: Container(
@@ -241,26 +244,39 @@ class _ChannelCardState extends State<ChannelCard> {
                   horizontal: isMobile ? 4 : 8,
                   vertical: isMobile ? 3 : 5,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    // 频道名称 - 始终显示，支持自动滚动
-                    _AutoScrollText(
-                      text: widget.name,
-                      style: TextStyle(
-                        color: AppTheme.getTextPrimary(context),
-                        fontSize: isMobile ? 9 : 11,
-                        fontWeight: FontWeight.w600,
-                        height: 1.2,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.topLeft,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minWidth: constraints.maxWidth,
+                          maxWidth: constraints.maxWidth,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          children: [
+                            // 频道名称 - 始终显示，支持自动滚动
+                            _AutoScrollText(
+                              text: widget.name,
+                              style: TextStyle(
+                                color: AppTheme.getTextPrimary(context),
+                                fontSize: (isMobile ? 9 : 11) * widget.fontScale,
+                                fontWeight: FontWeight.w600,
+                                height: 1.2,
+                              ),
+                              shouldScroll: _isHovered || _isFocused,
+                            ),
+                            // EPG或分类信息 - 自适应显示
+                            _buildInfoSection(context, isMobile),
+                          ],
+                        ),
                       ),
-                      shouldScroll: _isHovered || _isFocused,
-                    ),
-                    // EPG或分类信息 - 自适应显示
-                    Expanded(
-                      child: _buildInfoSection(context, isMobile),
-                    ),
-                  ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -278,6 +294,7 @@ class _ChannelCardState extends State<ChannelCard> {
     final hasEpg = hasCurrentProgram || hasNextProgram;
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.start,
       children: [
@@ -294,7 +311,7 @@ class _ChannelCardState extends State<ChannelCard> {
                     text: widget.currentProgram!,
                     style: TextStyle(
                       color: AppTheme.getPrimaryColor(context), 
-                      fontSize: isMobile ? 7 : 9,
+                      fontSize: (isMobile ? 7 : 9) * widget.fontScale,
                       height: 1.1,
                     ),
                     shouldScroll: _isHovered || _isFocused,
@@ -314,7 +331,7 @@ class _ChannelCardState extends State<ChannelCard> {
                     text: widget.nextProgram!,
                     style: TextStyle(
                       color: AppTheme.getPrimaryColor(context).withOpacity(0.8), 
-                      fontSize: isMobile ? 7 : 9,
+                      fontSize: (isMobile ? 7 : 9) * widget.fontScale,
                       height: 1.1,
                       fontWeight: FontWeight.w500,
                     ),
@@ -333,7 +350,7 @@ class _ChannelCardState extends State<ChannelCard> {
               text: widget.groupName!,
               style: TextStyle(
                 color: AppTheme.getPrimaryColor(context).withOpacity(0.8), 
-                fontSize: isMobile ? 8 : 10,
+                fontSize: (isMobile ? 8 : 10) * widget.fontScale,
                 height: 1.1,
                 fontWeight: FontWeight.w500,
               ),
@@ -345,7 +362,7 @@ class _ChannelCardState extends State<ChannelCard> {
             AppStrings.of(context)?.noProgramInfo ?? 'No Program Info',
             style: TextStyle(
               color: AppTheme.getPrimaryColor(context).withOpacity(0.6), 
-              fontSize: isMobile ? 7 : 9,
+              fontSize: (isMobile ? 7 : 9) * widget.fontScale,
               height: 1.1,
             ),
             maxLines: 1,
