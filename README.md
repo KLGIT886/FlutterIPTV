@@ -9,14 +9,14 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/shnulaa/FlutterIPTV/releases">
-    <img src="https://img.shields.io/github/v/release/shnulaa/FlutterIPTV?include_prereleases" alt="最新版本">
+  <a href="https://github.com/KLGIT886/FlutterIPTV/releases">
+    <img src="https://img.shields.io/github/v/release/KLGIT886/FlutterIPTV?include_prereleases" alt="最新版本">
   </a>
-  <a href="https://github.com/shnulaa/FlutterIPTV/actions/workflows/build-release.yml">
-    <img src="https://github.com/shnulaa/FlutterIPTV/actions/workflows/build-release.yml/badge.svg" alt="构建状态">
+  <a href="https://github.com/KLGIT886/FlutterIPTV/actions/workflows/build-release.yml">
+    <img src="https://github.com/KLGIT886/FlutterIPTV/actions/workflows/build-release.yml/badge.svg" alt="构建状态">
   </a>
-  <a href="https://github.com/shnulaa/FlutterIPTV/releases">
-    <img src="https://img.shields.io/github/downloads/shnulaa/FlutterIPTV/total" alt="下载量">
+  <a href="https://github.com/KLGIT886/FlutterIPTV/releases">
+    <img src="https://img.shields.io/github/downloads/KLGIT886/FlutterIPTV/total" alt="下载量">
   </a>
 </p>
 
@@ -27,7 +27,7 @@
 Lotus IPTV 是一款基于 Flutter 开发的现代化高性能 IPTV 播放器（支持分屏播放）。采用精美的多主题 UI，渐变色调，针对桌面、移动端和电视平台进行了深度优化。
 
 > **💡 欢迎反馈**  
-> 欢迎大家提出 [Issue](https://github.com/shnulaa/FlutterIPTV/issues)！因为没有你们提出的 bug 或者改进建议，软件就没有希望！您的每一个反馈都是推动项目进步的动力。
+> 欢迎大家提出 [Issue](https://github.com/KLGIT886/FlutterIPTV/issues)！因为没有你们提出的 bug 或者改进建议，软件就没有希望！您的每一个反馈都是推动项目进步的动力。
 
 ## 📸 软件截图
 
@@ -129,7 +129,7 @@ Lotus IPTV 是一款基于 Flutter 开发的现代化高性能 IPTV 播放器（
 
 ## 🚀 下载安装
 
-从 [Releases 页面](https://github.com/shnulaa/FlutterIPTV/releases/latest) 下载最新版本。
+从 [Releases 页面](https://github.com/KLGIT886/FlutterIPTV/releases/latest) 下载最新版本。
 
 ### 支持平台
 - **Windows**: x64 安装包 (.exe)
@@ -186,7 +186,7 @@ Lotus IPTV 是一款基于 Flutter 开发的现代化高性能 IPTV 播放器（
 
 ### 构建步骤
 ```bash
-git clone https://github.com/shnulaa/FlutterIPTV.git
+git clone https://github.com/KLGIT886/FlutterIPTV.git
 cd FlutterIPTV
 flutter pub get
 

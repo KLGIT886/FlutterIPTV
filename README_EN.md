@@ -9,14 +9,14 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/shnulaa/FlutterIPTV/releases">
-    <img src="https://img.shields.io/github/v/release/shnulaa/FlutterIPTV?include_prereleases" alt="Latest Release">
+  <a href="https://github.com/KLGIT886/FlutterIPTV/releases">
+    <img src="https://img.shields.io/github/v/release/KLGIT886/FlutterIPTV?include_prereleases" alt="Latest Release">
   </a>
-  <a href="https://github.com/shnulaa/FlutterIPTV/actions/workflows/build-release.yml">
-    <img src="https://github.com/shnulaa/FlutterIPTV/actions/workflows/build-release.yml/badge.svg?branch=main" alt="Build Status">
+  <a href="https://github.com/KLGIT886/FlutterIPTV/actions/workflows/build-release.yml">
+    <img src="https://github.com/KLGIT886/FlutterIPTV/actions/workflows/build-release.yml/badge.svg?branch=main" alt="Build Status">
   </a>
-  <a href="https://github.com/shnulaa/FlutterIPTV/releases">
-    <img src="https://img.shields.io/github/downloads/shnulaa/FlutterIPTV/total" alt="Downloads">
+  <a href="https://github.com/KLGIT886/FlutterIPTV/releases">
+    <img src="https://img.shields.io/github/downloads/KLGIT886/FlutterIPTV/total" alt="Downloads">
   </a>
 </p>
 
@@ -27,7 +27,7 @@
 Lotus IPTV is a modern, high-performance IPTV player built with Flutter. Features a beautiful Lotus-themed UI with pink/purple gradient accents(Split-screen support), optimized for seamless viewing across desktop, mobile, and TV platforms.
 
 > **💡 Feedback Welcome**  
-> We welcome everyone to submit [Issues](https://github.com/shnulaa/FlutterIPTV/issues)! Without your bug reports and improvement suggestions, the software has no hope of progress! Every piece of feedback you provide is the driving force behind the project's advancement.
+> We welcome everyone to submit [Issues](https://github.com/KLGIT886/FlutterIPTV/issues)! Without your bug reports and improvement suggestions, the software has no hope of progress! Every piece of feedback you provide is the driving force behind the project's advancement.
 
 ## 📸 Screenshots
 
@@ -77,7 +77,7 @@ To start watching channels, you need to add M3U/M3U8/TXT playlist sources:
 
 ## 🚀 Download
 
-Download the latest version from [Releases Page](https://github.com/shnulaa/FlutterIPTV/releases/latest).
+Download the latest version from [Releases Page](https://github.com/KLGIT886/FlutterIPTV/releases/latest).
 
 ### Available Platforms
 - **Windows**: x64 Installer (.exe)
@@ -201,7 +201,7 @@ Download the latest version from [Releases Page](https://github.com/shnulaa/Flut
 
 ### Build
 ```bash
-git clone https://github.com/shnulaa/FlutterIPTV.git
+git clone https://github.com/KLGIT886/FlutterIPTV.git
 cd FlutterIPTV
 flutter pub get
 

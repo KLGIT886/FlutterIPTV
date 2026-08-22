@@ -486,11 +486,11 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
     <deviceType>urn:schemas-upnp-org:device:MediaRenderer:1</deviceType>
     <friendlyName>$_deviceName</friendlyName>
     <manufacturer>Lotus IPTV</manufacturer>
-    <manufacturerURL>https://github.com/shnulaa/FlutterIPTV</manufacturerURL>
+    <manufacturerURL>https://github.com/KLGIT886/FlutterIPTV</manufacturerURL>
     <modelDescription>Lotus IPTV Media Renderer</modelDescription>
     <modelName>Lotus IPTV</modelName>
     <modelNumber>1.0</modelNumber>
-    <modelURL>https://github.com/shnulaa/FlutterIPTV</modelURL>
+    <modelURL>https://github.com/KLGIT886/FlutterIPTV</modelURL>
     <UDN>$_deviceUuid</UDN>
     <dlna:X_DLNADOC>DMR-1.50</dlna:X_DLNADOC>
     <serviceList>
