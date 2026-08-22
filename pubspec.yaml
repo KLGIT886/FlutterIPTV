@@ -44,7 +44,7 @@ dependencies:
   # UI Components
   cached_network_image: ^3.3.0
   flutter_cache_manager: ^3.4.2
-  shimmer: ^3.0.0
+  shimmer: ^4.0.0
   flutter_staggered_animations: ^1.1.1
   qr_flutter: ^4.1.0
   
@@ -71,6 +71,8 @@ dependencies:
   wakelock_plus: ^1.7.0
   screen_retriever: ^0.2.2
   device_info_plus: ^13.2.0
+  material_ui: ^1.0.1
+  cupertino_ui: ^1.0.0
 
 dependency_overrides:
   # 使用 zhongfly/mpv-winbuild 的完整版 libmpv（含 libavfilter + msg-level 支持）
