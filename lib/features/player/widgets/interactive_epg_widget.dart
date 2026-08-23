@@ -70,7 +70,20 @@ class _InteractiveEpgWidgetState extends State<InteractiveEpgWidget> {
         onTap: () {}, // 吞掉点击事件
         child: Container(
           width: panelWidth,
-          color: Colors.black.withOpacity(0.85),
+          decoration: const BoxDecoration(
+            // 透明度对齐播放器左侧分类面板：90%→60%→透明渐变
+            // 位于屏幕右侧，渐变方向与分类面板（左→透明）镜像，向中间淡出
+            gradient: LinearGradient(
+              begin: Alignment.centerRight,
+              end: Alignment.centerLeft,
+              colors: [
+                Color(0xE6000000),
+                Color(0x99000000),
+                Colors.transparent,
+              ],
+              stops: [0.0, 0.7, 1.0],
+            ),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
