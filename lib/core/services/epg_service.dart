@@ -58,6 +58,10 @@ class EpgService {
   factory EpgService() => _instance;
   EpgService._internal();
 
+  // CCTV*K 通道（如 CCTV4K/CCTV8K）的 K 哨兵：规范化期间用它暂代 K，
+  // 避免被分辨率后缀剥离逻辑误删，最终再还原为 K。
+  static const String _cctvKSentinel = '\uE000';
+
   // channelId -> List<EpgProgram>
   final Map<String, List<EpgProgram>> _programs = {};
 
@@ -239,7 +243,12 @@ class EpgService {
     // 1. 先去除空格、横线、下划线（保留 + 号），统一格式
     normalized = normalized.replaceAll(RegExp(r'[-\s_]+'), '');
 
-    // 2. 特殊处理：CCTV01 -> CCTV1
+    // 2. 特殊处理：CCTV01 -> CCTV1；CCTV*K 通道的 K 先换为哨兵，
+    //    防止步骤3把 K 当分辨率后缀剥掉（否则 CCTV4K 与 CCTV8K 都会塌成 CCTV）。
+    normalized = normalized.replaceAllMapped(
+      RegExp(r'CCTV0*(\d+)K'),
+      (match) => 'CCTV${match.group(1)}$_cctvKSentinel',
+    );
     normalized = normalized.replaceAllMapped(
       RegExp(r'CCTV0*(\d+)'),
       (match) => 'CCTV${match.group(1)}',
@@ -275,6 +284,9 @@ class EpgService {
       RegExp(r'(卫视)(高清|超清)$'),
       r'$1',
     );
+
+    // 还原 CCTV*K 通道的 K（CCTV4K -> CCTV4K，CCTV8K -> CCTV8K）
+    normalized = normalized.replaceAll(_cctvKSentinel, 'K');
 
     return normalized;
   }
@@ -470,7 +482,12 @@ class EpgService {
     // 1. 先去除空格、横线、下划线（保留 + 号），统一格式
     normalized = normalized.replaceAll(RegExp(r'[-\s_]+'), '');
 
-    // 2. 特殊处理：CCTV01 -> CCTV1
+    // 2. 特殊处理：CCTV01 -> CCTV1；CCTV*K 通道的 K 先换为哨兵，
+    //    防止步骤3把 K 当分辨率后缀剥掉（否则 CCTV4K 与 CCTV8K 都会塌成 CCTV）。
+    normalized = normalized.replaceAllMapped(
+      RegExp(r'CCTV0*(\d+)K'),
+      (match) => 'CCTV${match.group(1)}$_cctvKSentinel',
+    );
     normalized = normalized.replaceAllMapped(
       RegExp(r'CCTV0*(\d+)'),
       (match) => 'CCTV${match.group(1)}',
@@ -506,6 +523,9 @@ class EpgService {
       RegExp(r'(卫视)(高清|超清)$'),
       r'$1',
     );
+
+    // 还原 CCTV*K 通道的 K（CCTV4K -> CCTV4K，CCTV8K -> CCTV8K）
+    normalized = normalized.replaceAll(_cctvKSentinel, 'K');
 
     return normalized;
   }
