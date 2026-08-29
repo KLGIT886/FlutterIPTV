@@ -5,6 +5,26 @@ All notable changes to FlutterIPTV will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2] - 2026-08-22
+
+### Added
+- **首页/分类页字体调节**：可选节目名称与 EPG 节目单字体大小（80%~120%），不影响其他位置字体，并修复放大字体导致的底部溢出。/ **Home & Category font scaling**: configurable channel name and EPG program guide font size (80%~120%), isolated from other UI, with bottom-overflow fix at large font.
+- **电子节目单（EPG）增强**：回看日期由 EPG 数据动态反推（自动适配 8+1 等源）、竖排日期列、面板宽度自适应最长节目名、自动定位当前时段并高亮（直播 + 回放高亮/回放中标识）。/ **EPG program guide enhancements**: catchup date range derived dynamically from EPG data (auto adapts to 8+1 style sources), vertical date column, panel width auto-fits the longest program name, auto-scroll & highlight of the current program (live highlight + catchup highlight with playing indicator).
+- **回看（catchup）时间参数**：对齐 Kodi pvr.iptvsimple 标准与 rtp2httpd（`${utc}/${utcend}/${timestamp}/${duration}`、`${(b/e)yyyyMMddHHmmss:UTC}`、`${offset}`、`{utc:格式}` 等）。/ **Catchup time parameters**: aligned with Kodi pvr.iptvsimple and rtp2httpd (`${utc}/${utcend}/${timestamp}/${duration}`, `${(b/e)yyyyMMddHHmmss:UTC}`, `${offset}`, `{utc:format}`, etc.).
+- **硬解配置增强**：自动（安全）硬解方案下可配置 `vf=d3d11vpp` 去交错参数（bob/adaptive/mocomp/off）。/ **HW-decoding config**: configurable `vf=d3d11vpp` deinterlace parameters (bob/adaptive/mocomp/off) under Auto (Safe) hardware-decode mode.
+
+### Changed
+- **UI 迁移**：迁移至独立 material_ui/cupertino_ui 包（随 Flutter 设计系统解耦）、升级 shimmer 至 4.0.0、适配 file_picker 正式版 API。/ **UI migration**: moved to standalone material_ui/cupertino_ui packages (design-system decoupling), upgraded shimmer to 4.0.0, adapted file_picker stable API.
+- **EPG 面板视觉**：背景改为渐变透明，对齐播放器分类面板。/ **EPG panel visuals**: background changed to transparent gradient, aligned with the player category panel.
+- **版本链接**：全部指向新仓库 KLGIT886/FlutterIPTV。/ **Version links**: all point to the new repository KLGIT886/FlutterIPTV.
+
+### Fixed
+- **EPG 规范化串扰**：4K/8K 频道（如 CCTV4K/CCTV8K/beijingstv_4k）不再与标清版本错误串扰；高清频道优先匹配自有节目单，无数据时回落到标清版本。/ **EPG normalization conflating 4K/8K channels** (CCTV4K/CCTV8K/beijingstv_4k) with SD versions; HD channels now prefer their own program list and fall back to SD when absent.
+- **EPG 自动滚动失效**：修复懒加载下 ensureVisible 无法定位当前节目。/ **EPG auto-scroll broken**: fixed ensureVisible failing to locate the current program under lazy loading.
+
+### Removed
+- **Vulkan 硬解方案**：h264 Vulkan 解码初始化崩溃。/ **Vulkan hardware-decode mode**: h264 Vulkan decode init crashed.
+
 ## [1.1.30] - 2024-12-21
 
 ### Added
