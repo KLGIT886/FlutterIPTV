@@ -29,7 +29,7 @@ dependencies:
   sqflite_common_ffi: ^2.4.2
   path_provider: ^2.1.6
   path: ^1.8.3
-  file_picker: ^12.0.0
+  file_picker: ^12.1.2
   ffi: ^2.1.0
   
   # HTTP & Network
@@ -42,7 +42,7 @@ dependencies:
   url_launcher: ^6.2.2
   
   # UI Components
-  cached_network_image: ^3.3.0
+  cached_network_image: ^4.0.0
   flutter_cache_manager: ^3.4.2
   shimmer: ^4.0.0
   flutter_staggered_animations: ^1.1.1
@@ -71,8 +71,8 @@ dependencies:
   wakelock_plus: ^1.7.0
   screen_retriever: ^0.2.2
   device_info_plus: ^13.2.0
-  material_ui: ^1.0.1
-  cupertino_ui: ^1.0.0
+  material_ui: ^1.1.0
+  cupertino_ui: ^1.0.1
 
 dependency_overrides:
   # 使用 zhongfly/mpv-winbuild 的完整版 libmpv（含 libavfilter + msg-level 支持）
