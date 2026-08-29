@@ -201,38 +201,59 @@ class EpgService {
     if (channelName != null && channelName.isNotEmpty) {
       final normalizedName = _normalizeName(channelName);
 
-      if (_nameIndex.containsKey(normalizedName)) {
-        // 同一显示名可能映射到多个频道 id（如"湖南卫视"=HUNANSTV 与
-        // HUNANWEISHI50P），遍历候选，优先返回真正有节目数据的那个。
-        for (final foundId in _nameIndex[normalizedName]!) {
-          final list = _programs[foundId];
-          if (list != null && list.isNotEmpty) {
-            _lookupCache[cacheKey] = foundId;
-            return list;
-          }
+      // 4K/8K 频道回落策略：先用含分辨率后缀的名字精确匹配自有节目单
+      // （如 BEIJINGSTV4K / CCTV4K），若该频道无任一候选有节目数据，
+      // 再回落到剥掉分辨率后缀的标清版本（BEIJINGSTV / CCTV4），
+      // 避免 4K 源缺节目单时空白。其他频道不触发回落。
+      String? foundId = _findNameIndexId(normalizedName);
+      if (foundId == null) {
+        final fallbackName =
+            _stripResolutionSuffix(normalizedName);
+        if (fallbackName != normalizedName) {
+          foundId = _findNameIndexId(fallbackName);
         }
-        // 所有候选均无节目数据，返回 null（不缓存，数据就绪后可重新命中）
-        return null;
+      }
+
+      if (foundId != null) {
+        _lookupCache[cacheKey] = foundId;
+        return _programs[foundId];
       }
 
       // 尝试用 channelId 作为名称查找
       if (channelId != null && channelId.isNotEmpty) {
         final normalizedId = _normalizeName(channelId);
-        if (_nameIndex.containsKey(normalizedId)) {
-          for (final foundId in _nameIndex[normalizedId]!) {
-            final list = _programs[foundId];
-            if (list != null && list.isNotEmpty) {
-              _lookupCache[cacheKey] = foundId;
-              return list;
-            }
+        foundId = _findNameIndexId(normalizedId);
+        if (foundId == null) {
+          final fallbackId = _stripResolutionSuffix(normalizedId);
+          if (fallbackId != normalizedId) {
+            foundId = _findNameIndexId(fallbackId);
           }
-          return null;
+        }
+        if (foundId != null) {
+          _lookupCache[cacheKey] = foundId;
+          return _programs[foundId];
         }
       }
     }
 
     // 未匹配：不缓存 null 结果，数据就绪后重新查询即可命中
     return null;
+  }
+
+  /// 在名称索引中查找第一个真正有节目数据的频道 id。
+  /// 未命中或所有候选均无节目数据时返回 null。
+  String? _findNameIndexId(String normalizedName) {
+    if (!_nameIndex.containsKey(normalizedName)) return null;
+    for (final foundId in _nameIndex[normalizedName]!) {
+      final list = _programs[foundId];
+      if (list != null && list.isNotEmpty) return foundId;
+    }
+    return null;
+  }
+
+  /// 剥离分辨率后缀（供 4K/8K 频道回落使用）。仅剥离，不做其它规范化。
+  String _stripResolutionSuffix(String normalized) {
+    return normalized.replaceAll(RegExp(r'(HD|4K|8K|FHD|UHD|SD)'), '');
   }
 
   /// 规范化频道名称，用于智能匹配
@@ -254,8 +275,10 @@ class EpgService {
       (match) => 'CCTV${match.group(1)}',
     );
 
-    // 3. 去除英文后缀
-    normalized = normalized.replaceAll(RegExp(r'(HD|4K|8K|FHD|UHD|SD)'), '');
+    // 3. 去除英文后缀。注意：4K/8K 不剥离，超高清分辨率频道
+    //    （如 CCTV4K、beijingstv_4k）与标清版本独立，不再共享合并节目单；
+    //    仅剥 HD/FHD/UHD/SD。
+    normalized = normalized.replaceAll(RegExp(r'(HD|FHD|UHD|SD)'), '');
 
     // 4. 去除中文后缀（匹配末尾的修饰词）
     normalized = normalized.replaceAll(
@@ -493,8 +516,10 @@ class EpgService {
       (match) => 'CCTV${match.group(1)}',
     );
 
-    // 3. 去除英文后缀
-    normalized = normalized.replaceAll(RegExp(r'(HD|4K|8K|FHD|UHD|SD)'), '');
+    // 3. 去除英文后缀。注意：4K/8K 不剥离，超高清分辨率频道
+    //    （如 CCTV4K、beijingstv_4k）与标清版本独立，不再共享合并节目单；
+    //    仅剥 HD/FHD/UHD/SD。
+    normalized = normalized.replaceAll(RegExp(r'(HD|FHD|UHD|SD)'), '');
 
     // 4. 去除中文后缀（匹配末尾的修饰词）
     normalized = normalized.replaceAll(
