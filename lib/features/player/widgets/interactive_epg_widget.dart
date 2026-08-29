@@ -280,29 +280,7 @@ class _InteractiveEpgWidgetState extends State<InteractiveEpgWidget> {
 
                         if (targetIndex >= 0 &&
                             _programScrollController.hasClients) {
-                          // 高度自适应后 ListView.builder 懒加载，目标项若在视口外
-                          // currentContext 为 null，直接 ensureVisible 会失效。
-                          // 先按估算行高粗跳（不依赖 item 已构建），让目标进入构建
-                          // 范围，再在下一帧精确居中。
-                          const double estimateHeight = 76.0;
-                          final maxScroll = _programScrollController
-                              .position.maxScrollExtent;
-                          final estimateOffset = (targetIndex * estimateHeight)
-                              .clamp(0.0, maxScroll)
-                              .toDouble();
-                          _programScrollController.jumpTo(estimateOffset);
-
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            final ctx = _itemKeys[targetIndex].currentContext;
-                            if (ctx != null) {
-                              Scrollable.ensureVisible(
-                                ctx,
-                                alignment: 0.5,
-                                duration: const Duration(milliseconds: 150),
-                                curve: Curves.easeInOut,
-                              );
-                            }
-                          });
+                          _scrollToProgram(targetIndex);
                         }
                       });
                     }
@@ -467,6 +445,62 @@ class _InteractiveEpgWidgetState extends State<InteractiveEpgWidget> {
       ],
     ),
   ));
+  }
+
+  /// 滚动定位到指定节目并精确居中。
+  ///
+  /// ListView.builder 懒加载时，目标项只会在“可视区 + cacheExtent”内被构建；
+  /// 其是否被构建受粗跳误差与视口高度共同影响，仅等一帧就 ensureVisible 常因
+  /// currentContext 为 null 而静默失败（小窗口时尤为明显）。
+  ///
+  /// 因此用行高下界粗跳（永不滚过目标顶部，避免目标被滚出上方释放），再分帧
+  /// 渐进向下滚动并轮询目标项是否已构建；一旦构建立即 ensureVisible 精确居中。
+  Future<void> _scrollToProgram(int index) async {
+    final controller = _programScrollController;
+
+    // 目标已构建：直接精确居中
+    if (_itemKeys[index].currentContext != null) {
+      Scrollable.ensureVisible(
+        _itemKeys[index].currentContext!,
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+      );
+      return;
+    }
+
+    // 目标未构建：保守粗跳。用小行高下界估算 offset，确保目标位于视口下方
+    // 待构建区而非被滚出上方，随后渐进逼近直至其进入 cacheExtent 被构建。
+    final position = controller.position;
+    final viewportH = position.viewportDimension;
+    final maxScroll = position.maxScrollExtent;
+    const double rowHeightLowerBound = 40.0;
+    final targetTop = index * rowHeightLowerBound;
+    final initialOffset =
+        (targetTop - viewportH * 0.5).clamp(0.0, maxScroll).toDouble();
+    controller.jumpTo(initialOffset);
+
+    for (var i = 0; i < 60; i++) {
+      await Future.delayed(const Duration(milliseconds: 16));
+      if (!mounted || !controller.hasClients) return;
+      final ctx = _itemKeys[index].currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          alignment: 0.5,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+        );
+        return;
+      }
+      // 尚未构建：向下推进一段，让目标逐步进入 cacheExtent 构建区
+      final max = controller.position.maxScrollExtent;
+      final next = (controller.offset + viewportH * 0.3)
+          .clamp(0.0, max)
+          .toDouble();
+      if (next <= controller.offset + 0.5) break; // 已到底仍未构建
+      controller.jumpTo(next);
+    }
   }
 
   /// 计算面板自适应宽度：贴合当前选中日节目名最长文本的占用，最多铺满屏宽。
