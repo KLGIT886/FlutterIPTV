@@ -59,6 +59,7 @@ class PlayerProvider extends ChangeNotifier {
   int _deinterlaceGeneration = 0; // 代际计数器，用于检测过时的 videoParams 回调
   String _videoOutput = 'auto';
   String _vo = 'unknown';
+  int _bufferSize = 0; // 当前缓冲强度对应的缓冲区大小（用于恢复非FCC流的demuxer设置）
 
   // Override duration for catchup playback
   Duration? _overrideDuration;
@@ -347,6 +348,8 @@ class PlayerProvider extends ChangeNotifier {
         final playStartTime = DateTime.now();
         // 代际计数器已在 _resetDeinterlaceDetection() 中递增，确保旧回调不影响新流
         await _applyDeinterlaceFilter();
+        // FCC 流禁用缓存以加速切台；普通流恢复默认缓冲（须在 open 前设置）
+        await _applyBufferConfig(realUrl);
         await _mediaKitPlayer?.open(_createMedia(realUrl));
 
         final playTime =
@@ -495,6 +498,7 @@ class PlayerProvider extends ChangeNotifier {
       'stable' => 128 * 1024 * 1024, // 128MB - 稳定优先
       _ => 32 * 1024 * 1024,
     };
+    _bufferSize = bufferSize; // 记录，供非FCC流恢复demuxer缓冲设置使用
 
     String? vo;
     switch (_videoOutput) {
@@ -606,6 +610,53 @@ class PlayerProvider extends ChangeNotifier {
     } catch (e) {
       ServiceLocator.log.d('读取 $label 失败: $e', tag: 'PlayerProvider');
       return null;
+    }
+  }
+
+  /// 判断源是否为 FCC（Fast Channel Change）流
+  /// 通过 URL 是否包含 fcc 关键字判断（忽略大小写及 $ 标签后缀）
+  bool _isFccSource(String url) {
+    final clean = url.split('\$').first.trim();
+    return clean.toLowerCase().contains('fcc');
+  }
+
+  /// 根据源是否 FCC 配置 mpv 缓冲参数（须在 open() 之前调用）
+  ///
+  /// FCC 流用于快速切台，缓存会引入额外延迟，因此禁用缓存并把 demuxer 读取
+  /// 上限收紧为 10M、向后回读禁用；普通流则恢复 media_kit 默认的启用缓存，
+  /// demuxer 上限用当前缓冲强度对应的 bufferSize。
+  Future<void> _applyBufferConfig(String realUrl) async {
+    final isFcc = _isFccSource(realUrl);
+    // 不做自定义 probesize：收敛 ffmpeg 探测上限会破坏 4K/25Mbps 组播流——
+    // 128KB 级小值读不到首个关键帧（HEVC 的 VPS/SPS/PPS，只出现在 IDR），
+    // 导致 avformat_find_stream_info 提前结束但"未选择任何流"，起播永久转圈。
+    // 因此沿用 mpv/ffmpeg 默认探测上限（约 495KB）：探测在第一个关键帧处即提前
+    // 返回，8Mbps 的 1080P 依旧很快，又能覆盖 4K 参数集读取。这里仅保留对协议
+    // 白名单等必要项的完整重写。
+    final lavfOpts = [
+      'seg_max_retry=5',
+      'strict=experimental',
+      'allowed_extensions=ALL',
+      'protocol_whitelist=[udp,rtp,rtsp,tcp,tls,data,file,http,https,crypto]',
+    ].join(',');
+    ServiceLocator.log.d(
+        '缓冲配置: ${isFcc ? "FCC(禁用缓存)" : "普通流"}, '
+        'cache=${isFcc ? "no" : "yes"}, '
+        'demuxer-max-bytes=${isFcc ? "10485760" : _bufferSize}, '
+        'demuxer-max-back-bytes=${isFcc ? "0" : _bufferSize}, '
+        'probesize=默认(约495KB)',
+        tag: 'PlayerProvider');
+    await _safeSetProperty('demuxer-lavf-o', lavfOpts, 'demuxer-lavf-o');
+    await _safeSetProperty('cache', isFcc ? 'no' : 'yes', 'cache');
+    if (isFcc) {
+      await _safeSetProperty(
+          'demuxer-max-bytes', '${10 * 1024 * 1024}', 'demuxer-max-bytes');
+      await _safeSetProperty('demuxer-max-back-bytes', '0', 'demuxer-max-back-bytes');
+    } else {
+      await _safeSetProperty(
+          'demuxer-max-bytes', '$_bufferSize', 'demuxer-max-bytes');
+      await _safeSetProperty(
+          'demuxer-max-back-bytes', '$_bufferSize', 'demuxer-max-back-bytes');
     }
   }
 
@@ -970,8 +1021,14 @@ class PlayerProvider extends ChangeNotifier {
     _mediaKitPlayer!.stream.log.listen((log) {
       final message = log.text.toLowerCase();
 
+      // 硬解 GUID 能力枚举（如 "h264: {86695f12-340e-...} 103 106"）：纯解码器
+      // 能力清单，每开播刷屏且无诊断价值；按 GUID 形态识别以兼容 h264/hevc。
+      final isDecoderGuidEnum = RegExp(r'^\S+: \{[0-9a-f]{8}-[0-9a-f]{4}-')
+          .hasMatch(log.text);
+
       // 过滤 FFmpeg 噪音日志（SEI truncated、mmco、reference frames 等）
-      if (message.contains('sei type') ||
+      if (isDecoderGuidEnum ||
+          message.contains('sei type') ||
           message.contains('truncated at') ||
           message.contains('mmco') ||
           message.contains('reference frames') ||
@@ -981,7 +1038,12 @@ class PlayerProvider extends ChangeNotifier {
           message.contains("skip ('#ext") ||
           (message.contains('hls @') && message.contains('skip')) ||
           message.contains('no such filter') ||
-          message.contains('error creating filters')) {
+          message.contains('error creating filters') ||
+          // 非关键机制噪音：切台时 pin 重连的瀑布流、demuxer 探测尝试清单、
+          // 播放列表读取提示（info 级，却被 mpv 误标为 warn）
+          message.contains('dropping request due to pin disconnect') ||
+          message.contains('trying demuxer') ||
+          message.contains('reading plaintext playlist')) {
         return;
       }
 
@@ -1363,8 +1425,7 @@ class PlayerProvider extends ChangeNotifier {
 
   // ============ Public API ============
 
-  Future<void> playChannel(Channel channel,
-      {bool preserveCurrentSource = false}) async {
+  Future<void> playChannel(Channel channel) async {
     ServiceLocator.log
         .i('========== 开始播放频道==========', tag: 'PlayerProvider');
     ServiceLocator.log
@@ -1389,35 +1450,14 @@ class PlayerProvider extends ChangeNotifier {
       notifyListeners();
     });
 
-    // 如果有多个源，先检测找到第一个可用的源
-    if (channel.hasMultipleSources && !preserveCurrentSource) {
-      ServiceLocator.log
-          .i('频道有 ${channel.sourceCount} 个源，开始检测可用源', tag: 'PlayerProvider');
-      final detectStartTime = DateTime.now();
-
-      final availableSourceIndex = await _findFirstAvailableSource(channel);
-
-      final detectTime =
-          DateTime.now().difference(detectStartTime).inMilliseconds;
-
-      if (availableSourceIndex != null) {
-        channel.currentSourceIndex = availableSourceIndex;
-        ServiceLocator.log.i(
-            '找到可用源 ${availableSourceIndex + 1}/${channel.sourceCount}，检测耗时: ${detectTime}ms',
-            tag: 'PlayerProvider');
-      } else {
-        ServiceLocator.log.e(
-            '所有 ${channel.sourceCount} 个源都不可用，检测耗时: ${detectTime}ms',
-            tag: 'PlayerProvider');
-        _setError('所有 ${channel.sourceCount} 个源均不可用');
-        return;
-      }
-    } else if (channel.hasMultipleSources) {
-      channel.currentSourceIndex =
-          channel.currentSourceIndex.clamp(0, channel.sourceCount - 1);
-      ServiceLocator.log.d(
-          'PlayerProvider: preserveCurrentSource=true, using source ${channel.currentSourceIndex + 1}/${channel.sourceCount}');
-    }
+    // 直接播放当前（默认首源）源，不再先做 HTTP 预检测，以压缩切台时间。
+    // 若首源失效，由播放失败回调（_setError -> _checkAndSwitchToNextSource）
+    // 自动依次回退检测并切换到下一源。
+    channel.currentSourceIndex =
+        channel.currentSourceIndex.clamp(0, channel.sourceCount - 1);
+    ServiceLocator.log.d(
+        '直接播放源 ${channel.currentSourceIndex + 1}/${channel.sourceCount}（跳过预检）',
+        tag: 'PlayerProvider');
 
     final playUrl = channel.currentUrl;
     ServiceLocator.log.d('准备播放URL: $playUrl', tag: 'PlayerProvider');
@@ -1448,6 +1488,8 @@ class PlayerProvider extends ChangeNotifier {
         final playStartTime = DateTime.now();
         // 代际计数器已在 _resetDeinterlaceDetection() 中递增，确保旧回调不影响新流
         await _applyDeinterlaceFilter();
+        // FCC 流禁用缓存以加速切台；普通流恢复默认缓冲（须在 open 前设置）
+        await _applyBufferConfig(realUrl);
         await _mediaKitPlayer?.open(_createMedia(realUrl));
 
         final playTime =
@@ -1493,52 +1535,6 @@ class PlayerProvider extends ChangeNotifier {
     }
   }
 
-  /// 查找第一个可用的源
-  Future<int?> _findFirstAvailableSource(Channel channel) async {
-    ServiceLocator.log
-        .d('开始检测第${channel.sourceCount} 个源', tag: 'PlayerProvider');
-    final testService = ChannelTestService();
-
-    for (int i = 0; i < channel.sourceCount; i++) {
-      // 更新UI显示当前检测的源
-      channel.currentSourceIndex = i;
-      notifyListeners();
-
-      // 创建临时频道对象用于测试
-      final tempChannel = Channel(
-        id: channel.id,
-        name: channel.name,
-        url: channel.sources[i],
-        groupName: channel.groupName,
-        logoUrl: channel.logoUrl,
-        sources: [channel.sources[i]], // 只测试当前源
-        playlistId: channel.playlistId,
-      );
-
-      ServiceLocator.log
-          .d('检测源 ${i + 1}/${channel.sourceCount}', tag: 'PlayerProvider');
-      final testStartTime = DateTime.now();
-
-      final result = await testService.testChannel(tempChannel);
-      final testTime = DateTime.now().difference(testStartTime).inMilliseconds;
-
-      if (result.isAvailable) {
-        ServiceLocator.log.i(
-            '源${i + 1} 可用，响应时间: ${result.responseTime}ms，检测耗时: ${testTime}ms',
-            tag: 'PlayerProvider');
-        return i;
-      } else {
-        ServiceLocator.log.w(
-            '✗ 源 ${i + 1} 不可用: ${result.error}，检测耗时: ${testTime}ms',
-            tag: 'PlayerProvider');
-      }
-    }
-
-    ServiceLocator.log
-        .e('所有${channel.sourceCount} 个源都不可用', tag: 'PlayerProvider');
-    return null; // 所有源都不可用
-  }
-
   Future<void> playUrl(String url, {String? name}) async {
     // Android TV 使用原生播放器，不支持此方法
     if (_useNativePlayer) {
@@ -1578,6 +1574,8 @@ class PlayerProvider extends ChangeNotifier {
       final playStartTime = DateTime.now();
       // 代际计数器已在 _resetDeinterlaceDetection() 中递增，确保旧回调不影响新流
       await _applyDeinterlaceFilter();
+      // FCC 流禁用缓存以加速切台；普通流恢复默认缓冲（须在 open 前设置）
+      await _applyBufferConfig(realUrl);
       await _mediaKitPlayer?.open(_createMedia(realUrl));
 
       final playTime = DateTime.now().difference(playStartTime).inMilliseconds;
@@ -1866,6 +1864,8 @@ class PlayerProvider extends ChangeNotifier {
         final playStartTime = DateTime.now();
         // 代际计数器已在 _resetDeinterlaceDetection() 中递增，确保旧回调不影响新流
         await _applyDeinterlaceFilter();
+        // FCC 流禁用缓存以加速切台；普通流恢复默认缓冲（须在 open 前设置）
+        await _applyBufferConfig(realUrl);
         await _mediaKitPlayer?.open(_createMedia(realUrl));
 
         final playTime =

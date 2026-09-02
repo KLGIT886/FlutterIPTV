@@ -259,6 +259,8 @@ class MultiScreenProvider extends ChangeNotifier {
       screen.videoParamsSubscription = null;
       screen.deinterlaceConfigured = false;
       await _applyDeinterlaceFilter(screen.player!);
+      // FCC 流禁用缓存以加速切台；普通流恢复默认缓冲（须在 open 前设置）
+      await _applyBufferConfig(screen.player!, realUrl);
 
       await screen.player!.open(Media(realUrl, httpHeaders: {'User-Agent': userAgent}));
       
@@ -326,8 +328,14 @@ class MultiScreenProvider extends ChangeNotifier {
     player.stream.log.listen((log) {
       final message = log.text.toLowerCase();
 
+      // 硬解 GUID 能力枚举（如 "h264: {86695f12-340e-...} 103 106"）：纯解码器
+      // 能力清单，每开播刷屏且无诊断价值；按 GUID 形态识别以兼容 h264/hevc。
+      final isDecoderGuidEnum = RegExp(r'^\S+: \{[0-9a-f]{8}-[0-9a-f]{4}-')
+          .hasMatch(log.text);
+
       // 过滤 FFmpeg 噪音日志（SEI truncated、mmco、reference frames 等）
-      if (message.contains('sei type') ||
+      if (isDecoderGuidEnum ||
+          message.contains('sei type') ||
           message.contains('truncated at') ||
           message.contains('mmco') ||
           message.contains('reference frames') ||
@@ -337,7 +345,12 @@ class MultiScreenProvider extends ChangeNotifier {
           message.contains("skip ('#ext") ||
           (message.contains('hls @') && message.contains('skip')) ||
           message.contains('no such filter') ||
-          message.contains('error creating filters')) {
+          message.contains('error creating filters') ||
+          // 非关键机制噪音：切台时 pin 重连的瀑布流、demuxer 探测尝试清单、
+          // 播放列表读取提示（info 级，却被 mpv 误标为 warn）
+          message.contains('dropping request due to pin disconnect') ||
+          message.contains('trying demuxer') ||
+          message.contains('reading plaintext playlist')) {
         return;
       }
 
@@ -453,6 +466,47 @@ class MultiScreenProvider extends ChangeNotifier {
     screen.videoParamsSubscription = null;
     screen.deinterlaceConfigured = false;
     await _applyDeinterlaceFilter(player);
+  }
+
+  /// 判断源是否为 FCC（Fast Channel Change）流
+  /// 通过 URL 是否包含 fcc 关键字判断（忽略大小写及 $ 标签后缀）
+  bool _isFccSource(String url) {
+    final clean = url.split('\$').first.trim();
+    return clean.toLowerCase().contains('fcc');
+  }
+
+  /// 当前缓冲强度对应的缓冲区大小
+  int get _currentBufferSize => switch (_bufferStrength) {
+        'fast' => 32 * 1024 * 1024,
+        'balanced' => 64 * 1024 * 1024,
+        'stable' => 128 * 1024 * 1024,
+        _ => 32 * 1024 * 1024,
+      };
+
+  /// 根据源是否 FCC 配置 mpv 缓冲参数（须在 open() 之前调用）
+  ///
+  /// FCC 流用于快速切台，缓存会引入额外延迟，因此禁用缓存并把 demuxer 读取
+  /// 上限收紧为 10M、向后回读禁用；普通流则恢复 media_kit 默认的启用缓存，
+  /// demuxer 上限用当前缓冲强度对应的 bufferSize。
+  Future<void> _applyBufferConfig(Player player, String realUrl) async {
+    final isFcc = _isFccSource(realUrl);
+    ServiceLocator.log.d(
+        'MultiScreenProvider: 缓冲配置: ${isFcc ? "FCC(禁用缓存)" : "普通流"}, '
+        'cache=${isFcc ? "no" : "yes"}, '
+        'demuxer-max-bytes=${isFcc ? "10485760" : _currentBufferSize}, '
+        'demuxer-max-back-bytes=${isFcc ? "0" : _currentBufferSize}');
+    await _safeSetProperty(player, 'cache', isFcc ? 'no' : 'yes', 'cache');
+    if (isFcc) {
+      await _safeSetProperty(player, 'demuxer-max-bytes',
+          '${10 * 1024 * 1024}', 'demuxer-max-bytes');
+      await _safeSetProperty(
+          player, 'demuxer-max-back-bytes', '0', 'demuxer-max-back-bytes');
+    } else {
+      await _safeSetProperty(player, 'demuxer-max-bytes',
+          '$_currentBufferSize', 'demuxer-max-bytes');
+      await _safeSetProperty(player, 'demuxer-max-back-bytes',
+          '$_currentBufferSize', 'demuxer-max-back-bytes');
+    }
   }
 
   /// 安全调用 setProperty，单个失败不影响其他调用

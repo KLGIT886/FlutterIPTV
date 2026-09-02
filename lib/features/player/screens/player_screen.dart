@@ -2118,10 +2118,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     final resumeChannel = baseChannel.copyWith(
       currentSourceIndex: targetSourceIndex,
     );
-    await playerProvider.playChannel(
-      resumeChannel,
-      preserveCurrentSource: true,
-    );
+    await playerProvider.playChannel(resumeChannel);
   }
 
   void _switchToMultiScreenMode() {
