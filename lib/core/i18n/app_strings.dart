@@ -655,6 +655,10 @@ class AppStrings {
   String get pageTransitionSet => _localizedValues['pageTransitionSet']!;
   String get favoritesOnHomeEnabled => _localizedValues['favoritesOnHomeEnabled']!;
   String get favoritesOnHomeDisabled => _localizedValues['favoritesOnHomeDisabled']!;
+  String get channelSnapshotPreview => _localizedValues['channelSnapshotPreview']!;
+  String get channelSnapshotPreviewSubtitle => _localizedValues['channelSnapshotPreviewSubtitle']!;
+  String get channelSnapshotPreviewEnabled => _localizedValues['channelSnapshotPreviewEnabled']!;
+  String get channelSnapshotPreviewDisabled => _localizedValues['channelSnapshotPreviewDisabled']!;
 
   // 去交错（反隔行）设置
   String get deinterlace => _localizedValues['deinterlace']!;
@@ -1213,6 +1217,10 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'watchHistoryOnHomeDisabled': '首页观看记录显示已关闭',
     'favoritesOnHomeEnabled': '首页收藏夹显示已启用',
     'favoritesOnHomeDisabled': '首页收藏夹显示已关闭',
+    'channelSnapshotPreview': '频道实时预览',
+    'channelSnapshotPreviewSubtitle': '悬停频道时显示实时画面快照（需 rtp2httpd 开启视频快照）',
+    'channelSnapshotPreviewEnabled': '频道实时预览已启用',
+    'channelSnapshotPreviewDisabled': '频道实时预览已关闭',
 
     // Page transition animation settings
     'pageTransitionAnimation': '页面切换动画',
@@ -1847,6 +1855,10 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'watchHistoryOnHomeDisabled': 'Watch history on home disabled',
     'favoritesOnHomeEnabled': 'Favorites on home enabled',
     'favoritesOnHomeDisabled': 'Favorites on home disabled',
+    'channelSnapshotPreview': 'Channel Snapshot Preview',
+    'channelSnapshotPreviewSubtitle': 'Show live snapshot when hovering a channel (requires rtp2httpd video-snapshot)',
+    'channelSnapshotPreviewEnabled': 'Channel snapshot preview enabled',
+    'channelSnapshotPreviewDisabled': 'Channel snapshot preview disabled',
 
     // Page transition animation settings
     'pageTransitionAnimation': 'Page Transition Animation',

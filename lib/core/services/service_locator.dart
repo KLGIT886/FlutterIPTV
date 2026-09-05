@@ -11,6 +11,7 @@ import 'channel_logo_service.dart';
 import 'redirect_cache_service.dart';
 import 'watch_history_service.dart';
 import 'logo_cache_service.dart';
+import 'snapshot_preview_service.dart';
 import '../managers/update_manager.dart';
 import '../../features/settings/providers/settings_provider.dart';
 
@@ -26,6 +27,7 @@ class ServiceLocator {
   static late RedirectCacheService _redirectCache;
   static late WatchHistoryService _watchHistory;
   static late LogoCacheService _logoCache;
+  static late SnapshotPreviewService _snapshotPreview;
   static SettingsProvider? _settings; // Nullable because it's initialized later
 
   static SharedPreferences get prefs => _prefs;
@@ -38,6 +40,7 @@ class ServiceLocator {
   static RedirectCacheService get redirectCache => _redirectCache;
   static WatchHistoryService get watchHistory => _watchHistory;
   static LogoCacheService get logoCache => _logoCache;
+  static SnapshotPreviewService get snapshotPreview => _snapshotPreview;
   static SettingsProvider? get settings => _settings;
   
   /// Check if log service is initialized
@@ -102,6 +105,9 @@ class ServiceLocator {
       enabled: enabled,
     );
     log.i('[ServiceLocator] LogoCacheService 已初始化: enabled=$enabled, $days天, max=$maxObjects');
+
+    // Initialize snapshot preview service
+    _snapshotPreview = SnapshotPreviewService();
   }
 
   /// Register settings provider (called from main.dart after SettingsProvider is created)
@@ -118,6 +124,7 @@ class ServiceLocator {
       debugPrint('ServiceLocator: 刷新日志失败 - $e');
     }
     
+    _snapshotPreview.dispose();
     await _database.close();
   }
 }

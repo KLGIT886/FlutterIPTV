@@ -202,6 +202,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _showSuccess(context, value ? (strings?.favoritesOnHomeEnabled ?? 'Favorites on home enabled') : (strings?.favoritesOnHomeDisabled ?? 'Favorites on home disabled'));
                 },
               ),
+              _buildDivider(),
+              _buildSwitchTile(
+                context,
+                title: AppStrings.of(context)?.channelSnapshotPreview ?? 'Channel Snapshot Preview',
+                subtitle: AppStrings.of(context)?.channelSnapshotPreviewSubtitle ?? 'Show live snapshot when hovering a channel (requires rtp2httpd video-snapshot)',
+                icon: Icons.videocam_rounded,
+                value: settings.channelSnapshotPreview,
+                onChanged: (value) {
+                  settings.setChannelSnapshotPreview(value);
+                  final strings = AppStrings.of(context);
+                  _showSuccess(context, value ? (strings?.channelSnapshotPreviewEnabled ?? 'Channel snapshot preview enabled') : (strings?.channelSnapshotPreviewDisabled ?? 'Channel snapshot preview disabled'));
+                },
+              ),
             ],
             ),
 

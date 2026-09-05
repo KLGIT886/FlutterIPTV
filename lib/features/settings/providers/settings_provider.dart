@@ -80,6 +80,8 @@ class SettingsProvider extends ChangeNotifier {
   static const String _keyLogoCacheDays = 'logo_cache_days'; // 台标缓存保留天数
   static const String _keyLogoCacheMaxObjects = 'logo_cache_max_objects'; // 台标最大缓存条数
   static const String _keyWebLogEnabled = 'web_log_enabled'; // 网页日志开关
+  static const String _keyChannelSnapshotPreview =
+      'channel_snapshot_preview'; // 频道实时快照预览开关
 
   // Default User-Agent (same as current hardcoded value)
   static const String defaultUserAgent = 'Wget/1.21.3';
@@ -141,6 +143,7 @@ class SettingsProvider extends ChangeNotifier {
   int _logoCacheDays = 7; // 台标缓存默认保留7天
   int _logoCacheMaxObjects = 500; // 台标最大缓存500张图片（约 10-50MB）
   bool _webLogEnabled = false; // 网页日志服务开关 - 默认关闭
+  bool _channelSnapshotPreview = false; // 频道实时快照预览 - 默认关闭
 
   // Getters
   String get themeMode => _themeMode;
@@ -196,6 +199,7 @@ class SettingsProvider extends ChangeNotifier {
   int get logoCacheDays => _logoCacheDays;
   int get logoCacheMaxObjects => _logoCacheMaxObjects;
   bool get webLogEnabled => _webLogEnabled;
+  bool get channelSnapshotPreview => _channelSnapshotPreview;
 
   /// 获取当前应该使用的配色方案
   String get currentColorScheme {
@@ -338,6 +342,10 @@ class SettingsProvider extends ChangeNotifier {
     // 加载网页日志设置
     _webLogEnabled = prefs.getBool(_keyWebLogEnabled) ?? false;
 
+    // 加载频道快照预览设置
+    _channelSnapshotPreview =
+        prefs.getBool(_keyChannelSnapshotPreview) ?? false;
+
     // 同步到 LogoCacheService
     try {
       ServiceLocator.logoCache.updateConfig(
@@ -458,6 +466,8 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setInt(_keyLogoCacheDays, _logoCacheDays);
     await prefs.setInt(_keyLogoCacheMaxObjects, _logoCacheMaxObjects);
     await prefs.setBool(_keyWebLogEnabled, _webLogEnabled);
+    await prefs.setBool(
+        _keyChannelSnapshotPreview, _channelSnapshotPreview);
   }
 
   // Setters with persistence
@@ -924,6 +934,14 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 设置频道实时快照预览开关
+  Future<void> setChannelSnapshotPreview(bool enabled) async {
+    ServiceLocator.log.d('SettingsProvider: 设置频道快照预览 - $enabled');
+    _channelSnapshotPreview = enabled;
+    await _saveSettings();
+    notifyListeners();
+  }
+
   /// 根据开关状态启停本地日志服务器（网页日志）
   void _applyWebLogServer(bool enabled) {
     final server = LocalServerService();
@@ -1009,6 +1027,7 @@ class SettingsProvider extends ChangeNotifier {
     _logoCacheDays = 7;
     _logoCacheMaxObjects = 500;
     _webLogEnabled = false;
+    _channelSnapshotPreview = false;
     _applyWebLogServer(false); // 停止网页日志服务
 
     await _saveSettings();

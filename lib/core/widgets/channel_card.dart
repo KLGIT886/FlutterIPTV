@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:material_ui/material_ui.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../theme/app_theme.dart';
@@ -72,6 +73,8 @@ class ChannelCard extends StatefulWidget {
 class _ChannelCardState extends State<ChannelCard> {
   bool _isHovered = false;
   bool _isFocused = false;
+  Uint8List? _snapshotBytes; // 频道实时快照
+  int _snapshotRequestId = 0; // 快照请求序号，用于丢弃过期结果
   static int _buildCount = 0; // 静态计数器，跟踪构建次数
 
   @override
@@ -91,6 +94,7 @@ class _ChannelCardState extends State<ChannelCard> {
       onFocus: () {
         setState(() => _isFocused = true);
         widget.onFocused?.call();
+        _loadSnapshot();
       },
       onBlur: () {
         setState(() => _isFocused = false);
@@ -116,7 +120,10 @@ class _ChannelCardState extends State<ChannelCard> {
             ),
           ),
           child: MouseRegion(
-            onEnter: (_) => setState(() => _isHovered = true),
+            onEnter: (_) {
+              setState(() => _isHovered = true);
+              _loadSnapshot();
+            },
             onExit: (_) => setState(() => _isHovered = false),
             child: child,
           ),
@@ -175,6 +182,15 @@ class _ChannelCardState extends State<ChannelCard> {
                                 : _buildPlaceholder()),
                       ),
                     ),
+                    // 频道实时快照预览（悬停/聚焦时覆盖台标）
+                    if ((_isHovered || _isFocused) && _snapshotBytes != null)
+                      Positioned.fill(
+                        child: Image.memory(
+                          _snapshotBytes!,
+                          fit: BoxFit.cover,
+                          gaplessPlayback: true,
+                        ),
+                      ),
                     // Playing indicator
                     if (widget.isPlaying)
                       Positioned(
@@ -284,6 +300,32 @@ class _ChannelCardState extends State<ChannelCard> {
         ),
       ),
     );
+  }
+
+  @override
+  void didUpdateWidget(ChannelCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 频道切换时清空旧快照，避免短暂显示上一频道的画面
+    if (oldWidget.channel?.currentUrl != widget.channel?.currentUrl) {
+      _snapshotBytes = null;
+      _snapshotRequestId++;
+    }
+  }
+
+  /// 拉取频道实时快照（由 Service 做缓存/并发/TTL 管理）
+  void _loadSnapshot() {
+    final channel = widget.channel;
+    final settings = ServiceLocator.settings;
+    if (channel == null || settings == null || !settings.channelSnapshotPreview) {
+      return;
+    }
+    final requestId = ++_snapshotRequestId;
+    ServiceLocator.snapshotPreview.fetchSnapshot(channel.currentUrl).then((bytes) {
+      if (!mounted || requestId != _snapshotRequestId) return;
+      if (bytes != null) {
+        setState(() => _snapshotBytes = bytes);
+      }
+    });
   }
 
   /// 构建信息区域（EPG或分类）- 静态显示当前和下一个节目
