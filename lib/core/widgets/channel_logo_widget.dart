@@ -436,11 +436,18 @@ class _ChannelLogoWidgetState extends State<ChannelLogoWidget> with ThrottledSta
       return _buildPlaceholder();
     }
 
+    // 台标锯齿修复：
+    // filterQuality.high 让 Bitmap 在非整数倍缩放（尤其放大）时做平滑插值，
+    // 消除窗口模式下因小源图放大导致的锯齿/马赛克。
+    // 不再手动指定 memCacheWidth/Height：CachedNetworkImage 默认按实际显示
+    // 尺寸自适应解码（全屏放大时会自动提升解码分辨率、跟随变大），固定缓存
+    // 尺寸反而会造成"全屏不跟随变大"或纵横比拉伸。
     return CachedNetworkImage(
       imageUrl: logoUrl,
       width: widget.width,
       height: widget.height,
       fit: widget.fit,
+      filterQuality: FilterQuality.high,
       cacheManager: LogoCacheManager(), // 使用自定义缓存管理器
       placeholder: (context, url) => _buildPlaceholder(),
       errorWidget: (context, url, error) {
