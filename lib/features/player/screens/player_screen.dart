@@ -21,16 +21,15 @@ import '../../favorites/providers/favorites_provider.dart';
 import '../../channels/providers/channel_provider.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../../settings/providers/dlna_provider.dart';
-import '../../epg/providers/epg_provider.dart';
 import '../../multi_screen/providers/multi_screen_provider.dart';
 import '../../multi_screen/widgets/multi_screen_player.dart';
 import '../../../core/services/service_locator.dart';
-import '../widgets/interactive_epg_widget.dart';
 import '../widgets/player_formatters.dart';
 import '../widgets/mini_controls_overlay.dart';
-import '../widgets/volume_control_bar.dart';
 import '../widgets/channel_panel.dart';
 import '../widgets/player_top_bar.dart';
+import '../widgets/player_bottom_controls.dart';
+import '../widgets/interactive_epg_widget.dart';
 import '../../../core/services/epg_service.dart';
 
 class PlayerScreen extends StatefulWidget {
@@ -2337,567 +2336,72 @@ PlayerTopBar(
   }
 
   Widget _buildBottomControls() {
-    return Consumer<PlayerProvider>(
-      builder: (context, provider, _) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // EPG 当前节目和下一个节目
-              Consumer<EpgProvider>(
-                builder: (context, epgProvider, _) {
-                  final channel = provider.currentChannel;
-                  final currentProgram = epgProvider.getCurrentProgram(
-                      channel?.epgId, channel?.name);
-                  final nextProgram =
-                      epgProvider.getNextProgram(channel?.epgId, channel?.name);
+    return PlayerBottomControls(
+      isFullScreen: _isFullScreen,
+      onToggleEpg: () {
+        setState(() {
+          _showEpgPanel = !_showEpgPanel;
+          if (_showEpgPanel) {
+            _showControls = false;
+          }
+        });
+      },
+      onShowSourceIndicator: (provider) {
+        _showSourceSwitchIndicator(provider);
+      },
+      onShowSettings: (context) {
+        _showSettingsSheet(context);
+      },
+      onToggleCategory: () {
+        setState(() {
+          if (_showCategoryPanel) {
+            // 如果已显示，则隐藏
+            _showCategoryPanel = false;
+            _selectedCategory = null;
+          } else {
+            // 如果没显示，则显示并定位到当前频道
+            final playerProvider = context.read<PlayerProvider>();
+            final channelProvider = context.read<ChannelProvider>();
+            final currentChannel = playerProvider.currentChannel;
 
-                  if (currentProgram != null || nextProgram != null) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0x33000000),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (currentProgram != null)
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.getPrimaryColor(context),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                        AppStrings.of(context)?.nowPlaying ??
-                                            'Now playing',
-                                        style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold)),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      currentProgram.title,
-                                      style: const TextStyle(
-                                          color: Colors.white, fontSize: 13),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  Text(
-                                    (AppStrings.of(context)?.endsInMinutes ??
-                                            'Ends in {minutes} min')
-                                        .replaceFirst('{minutes}',
-                                            '${currentProgram.remainingMinutes}'),
-                                    style: const TextStyle(
-                                        color: Color(0x99FFFFFF), fontSize: 11),
-                                  ),
-                                ],
-                              ),
-                            if (nextProgram != null) ...[
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: [
-                                          AppTheme.getPrimaryColor(context)
-                                              .withOpacity(0.7),
-                                          AppTheme.getSecondaryColor(context)
-                                              .withOpacity(0.7),
-                                        ],
-                                      ),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                        AppStrings.of(context)?.upNext ??
-                                            'Up next',
-                                        style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600)),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      nextProgram.title,
-                                      style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w500),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
+            _showCategoryPanel = true;
+            // 如果有当前频道，自动选中其所属分类
+            if (currentChannel != null && currentChannel.groupName != null) {
+              _selectedCategory = currentChannel.groupName;
+
+              // 延迟滚动到当前频道位置
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (_selectedCategory != null) {
+                  final channels = channelProvider
+                      .getChannelsByGroup(_selectedCategory!);
+                  final currentIndex = channels.indexWhere(
+                      (ch) => ch.id == currentChannel.id);
+
+                  if (currentIndex >= 0 &&
+                      _channelScrollController.hasClients) {
+                    // 计算滚动位置（每个频道项高 44 像素高）
+                    const itemHeight = 44.0;
+                    final scrollOffset = currentIndex * itemHeight;
+
+                    _channelScrollController.animateTo(
+                      scrollOffset,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOut,
                     );
                   }
-                  return const SizedBox.shrink();
-                },
-              ),
-
-              // Progress bar for seekable content (VOD, Replay) - EPG 淇℃伅个嬫柟
-              Consumer<SettingsProvider>(
-                builder: (context, settings, _) {
-                  if (!provider
-                      .shouldShowProgressBar(settings.progressBarMode)) {
-                    return const SizedBox.shrink();
-                  }
-
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Column(
-                      children: [
-                        // 进度条（更小的高度）
-                        SliderTheme(
-                          data: SliderTheme.of(context).copyWith(
-                            trackHeight: 2, // 减小轨道高度
-                            thumbShape: const RoundSliderThumbShape(
-                                enabledThumbRadius: 5), // 减小滑块大小
-                            overlayShape: const RoundSliderOverlayShape(
-                                overlayRadius: 10), // 减皬视︽懜鍖哄煙
-                            activeTrackColor: AppTheme.getPrimaryColor(context),
-                            inactiveTrackColor: const Color(0x33FFFFFF),
-                            thumbColor: Colors.white,
-                            overlayColor: AppTheme.getPrimaryColor(context)
-                                .withOpacity(0.3),
-                          ),
-                          child: Slider(
-                            value: provider.position.inSeconds.toDouble().clamp(
-                                0, provider.duration.inSeconds.toDouble()),
-                            max: provider.duration.inSeconds
-                                .toDouble()
-                                .clamp(1, double.infinity),
-                            onChanged: (value) {
-                              provider.seek(Duration(seconds: value.toInt()));
-                            },
-                          ),
-                        ),
-                        // 时堕棿显示锛堟洿宽忕殑瀛椾綋鍜岄棿璺濓級
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                formatDuration(provider.position),
-                                style: const TextStyle(
-                                    color: Color(0x99FFFFFF), fontSize: 10),
-                              ),
-                              Text(
-                                formatDuration(provider.duration),
-                                style: const TextStyle(
-                                    color: Color(0x99FFFFFF), fontSize: 10),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-
-              // Control buttons row (moved above progress bar)
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Volume control
-                  VolumeControlBar(provider: provider),
-
-                  const SizedBox(width: 16),
-
-                  // EPG Button
-                  if (provider.currentChannel?.epgId != null ||
-                      provider.currentChannel?.hasCatchup == true)
-                    TVFocusable(
-                      onSelect: () {
-                        setState(() {
-                          _showEpgPanel = !_showEpgPanel;
-                          if (_showEpgPanel) {
-                            _showControls =
-                                false; // Hide controls when EPG opens
-                          }
-                        });
-                      },
-                      focusScale: 1.0,
-                      showFocusBorder: false,
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.list_alt,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            AppStrings.of(context)?.epg ?? 'EPG',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      builder: (context, isFocused, child) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: isFocused
-                                ? AppTheme.getPrimaryColor(context)
-                                : const Color(0x33FFFFFF),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isFocused
-                                  ? AppTheme.getPrimaryColor(context)
-                                  : const Color(0x1AFFFFFF),
-                              width: isFocused ? 2 : 1,
-                            ),
-                          ),
-                          child: child,
-                        );
-                      },
-                    ),
-
-                  if (provider.currentChannel?.epgId != null ||
-                      provider.currentChannel?.hasCatchup == true)
-                    const SizedBox(width: 16),
-
-                  // 手机端源切换按钮 - 上一个源
-                  if (PlatformDetector.isMobile &&
-                      provider.currentChannel != null &&
-                      provider.currentChannel!.hasMultipleSources)
-                    TVFocusable(
-                      onSelect: () {
-                        provider.switchToPreviousSource();
-                        _showSourceSwitchIndicator(provider);
-                      },
-                      focusScale: 1.0,
-                      showFocusBorder: false,
-                      builder: (context, isFocused, child) {
-                        return Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: isFocused
-                                ? AppTheme.getPrimaryColor(context)
-                                : const Color(0x33FFFFFF),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isFocused
-                                  ? AppTheme.getPrimaryColor(context)
-                                  : const Color(0x1AFFFFFF),
-                              width: isFocused ? 2 : 1,
-                            ),
-                          ),
-                          child: child,
-                        );
-                      },
-                      child: const Icon(Icons.skip_previous_rounded,
-                          color: Colors.white, size: 18),
-                    ),
-
-                  if (PlatformDetector.isMobile &&
-                      provider.currentChannel != null &&
-                      provider.currentChannel!.hasMultipleSources)
-                    const SizedBox(width: 8),
-
-                  // Play/Pause - Lotus gradient button (smaller)
-                  TVFocusable(
-                    autofocus: true,
-                    onSelect: provider.togglePlayPause,
-                    focusScale: 1.0,
-                    showFocusBorder: false,
-                    builder: (context, isFocused, child) {
-                      return Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          gradient: AppTheme.getGradient(context),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color:
-                                isFocused ? Colors.white : Colors.transparent,
-                            width: 2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.getPrimaryColor(context)
-                                  .withAlpha(isFocused ? 100 : 50),
-                              blurRadius: isFocused ? 16 : 8,
-                              spreadRadius: isFocused ? 2 : 1,
-                            ),
-                          ],
-                        ),
-                        child: child,
-                      );
-                    },
-                    child: Icon(
-                      provider.isPlaying
-                          ? Icons.pause_rounded
-                          : Icons.play_arrow_rounded,
-                      color: Colors.white,
-                      size: 22,
-                    ),
-                  ),
-
-                  // 手机端源切换按钮 - 下一个源
-                  if (PlatformDetector.isMobile &&
-                      provider.currentChannel != null &&
-                      provider.currentChannel!.hasMultipleSources)
-                    const SizedBox(width: 8),
-
-                  if (PlatformDetector.isMobile &&
-                      provider.currentChannel != null &&
-                      provider.currentChannel!.hasMultipleSources)
-                    TVFocusable(
-                      onSelect: () {
-                        provider.switchToNextSource();
-                        _showSourceSwitchIndicator(provider);
-                      },
-                      focusScale: 1.0,
-                      showFocusBorder: false,
-                      builder: (context, isFocused, child) {
-                        return Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: isFocused
-                                ? AppTheme.getPrimaryColor(context)
-                                : const Color(0x33FFFFFF),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isFocused
-                                  ? AppTheme.getPrimaryColor(context)
-                                  : const Color(0x1AFFFFFF),
-                              width: isFocused ? 2 : 1,
-                            ),
-                          ),
-                          child: child,
-                        );
-                      },
-                      child: const Icon(Icons.skip_next_rounded,
-                          color: Colors.white, size: 18),
-                    ),
-
-                  if (!PlatformDetector.isMobile &&
-                      provider.currentChannel != null &&
-                      provider.currentChannel!.hasMultipleSources) ...[
-                    const SizedBox(width: 8),
-                    TVFocusable(
-                      onSelect: () {
-                        provider.switchToNextSource();
-                        _showSourceSwitchIndicator(provider);
-                      },
-                      focusScale: 1.0,
-                      showFocusBorder: false,
-                      builder: (context, isFocused, child) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: isFocused
-                                ? AppTheme.getPrimaryColor(context)
-                                : const Color(0x33FFFFFF),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isFocused
-                                  ? AppTheme.getPrimaryColor(context)
-                                  : const Color(0x1AFFFFFF),
-                              width: isFocused ? 2 : 1,
-                            ),
-                          ),
-                          child: child,
-                        );
-                      },
-                      child: Text(
-                        '${AppStrings.of(context)?.source ?? 'Source'} ${provider.currentSourceIndex}/${provider.sourceCount}',
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 12),
-                      ),
-                    ),
-                  ],
-
-                  const SizedBox(width: 16),
-
-                  // Settings button (smaller)
-                  TVFocusable(
-                    onSelect: () => _showSettingsSheet(context),
-                    focusScale: 1.0,
-                    showFocusBorder: false,
-                    builder: (context, isFocused, child) {
-                      return Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: isFocused
-                              ? AppTheme.getPrimaryColor(context)
-                              : const Color(0x33FFFFFF),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: isFocused
-                                ? AppTheme.getPrimaryColor(context)
-                                : const Color(0x1AFFFFFF),
-                            width: isFocused ? 2 : 1,
-                          ),
-                        ),
-                        child: child,
-                      );
-                    },
-                    child: const Icon(Icons.settings_rounded,
-                        color: Colors.white, size: 18),
-                  ),
-
-                  const SizedBox(width: 16),
-
-                  // Category menu button
-                  TVFocusable(
-                    onSelect: () {
-                      setState(() {
-                        if (_showCategoryPanel) {
-                          // 如果已显示，则隐藏
-                          _showCategoryPanel = false;
-                          _selectedCategory = null;
-                        } else {
-                          // 如果没显示，则显示并定位到当前频道
-                          final playerProvider = context.read<PlayerProvider>();
-                          final channelProvider =
-                              context.read<ChannelProvider>();
-                          final currentChannel = playerProvider.currentChannel;
-
-                          _showCategoryPanel = true;
-                          // 如果有当前频道，自动选中其所属分类
-                          if (currentChannel != null &&
-                              currentChannel.groupName != null) {
-                            _selectedCategory = currentChannel.groupName;
-
-                            // 延迟滚动到当前频道位置
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              if (_selectedCategory != null) {
-                                final channels = channelProvider
-                                    .getChannelsByGroup(_selectedCategory!);
-                                final currentIndex = channels.indexWhere(
-                                    (ch) => ch.id == currentChannel.id);
-
-                                if (currentIndex >= 0 &&
-                                    _channelScrollController.hasClients) {
-                                  // 计算滚动位置（每个频道项高 44 像素高）
-                                  const itemHeight = 44.0;
-                                  final scrollOffset =
-                                      currentIndex * itemHeight;
-
-                                  _channelScrollController.animateTo(
-                                    scrollOffset,
-                                    duration: const Duration(milliseconds: 300),
-                                    curve: Curves.easeOut,
-                                  );
-                                }
-                              }
-                            });
-                          } else {
-                            _selectedCategory = null;
-                          }
-                        }
-                      });
-                    },
-                    focusScale: 1.0,
-                    showFocusBorder: false,
-                    builder: (context, isFocused, child) {
-                      return Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: isFocused
-                              ? AppTheme.getPrimaryColor(context)
-                              : const Color(0x33FFFFFF),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: isFocused
-                                ? AppTheme.getPrimaryColor(context)
-                                : const Color(0x1AFFFFFF),
-                            width: isFocused ? 2 : 1,
-                          ),
-                        ),
-                        child: child,
-                      );
-                    },
-                    child: const Icon(Icons.menu_rounded,
-                        color: Colors.white, size: 18),
-                  ),
-
-                  // Windows 全ㄥ睆按挳
-                  if (PlatformDetector.isWindows) ...[
-                    const SizedBox(width: 16),
-                    TVFocusable(
-                      onSelect: () {
-                        _toggleFullScreen();
-                        Future.delayed(const Duration(milliseconds: 120), () {
-                          if (mounted) _playerFocusNode.requestFocus();
-                        });
-                      },
-                      focusScale: 1.0,
-                      showFocusBorder: false,
-                      builder: (context, isFocused, child) {
-                        return Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: isFocused
-                                ? AppTheme.getPrimaryColor(context)
-                                : const Color(0x33FFFFFF),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isFocused
-                                  ? AppTheme.getPrimaryColor(context)
-                                  : const Color(0x1AFFFFFF),
-                              width: isFocused ? 2 : 1,
-                            ),
-                          ),
-                          child: child,
-                        );
-                      },
-                      child: Icon(
-                          _isFullScreen
-                              ? Icons.fullscreen_exit_rounded
-                              : Icons.fullscreen_rounded,
-                          color: Colors.white,
-                          size: 18),
-                    ),
-                  ],
-                ],
-              ),
-                ),
-
-              // Keyboard hints
-              if (PlatformDetector.useDPadNavigation)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    AppStrings.of(context)?.playerHintTV ??
-                        '☰️ 切换频道 · 🎛️ 切换源· 长按🔄 分类 · OK 播放/暂停 · 长按OK 收藏',
-                    style:
-                        const TextStyle(color: Color(0x66FFFFFF), fontSize: 11),
-                  ),
-                ),
-            ],
-          ),
-        );
+                }
+              });
+            } else {
+              _selectedCategory = null;
+            }
+          }
+        });
+      },
+      onToggleFullScreen: () {
+        _toggleFullScreen();
+        Future.delayed(const Duration(milliseconds: 120), () {
+          if (mounted) _playerFocusNode.requestFocus();
+        });
       },
     );
   }
