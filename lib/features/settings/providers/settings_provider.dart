@@ -1017,7 +1017,7 @@ class SettingsProvider extends ChangeNotifier {
     _lastMultiScreenSourceIndexes = [0, 0, 0, 0];
     _darkColorScheme = 'ocean';
     _lightColorScheme = 'sky';
-    _fontFamily = 'System';
+    _fontFamily = 'Arial';
     _homeFontScale = 1.0;
     _userAgent = defaultUserAgent; // 重置 User-Agent 为默认值 Wget/1.21.3
     _showUserAgent = false; // 重置显示User-Agent开关为关闭

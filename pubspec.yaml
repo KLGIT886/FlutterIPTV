@@ -99,7 +99,7 @@ flutter:
     - assets/sql/
 
   fonts:
-    # 涓枃瀛椾綋
+    # 中文字体
     - family: SimHei
       fonts:
         - asset: assets/fonts/SimHei.ttf
@@ -115,7 +115,7 @@ flutter:
     - family: MicrosoftYaHei
       fonts:
         - asset: assets/fonts/MicrosoftYaHei.ttc
-    # 鑻辨枃瀛椾綋
+    # 英文字体
     - family: Arial
       fonts:
         - asset: assets/fonts/Arial.ttf
