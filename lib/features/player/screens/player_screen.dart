@@ -26,6 +26,9 @@ import '../../multi_screen/providers/multi_screen_provider.dart';
 import '../../multi_screen/widgets/multi_screen_player.dart';
 import '../../../core/services/service_locator.dart';
 import '../widgets/interactive_epg_widget.dart';
+import '../widgets/player_formatters.dart';
+import '../widgets/mini_controls_overlay.dart';
+import '../widgets/volume_control_bar.dart';
 import '../../../core/services/epg_service.dart';
 
 class PlayerScreen extends StatefulWidget {
@@ -578,26 +581,6 @@ class _PlayerScreenState extends State<PlayerScreen>
   void _showControlsTemporarily() {
     setState(() => _showControls = true);
     _startHideControlsTimer();
-  }
-
-  String _formatSpeed(double bytesPerSecond) {
-    if (bytesPerSecond >= 1024 * 1024) {
-      return '${(bytesPerSecond / (1024 * 1024)).toStringAsFixed(1)} MB/s';
-    } else if (bytesPerSecond >= 1024) {
-      return '${(bytesPerSecond / 1024).toStringAsFixed(0)} KB/s';
-    } else {
-      return '${bytesPerSecond.toStringAsFixed(0)} B/s';
-    }
-  }
-
-  String _formatDuration(Duration duration) {
-    final hours = duration.inHours;
-    final minutes = duration.inMinutes.remainder(60);
-    final seconds = duration.inSeconds.remainder(60);
-    if (hours > 0) {
-      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-    }
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -1720,7 +1703,25 @@ class _PlayerScreenState extends State<PlayerScreen>
                       child: IgnorePointer(
                         ignoring: !_showControls,
                         child: WindowsPipChannel.isInPipMode
-                            ? _buildMiniControlsOverlay()
+                            ? MiniControlsOverlay(
+                            onRestore: () async {
+                              await WindowsPipChannel.exitPipMode();
+                              // 延迟同步全屏状态，等待窗口恢复完成
+                              if (PlatformDetector.isWindows) {
+                                await Future.delayed(
+                                    const Duration(milliseconds: 300));
+                                _isFullScreen = await windowManager.isFullScreen();
+                              }
+                              setState(() {});
+                              // 恢复焦点到播放器
+                              _playerFocusNode.requestFocus();
+                            },
+                            onClose: () {
+                              WindowsPipChannel.exitPipMode();
+                              context.read<PlayerProvider>().stop();
+                              Navigator.of(context).pop();
+                            },
+                          )
                             : _buildControlsOverlay(),
                       ),
                     ),
@@ -1862,7 +1863,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
-                                    _formatSpeed(player.downloadSpeed),
+                                    formatSpeed(player.downloadSpeed),
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 11,
@@ -1947,7 +1948,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
-                                    'UA: ${_getShortUserAgent(settings.userAgent)}',
+                                    'UA: ${getShortUserAgent(settings.userAgent)}',
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 11,
@@ -1972,58 +1973,6 @@ class _PlayerScreenState extends State<PlayerScreen>
         ),
       ),
     ); // PopScope
-  }
-
-  /// 获取简短的User-Agent显示文本
-  String _getShortUserAgent(String userAgent) {
-    // Wget/1.21.3 -> Wget
-    if (userAgent.startsWith('Wget/')) {
-      return 'Wget';
-    }
-    // Mozilla/5.0 (Windows...) -> Windows
-    if (userAgent.contains('Windows')) {
-      return 'Windows';
-    }
-    // Mozilla/5.0 (Macintosh...) -> Mac
-    if (userAgent.contains('Macintosh')) {
-      return 'Mac';
-    }
-    // Mozilla/5.0 (Linux; Android...) -> Android
-    if (userAgent.contains('Android')) {
-      return 'Android';
-    }
-    // Mozilla/5.0 (iPhone...) -> iOS
-    if (userAgent.contains('iPhone') || userAgent.contains('iPad')) {
-      return 'iOS';
-    }
-    // VLC/3.0.20 -> VLC
-    if (userAgent.startsWith('VLC/')) {
-      return 'VLC';
-    }
-    // Lavf/60.3.100 -> FFmpeg
-    if (userAgent.startsWith('Lavf/')) {
-      return 'FFmpeg';
-    }
-    // Chrome
-    if (userAgent.contains('Chrome') && !userAgent.contains('Edg')) {
-      return 'Chrome';
-    }
-    // Edge
-    if (userAgent.contains('Edg')) {
-      return 'Edge';
-    }
-    // Firefox
-    if (userAgent.contains('Firefox')) {
-      return 'Firefox';
-    }
-    // Safari (not Chrome)
-    if (userAgent.contains('Safari') && !userAgent.contains('Chrome')) {
-      return 'Safari';
-    }
-    // 默认显示前20个字符
-    return userAgent.length > 20
-        ? '${userAgent.substring(0, 20)}...'
-        : userAgent;
   }
 
   Widget _buildVideoPlayer() {
@@ -2157,129 +2106,6 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   // 遥控器模式的简化控制
-  Widget _buildMiniControlsOverlay() {
-    return GestureDetector(
-      // 整个区域可拖动
-      onPanStart: (_) => windowManager.startDragging(),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.transparent,
-              Colors.transparent,
-              Colors.black.withOpacity(0.5),
-            ],
-            stops: const [0.0, 0.5, 1.0],
-          ),
-        ),
-        child: Column(
-          children: [
-            // 顶部：只保留恢复和关闭，不显示标题文字和退出按钮
-            Padding(
-              padding: const EdgeInsets.all(6),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  // 恢复大小按钮
-                  GestureDetector(
-                    onTap: () async {
-                      await WindowsPipChannel.exitPipMode();
-                      // 延迟同步全屏状态，等待窗口恢复完成
-                      if (PlatformDetector.isWindows) {
-                        await Future.delayed(const Duration(milliseconds: 300));
-                        _isFullScreen = await windowManager.isFullScreen();
-                      }
-                      setState(() {});
-                      // 恢复焦点到播放器
-                      _playerFocusNode.requestFocus();
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Icon(Icons.fullscreen,
-                          color: Colors.white, size: 14),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  // 全抽棴按挳
-                  GestureDetector(
-                    onTap: () {
-                      WindowsPipChannel.exitPipMode();
-                      context.read<PlayerProvider>().stop();
-                      Navigator.of(context).pop();
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Icon(Icons.close,
-                          color: Colors.white, size: 14),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Spacer(),
-            // 底部：静音 + 播放/暂停按钮
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Consumer<PlayerProvider>(
-                builder: (context, provider, _) {
-                  return Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // 闈欓煶按挳
-                      GestureDetector(
-                        onTap: provider.toggleMute,
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            provider.isMuted
-                                ? Icons.volume_off
-                                : Icons.volume_up,
-                            color: Colors.white,
-                            size: 16,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      // 播放/暂停按钮
-                      GestureDetector(
-                        onTap: provider.togglePlayPause,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: const BoxDecoration(
-                            gradient: AppTheme.lotusGradient,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            provider.isPlaying ? Icons.pause : Icons.play_arrow,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildControlsOverlay() {
     return Stack(
@@ -2857,12 +2683,12 @@ class _PlayerScreenState extends State<PlayerScreen>
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                _formatDuration(provider.position),
+                                formatDuration(provider.position),
                                 style: const TextStyle(
                                     color: Color(0x99FFFFFF), fontSize: 10),
                               ),
                               Text(
-                                _formatDuration(provider.duration),
+                                formatDuration(provider.duration),
                                 style: const TextStyle(
                                     color: Color(0x99FFFFFF), fontSize: 10),
                               ),
@@ -2880,7 +2706,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   // Volume control
-                  _buildVolumeControl(provider),
+                  VolumeControlBar(provider: provider),
 
                   const SizedBox(width: 16),
 
@@ -3255,72 +3081,6 @@ class _PlayerScreenState extends State<PlayerScreen>
           ),
         );
       },
-    );
-  }
-
-  Widget _buildVolumeControl(PlayerProvider provider) {
-    // 确保音量值在 0-1 范围内
-    final volume = provider.volume.clamp(0.0, 1.0);
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        TVFocusable(
-          onSelect: provider.toggleMute,
-          focusScale: 1.0,
-          showFocusBorder: false,
-          builder: (context, isFocused, child) {
-            return Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: isFocused
-                    ? AppTheme.getPrimaryColor(context)
-                    : const Color(0x33FFFFFF),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: isFocused
-                      ? AppTheme.getPrimaryColor(context)
-                      : const Color(0x1AFFFFFF),
-                  width: isFocused ? 2 : 1,
-                ),
-              ),
-              child: child,
-            );
-          },
-          child: Icon(
-            provider.isMuted || volume == 0
-                ? Icons.volume_off_rounded
-                : volume < 0.5
-                    ? Icons.volume_down_rounded
-                    : Icons.volume_up_rounded,
-            color: Colors.white,
-            size: 16,
-          ),
-        ),
-        const SizedBox(width: 6),
-        SizedBox(
-          width: 70,
-          child: SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: 2,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 8),
-            ),
-            child: Slider(
-              value: provider.isMuted ? 0 : volume,
-              onChanged: (value) {
-                // 如果当前是静音状态，拖动滑块时先取消静音
-                if (provider.isMuted && value > 0) {
-                  provider.toggleMute();
-                }
-                provider.setVolume(value);
-              },
-              activeColor: AppTheme.getPrimaryColor(context),
-              inactiveColor: const Color(0x33FFFFFF),
-            ),
-          ),
-        ),
-      ],
     );
   }
 
