@@ -5,6 +5,23 @@ All notable changes to FlutterIPTV will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.3] - 2026-09-08
+
+### Added
+- **频道实时快照预览**：悬停（Windows 鼠标）或聚焦（TV）频道时预览实时画面，离开/失焦自动回退为台标，可在设置中开关；需 rtp2httpd 服务端开启 `video-snapshot` 才能生效。/ **Channel live snapshot preview**: preview the live frame on hover (Windows mouse) or focus (TV), auto-fall back to the logo on leave, toggleable in Settings; requires the `video-snapshot` option enabled on the rtp2httpd server.
+
+### Changed
+- **直播起播优化**：优化直播流起播速度与缓冲策略，并收敛非关键日志噪声。/ **Live streaming optimization**: improved live-stream startup speed and buffering strategy, and reduced non-critical log noise.
+- **大文件拆分重构**：将设置页、频道页、首页与播放器页拆分为独立组件，提升可维护性与可读性。/ **Modular refactor**: split the Settings, Channels, Home and Player pages into standalone components for better maintainability and readability.
+- **启动性能与测试**：优化启动性能，并为 EPG 逻辑补充纯逻辑单元测试。/ **Startup performance & tests**: improved startup performance and added pure-logic unit tests for the EPG logic.
+- **依赖升级**：file_picker、wakelock_plus、cached_network_image、material_ui/cupertino_ui、logger 升级至最新稳定版。/ **Dependency upgrades**: bumped file_picker, wakelock_plus, cached_network_image, material_ui/cupertino_ui and logger to the latest stable versions.
+
+### Fixed
+- **台标渲染锯齿**：logo 缩小采样时提升质量，消除边缘锯齿。/ **Logo aliasing**: higher sampling quality when scaling, eliminating edge aliasing.
+- **EPG 跨天节目日期窗口**：日期窗口末尾跨天节目（如 22:00→00:00）不再导致多出一天空节目页面。/ **EPG overnight programs**: programs crossing midnight at the end of the date window no longer add an extra empty-day page.
+- **EPG 自动滚动定位**：修复自动定位受窗口高度影响导致滚动不准的问题。/ **EPG auto-scroll**: fixed inaccurate scrolling caused by window height.
+- **稳定性**：启动初始化失败时不再错误跳转首页、启用 SQLite 外键级联删除并清理遗留数据、修复多处监听器泄漏、为全局未捕获异常增加兜底处理、修复小窗渲染溢出、修复 README 语言切换与字体设置不一致问题。/ **Stability**: no longer incorrectly navigating to Home after init failure, enabled SQLite FK cascade + orphan-data cleanup, fixed listener leaks, added a global uncaught-exception fallback, fixed small-window render overflow, and fixed README language-switch and font-setting inconsistencies.
+
 ## [1.6.2] - 2026-08-22
 
 ### Added

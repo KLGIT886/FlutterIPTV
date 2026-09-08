@@ -1,23 +1,23 @@
 {
-  "version": "1.6.2",
-  "build": 186,
-  "releaseDate": "2026-08-22",
+  "version": "1.6.3",
+  "build": 187,
+  "releaseDate": "2026-09-08",
   "assets": {
-     "windows": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.2/flutteriptv-Windows-x64-Setup.exe",
+     "windows": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.3/flutteriptv-Windows-x64-Setup.exe",
     "android_mobile": {
-      "arm64-v8a": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.2/flutteriptv-Android-Mobile-arm64-v8a.apk",
-      "armeabi-v7a": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.2/flutteriptv-Android-Mobile-armeabi-v7a.apk",
-      "x86_64": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.2/flutteriptv-Android-Mobile-x86_64.apk"
+      "arm64-v8a": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.3/flutteriptv-Android-Mobile-arm64-v8a.apk",
+      "armeabi-v7a": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.3/flutteriptv-Android-Mobile-armeabi-v7a.apk",
+      "x86_64": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.3/flutteriptv-Android-Mobile-x86_64.apk"
     },
     "android_tv": {
-      "arm64-v8a": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.2/flutteriptv-AndroidTV-arm64-v8a.apk",
-      "armeabi-v7a": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.2/flutteriptv-AndroidTV-arm64-v8a.apk",
-      "x86_64": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.2/flutteriptv-AndroidTV-x86_64.apk"
+      "arm64-v8a": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.3/flutteriptv-AndroidTV-arm64-v8a.apk",
+      "armeabi-v7a": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.3/flutteriptv-AndroidTV-arm64-v8a.apk",
+      "x86_64": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.3/flutteriptv-AndroidTV-x86_64.apk"
     }
   },
   "changelog": {
-    "zh": "- 新增：首页与分类页节目名称及 EPG 节目单字体大小调节（80%~120%），不影响其他位置字体，修复放大字体导致底部溢出\n- 新增：电子节目单增强 —— 回看日期由 EPG 数据动态反推（自动适配 8+1 等源）、竖排日期列、面板宽度自适应最长节目名、自动定位当前时段并高亮（直播高亮 + 回放高亮/回放中标识）\n- 修复：EPG 规范化将 4K/8K 频道（如 CCTV4K/CCTV8K/beijingstv_4k）与标清版本错误串扰；高清频道优先匹配自有节目单，无数据时回落到标清版本\n- 修复：电子节目单自动滚动到当前节目失效（懒加载下 ensureVisible 定位失败）\n- 优化：EPG 面板背景改为渐变透明，对齐播放器分类面板视觉\n- 新增：回看（catchup）时间参数支持，对齐 Kodi pvr.iptvsimple 标准与 rtp2httpd（${utc}/${utcend}/${timestamp}/${duration}、${(b/e)yyyyMMddHHmmss:UTC}、${offset}、{utc:格式} 等）\n- 新增：自动（安全）硬解方案下可配置 vf=d3d11vpp 去交错参数（bob/adaptive/mocomp/off）\n- 移除：Vulkan 硬解方案（h264 Vulkan 解码初始化崩溃）\n- 优化：迁移 UI 至独立 material_ui/cupertino_ui 包（随 Flutter 3.47 设计系统解耦）、升级 shimmer 至 4.0.0、适配 file_picker 正式版 API\n- 优化：版本相关链接指向新仓库 KLGIT886/FlutterIPTV",
-    "en": "- New: Home & category channel name / EPG font size adjustment (80%~120%), isolated from other UI, fixed bottom overflow at large font\n- New: EPG program guide enhancements - catchup date range derived dynamically from EPG data (auto adapts to 8+1 style sources), vertical date column, panel width auto-fits longest program name, auto-scroll & highlight current program (live highlight + catchup highlight with playing indicator)\n- Fix: EPG name normalization no longer conflates 4K/8K channels (CCTV4K/CCTV8K/beijingstv_4k) with SD versions; HD channels prefer own program list, fall back to SD when absent\n- Fix: EPG auto-scroll to current program broken (ensureVisible failed on lazy ListView)\n- Optimization: EPG panel background changed to transparent gradient, aligned with player category panel\n- New: Catchup time parameter support aligned with Kodi pvr.iptvsimple and rtp2httpd (${utc}/${utcend}/${timestamp}/${duration}, ${(b/e)yyyyMMddHHmmss:UTC}, ${offset}, {utc:format}, etc.)\n- New: Configurable vf=d3d11vpp deinterlace parameters (bob/adaptive/mocomp/off) under Auto (Safe) hardware decode mode\n- Removed: Vulkan hardware decode mode (h264 Vulkan init crashed)\n- Optimization: Migrated UI to standalone material_ui/cupertino_ui packages (design system decoupled in Flutter 3.47), upgraded shimmer to 4.0.0, adapted file_picker stable API\n- Optimization: Version links point to new repository KLGIT886/FlutterIPTV"
+    "zh": "- 新增：频道实时快照预览 —— 悬停（Windows 鼠标）或聚焦（TV）频道时预览实时画面，离开/失焦自动回退为台标，可在设置中开关；需 rtp2httpd 服务端开启 video-snapshot 才能生效\n- 优化：直播流起播速度与缓冲策略，并收敛非关键日志噪声\n- 重构：将设置页、频道页、首页与播放器页拆分为独立组件，提升可维护性\n- 优化：启动性能，并为 EPG 逻辑补充纯逻辑单元测试\n- 升级：file_picker、wakelock_plus、cached_network_image、material_ui/cupertino_ui、logger 至最新稳定版\n- 修复：台标渲染锯齿、EPG 跨天节目日期窗口多出空页面、EPG 自动定位滚动不准\n- 修复：启动初始化失败仍跳转首页、SQLite 外键级联与脏数据、多处监听器泄漏、全局未捕获异常兜底、小窗渲染溢出、README 语言切换与字体设置不一致",
+    "en": "- New: Channel live snapshot preview - preview the live frame on hover (Windows mouse) or focus (TV), auto-fall back to the logo on leave, toggleable in Settings; requires the video-snapshot option enabled on the rtp2httpd server\n- Optimization: Improved live-stream startup speed & buffering strategy, and reduced non-critical log noise\n- Refactor: Split Settings, Channels, Home and Player pages into standalone components for maintainability\n- Optimization: Improved startup performance; added pure-logic unit tests for EPG\n- Upgraded: file_picker, wakelock_plus, cached_network_image, material_ui/cupertino_ui and logger to latest stable\n- Fixed: logo aliasing, extra empty EPG page caused by overnight programs at the end of the date window, inaccurate EPG auto-scroll\n- Fixed: startup no longer navigating incorrectly after init failure, SQLite FK cascade & orphan-data cleanup, listener leaks, global uncaught-exception fallback, small-window render overflow, README language-switch and font inconsistencies"
   },
   "minVersion": "1.0.0"
 }
