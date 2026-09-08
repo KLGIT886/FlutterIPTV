@@ -30,6 +30,7 @@ import '../widgets/player_formatters.dart';
 import '../widgets/mini_controls_overlay.dart';
 import '../widgets/volume_control_bar.dart';
 import '../widgets/channel_panel.dart';
+import '../widgets/player_top_bar.dart';
 import '../../../core/services/epg_service.dart';
 
 class PlayerScreen extends StatefulWidget {
@@ -2158,7 +2159,16 @@ class _PlayerScreenState extends State<PlayerScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildTopBar(),
+PlayerTopBar(
+                fallbackChannelName: widget.channelName,
+                onBack: _handleTopBarBack,
+                pipButton: WindowsPipChannel.isSupported
+                    ? _buildPipButton()
+                    : null,
+                multiScreenButton: PlatformDetector.isDesktop
+                    ? _buildMultiScreenButton()
+                    : null,
+              ),
               Expanded(
                 child: Align(
                   alignment: Alignment.bottomCenter,
@@ -2174,237 +2184,31 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
   }
 
-  Widget _buildTopBar() {
-    return Padding(
-      // 调整顶部间距为 30，使按钮向上移动，减少与信息窗口的距离，同时保持不重叠
-      padding: const EdgeInsets.fromLTRB(24, 30, 24, 16),
-      child: Row(
-        children: [
-          // Semi-transparent channel logo/back button
-          TVFocusable(
-            onSelect: () async {
-              // 先清除所有错误提示和状态
-              _errorHideTimer?.cancel();
-              _errorShown = false;
-              ScaffoldMessenger.of(context).clearSnackBars();
+  // 顶栏返回按钮回调：清理错误提示、退出全屏并返回上一页
+  Future<void> _handleTopBarBack() async {
+    // 先清除所有错误提示和状态
+    _errorHideTimer?.cancel();
+    _errorShown = false;
+    ScaffoldMessenger.of(context).clearSnackBars();
 
-              // 如果是全屏状态，先退出全屏 - 使用原生 API
-              if (_isFullScreen && PlatformDetector.isWindows) {
-                _isFullScreen = false;
-                final success = WindowsFullscreenNative.exitFullScreen();
-                if (!success) {
-                  // 如果原生 API 失败，回退到 window_manager
-                  unawaited(windowManager.setFullScreen(false));
-                }
-              }
+    // 如果是全屏状态，先退出全屏 - 使用原生 API
+    if (_isFullScreen && PlatformDetector.isWindows) {
+      _isFullScreen = false;
+      final success = WindowsFullscreenNative.exitFullScreen();
+      if (!success) {
+        // 如果原生 API 失败，回退到 window_manager
+        unawaited(windowManager.setFullScreen(false));
+      }
+    }
 
-              // 不需要手动调用 stop()，dispose 会自动处理
+    // 不需要手动调用 stop()，dispose 会自动处理
 
-              // 最后导航返回
-              if (mounted) {
-                Navigator.of(context).pop();
-              }
-            },
-            focusScale: 1.0,
-            showFocusBorder: false,
-            builder: (context, isFocused, child) {
-              return Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: isFocused
-                      ? AppTheme.getPrimaryColor(context)
-                      : const Color(0x33FFFFFF),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isFocused
-                        ? AppTheme.getPrimaryColor(context)
-                        : const Color(0x1AFFFFFF),
-                    width: isFocused ? 2 : 1,
-                  ),
-                ),
-                child: child,
-              );
-            },
-            child: const Icon(Icons.arrow_back_rounded,
-                color: Colors.white, size: 18),
-          ),
-
-          const SizedBox(width: 16),
-
-          // Minimal channel info
-          Expanded(
-            child: Consumer<PlayerProvider>(
-              builder: (context, provider, _) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      provider.currentChannel?.name ?? widget.channelName,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        // Live indicator
-                        if (provider.state == PlayerState.playing) ...[
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              gradient: AppTheme.getGradient(context),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.circle,
-                                    color: Colors.white, size: 6),
-                                SizedBox(width: 4),
-                                Text('LIVE',
-                                    style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
-                        // Source indicator (if multiple sources)
-                        if (provider.currentChannel != null &&
-                            provider.currentChannel!.hasMultipleSources) ...[
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppTheme.getPrimaryColor(context)
-                                  .withOpacity(0.8),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.swap_horiz,
-                                    color: Colors.white, size: 10),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${AppStrings.of(context)?.source ?? 'Source'} ${provider.currentSourceIndex}/${provider.sourceCount}',
-                                  style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
-                        // Video info
-                        if (provider.videoInfo.isNotEmpty)
-                          Flexible(
-                            child: Text(
-                              provider.videoInfo,
-                              style: const TextStyle(
-                                  color: Color(0x99FFFFFF), fontSize: 11),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-
-          // Favorite button - minimal style
-          Consumer<FavoritesProvider>(
-            builder: (context, favorites, _) {
-              final playerProvider = context.read<PlayerProvider>();
-              final currentChannel = playerProvider.currentChannel;
-              final isFav = currentChannel != null &&
-                  favorites.isFavorite(currentChannel.id ?? 0);
-
-              return TVFocusable(
-                onSelect: () async {
-                  if (currentChannel != null) {
-                    ServiceLocator.log.d(
-                        'TV播放器: 尝试切换收藏状态 - 频道: ${currentChannel.name}, ID: ${currentChannel.id}');
-                    final success =
-                        await favorites.toggleFavorite(currentChannel);
-                    ServiceLocator.log.d('TV播放器: 收藏切换${success ? "成功" : "失败"}');
-
-                    if (success) {
-                      final newIsFav =
-                          favorites.isFavorite(currentChannel.id ?? 0);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            newIsFav ? '已添加到收藏' : '已从收藏中移除',
-                          ),
-                          duration: const Duration(seconds: 1),
-                        ),
-                      );
-                    }
-                  } else {
-                    ServiceLocator.log.d('TV播放器: 当前频道为空，无法切换收藏');
-                  }
-                },
-                focusScale: 1.0,
-                showFocusBorder: false,
-                builder: (context, isFocused, child) {
-                  return Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      gradient: isFav ? AppTheme.getGradient(context) : null,
-                      color: isFav
-                          ? null
-                          : (isFocused
-                              ? AppTheme.getPrimaryColor(context)
-                              : const Color(0x33FFFFFF)),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: isFocused
-                            ? AppTheme.getPrimaryColor(context)
-                            : const Color(0x1AFFFFFF),
-                        width: isFocused ? 2 : 1,
-                      ),
-                    ),
-                    child: child,
-                  );
-                },
-                child: Icon(
-                  isFav ? Icons.favorite : Icons.favorite_border_rounded,
-                  color: Colors.white,
-                  size: 18,
-                ),
-              );
-            },
-          ),
-
-          // PiP 画中画播放器按钮 - 仅 Windows
-          if (WindowsPipChannel.isSupported) ...[
-            const SizedBox(width: 8),
-            _buildPipButton(),
-          ],
-
-          // 切嗗睆模式紡按挳 - 浠呮闈㈠钩只?
-          if (PlatformDetector.isDesktop) ...[
-            const SizedBox(width: 8),
-            _buildMultiScreenButton(),
-          ],
-        ],
-      ),
-    );
+    // 最后导航返回
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
   }
+
 
   // 多屏模式切换按钮
   Widget _buildMultiScreenButton() {
