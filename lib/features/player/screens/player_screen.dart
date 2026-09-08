@@ -29,6 +29,7 @@ import '../widgets/interactive_epg_widget.dart';
 import '../widgets/player_formatters.dart';
 import '../widgets/mini_controls_overlay.dart';
 import '../widgets/volume_control_bar.dart';
+import '../widgets/channel_panel.dart';
 import '../../../core/services/epg_service.dart';
 
 class PlayerScreen extends StatefulWidget {
@@ -2158,8 +2159,14 @@ class _PlayerScreenState extends State<PlayerScreen>
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildTopBar(),
-              const Spacer(),
-              _buildBottomControls(),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: SingleChildScrollView(
+                    child: _buildBottomControls(),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -2301,10 +2308,14 @@ class _PlayerScreenState extends State<PlayerScreen>
                         ],
                         // Video info
                         if (provider.videoInfo.isNotEmpty)
-                          Text(
-                            provider.videoInfo,
-                            style: const TextStyle(
-                                color: Color(0x99FFFFFF), fontSize: 11),
+                          Flexible(
+                            child: Text(
+                              provider.videoInfo,
+                              style: const TextStyle(
+                                  color: Color(0x99FFFFFF), fontSize: 11),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                       ],
                     ),
@@ -2702,7 +2713,9 @@ class _PlayerScreenState extends State<PlayerScreen>
               ),
 
               // Control buttons row (moved above progress bar)
-              Row(
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   // Volume control
@@ -3065,6 +3078,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                   ],
                 ],
               ),
+                ),
 
               // Keyboard hints
               if (PlatformDetector.useDPadNavigation)
@@ -3199,239 +3213,17 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   Widget _buildCategoryPanel() {
     final channelProvider = context.read<ChannelProvider>();
-    final groups = channelProvider.groups;
-    return Positioned(
-      left: 0,
-      top: 0,
-      bottom: 0,
-      child: Row(
-        children: [
-          // 切嗙被切楄〃
-          Container(
-            width: 180,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  Color(0xE6000000),
-                  Color(0x99000000),
-                  Colors.transparent,
-                ],
-                stops: [0.0, 0.7, 1.0],
-              ),
-            ),
-            child: SafeArea(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    child: Text(
-                      AppStrings.of(context)?.categories ?? 'Categories',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: ListView.builder(
-                      controller: _categoryScrollController,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemCount: groups.length,
-                      itemBuilder: (context, index) {
-                        final group = groups[index];
-                        final isSelected = _selectedCategory == group.name;
-                        return TVFocusable(
-                          autofocus: index == 0 && _selectedCategory == null,
-                          onSelect: () {
-                            setState(() {
-                              _selectedCategory = group.name;
-                            });
-                          },
-                          focusScale: 1.0,
-                          showFocusBorder: false,
-                          builder: (context, isFocused, child) {
-                            return Container(
-                              margin: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 10),
-                              decoration: BoxDecoration(
-                                gradient: (isFocused || isSelected)
-                                    ? AppTheme.getGradient(context)
-                                    : null,
-                                color: (isFocused || isSelected)
-                                    ? null
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: child,
-                            );
-                          },
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  group.name,
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 13),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              Text(
-                                '${group.channelCount}',
-                                style: const TextStyle(
-                                    color: Color(0x99FFFFFF), fontSize: 11),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // 频道列表（当选中分类时显示）
-          if (_selectedCategory != null) _buildChannelList(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChannelList() {
-    final channelProvider = context.read<ChannelProvider>();
-    final playerProvider = context.read<PlayerProvider>();
-    final channels = channelProvider.getChannelsByGroup(_selectedCategory!);
-    final currentChannel = playerProvider.currentChannel;
-
-    return Container(
-      width: 220,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            Color(0xCC000000),
-            Color(0x66000000),
-            Colors.transparent,
-          ],
-          stops: [0.0, 0.7, 1.0],
-        ),
-      ),
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => setState(() => _selectedCategory = null),
-                    child: const Icon(Icons.arrow_back_ios,
-                        color: Colors.white, size: 14),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _selectedCategory!,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                controller: _channelScrollController,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: channels.length,
-                itemBuilder: (context, index) {
-                  final channel = channels[index];
-                  final isPlaying = currentChannel?.id == channel.id;
-                  return TVFocusable(
-                    autofocus: isPlaying, // 当前播放的频道自动获取焦点
-                    onSelect: () {
-                      // 保存上次播放的频道 ID
-                      final settingsProvider = context.read<SettingsProvider>();
-                      if (settingsProvider.rememberLastChannel &&
-                          channel.id != null) {
-                        settingsProvider.setLastChannelId(channel.id);
-                      }
-
-                      // 切换到该频道
-                      playerProvider.playChannel(channel);
-                      // 全抽棴闈㈡澘
-                      setState(() {
-                        _showCategoryPanel = false;
-                        _selectedCategory = null;
-                      });
-                    },
-                    focusScale: 1.0,
-                    showFocusBorder: false,
-                    builder: (context, isFocused, child) {
-                      return Container(
-                        margin: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          gradient:
-                              isFocused ? AppTheme.getGradient(context) : null,
-                          color: isPlaying && !isFocused
-                              ? const Color(0x33E91E63)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: child,
-                      );
-                    },
-                    child: Row(
-                      children: [
-                        if (isPlaying)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: Icon(Icons.play_arrow,
-                                color: AppTheme.getPrimaryColor(context),
-                                size: 16),
-                          ),
-                        Expanded(
-                          child: Text(
-                            channel.name,
-                            style: TextStyle(
-                              color: isPlaying
-                                  ? AppTheme.getPrimaryColor(context)
-                                  : Colors.white,
-                              fontSize: 13,
-                              fontWeight: isPlaying
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
+    return ChannelPanel(
+      groups: channelProvider.groups,
+      selectedCategory: _selectedCategory,
+      categoryScrollController: _categoryScrollController,
+      channelScrollController: _channelScrollController,
+      onCategorySelected: (name) => setState(() => _selectedCategory = name),
+      onBack: () => setState(() => _selectedCategory = null),
+      onClose: () => setState(() {
+        _showCategoryPanel = false;
+        _selectedCategory = null;
+      }),
     );
   }
 }
