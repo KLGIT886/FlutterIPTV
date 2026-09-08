@@ -141,14 +141,18 @@ class EpgService {
     if (programs == null || programs.isEmpty) return [DateTime.now()];
 
     DateTime min = programs.first.start;
-    DateTime max = programs.first.end;
     for (final p in programs) {
       if (p.start.isBefore(min)) min = p.start;
-      if (p.end.isAfter(max)) max = p.end;
     }
 
     final minDay = DateTime(min.year, min.month, min.day);
-    final maxDay = DateTime(max.year, max.month, max.day);
+    // 窗口末天取“最晚节目 start 的日历日”，而非最晚 end：末尾档节目常为
+    // 22:00~00:00 跨到次日凌晨，若按 end 取日历日会把下一日也算进来，
+    // 而 getProgramsForDate 对恰好 00:00 结束的节目不会算进该日，从而多出空页面。
+    // 节目归属其 start 日，跨天收尾不构成新的一天。programs 已按 start 升序排序。
+    final lastStart = programs.last.start;
+    final maxDay =
+        DateTime(lastStart.year, lastStart.month, lastStart.day);
 
     final dates = <DateTime>[];
     for (var d = minDay;
