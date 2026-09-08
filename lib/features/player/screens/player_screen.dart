@@ -24,11 +24,12 @@ import '../../settings/providers/dlna_provider.dart';
 import '../../multi_screen/providers/multi_screen_provider.dart';
 import '../../multi_screen/widgets/multi_screen_player.dart';
 import '../../../core/services/service_locator.dart';
-import '../widgets/player_formatters.dart';
 import '../widgets/mini_controls_overlay.dart';
 import '../widgets/channel_panel.dart';
+import '../widgets/gesture_overlay.dart';
 import '../widgets/player_top_bar.dart';
 import '../widgets/player_bottom_controls.dart';
+import '../widgets/player_info_overlay.dart';
 import '../widgets/interactive_epg_widget.dart';
 import '../../../core/services/epg_service.dart';
 
@@ -1273,55 +1274,6 @@ class _PlayerScreenState extends State<PlayerScreen>
     _currentGestureType = null;
   }
 
-  Widget _buildGestureIndicator() {
-    IconData icon;
-    String label;
-
-    if (_currentGestureType == 'volume') {
-      icon = _gestureValue > 0.5
-          ? Icons.volume_up
-          : (_gestureValue > 0 ? Icons.volume_down : Icons.volume_off);
-      label = '${(_gestureValue * 100).toInt()}%';
-    } else if (_currentGestureType == 'brightness') {
-      icon = _gestureValue > 0.5 ? Icons.brightness_high : Icons.brightness_low;
-      label = '${(_gestureValue * 100).toInt()}%';
-    } else if (_currentGestureType == 'channel') {
-      // 频道切换指示
-      if (_gestureValue < 0) {
-        icon = Icons.keyboard_arrow_up;
-        label = AppStrings.of(context)?.nextChannel ?? 'Next channel';
-      } else {
-        icon = Icons.keyboard_arrow_down;
-        label = AppStrings.of(context)?.previousChannel ?? 'Previous channel';
-      }
-    } else {
-      return const SizedBox.shrink();
-    }
-
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        decoration: BoxDecoration(
-          color: Colors.black.withAlpha(180),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: Colors.white, size: 36),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   DateTime? _lastSelectKeyDownTime;
   DateTime? _lastLeftKeyDownTime; // 用于检测长按左键
@@ -1734,38 +1686,14 @@ class _PlayerScreenState extends State<PlayerScreen>
                     _buildCategoryPanel(),
 
                   // EPG Panel (Right side)
-                  if (_showEpgPanel &&
-                      !WindowsPipChannel.isInPipMode &&
-                      !_isMultiScreenMode())
-                    Positioned(
-                      top: 0,
-                      bottom: 0,
-                      right: 0,
-                      child: InteractiveEpgWidget(
-                        channel: _originalChannel ??
-                            (_playerProvider?.currentChannel ??
-                                Channel(
-                                    playlistId: 0, name: 'Unknown', url: '')),
-                        isPlayingCatchup: _originalChannel != null,
-                        currentCatchupProgram: _currentCatchupProgram,
-                        onProgramSelected: (program) {
-                          // Handle playback
-                          _playCatchup(program);
-                          // Close EPG? Maybe keep it open or close.
-                          // Usually better to keep open or close depending on UX.
-                          // User said "interactive epg program list... provide playback option... return to live"
-                          // I'll close EPG after selection to show video.
-                          setState(() => _showEpgPanel = false);
-                        },
-                        onBackToLive: () {
-                          _backToLive();
-                          setState(() => _showEpgPanel = false);
-                        },
-                      ),
-                    ),
+                  _buildEpgPanel(),
 
                   // 手前娍鎸囩ず器?手嬫満绔?
-                  if (_showGestureIndicator) _buildGestureIndicator(),
+                  if (_showGestureIndicator)
+                          GestureOverlay(
+                            gestureType: _currentGestureType,
+                            gestureValue: _gestureValue,
+                          ),
 
                   // Loading Indicator - 切嗗睆模式紡个嬩笉显示全ㄥ眬加浇鎸囩ず器?
                   if (_isLoading && !_isMultiScreenMode())
@@ -1821,147 +1749,8 @@ class _PlayerScreenState extends State<PlayerScreen>
                     },
                   ),
 
-                  // Windows 播放器信息显示 - 右上角（网速、时间、FPS、分辨率等）
-                  // 分屏模式下不显示全局信息（每个分屏有自己的信息显示）
-                  Builder(
-                    builder: (context) {
-                      final settings = context.watch<SettingsProvider>();
-                      final player = context.watch<PlayerProvider>();
-
-                      // 分屏模式、迷你模式或非播放状态不显示
-                      if (_isMultiScreenMode() ||
-                          WindowsPipChannel.isInPipMode ||
-                          player.state != PlayerState.playing) {
-                        return const SizedBox.shrink();
-                      }
-
-                      // 检查是否有任何信息需要显示
-                      final showAny = settings.showNetworkSpeed ||
-                          settings.showClock ||
-                          settings.showFps ||
-                          settings.showVideoInfo;
-                      if (!showAny) return const SizedBox.shrink();
-
-                      final fps = player.currentFps;
-
-                      return Positioned(
-                        top: MediaQuery.of(context).padding.top + 8,
-                        right: 16,
-                        child: IgnorePointer(
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // 网速显示（仅TV端显示，Windows端不显示）
-                              if (settings.showNetworkSpeed &&
-                                  player.downloadSpeed > 0 &&
-                                  PlatformDetector.isTV)
-                                Container(
-                                  margin: const EdgeInsets.only(left: 6),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green.withOpacity(0.7),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    formatSpeed(player.downloadSpeed),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              // 时堕棿显示 - 榛戣壊
-                              if (settings.showClock)
-                                Container(
-                                  margin: const EdgeInsets.only(left: 6),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.7),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: StreamBuilder(
-                                    stream: Stream.periodic(
-                                        const Duration(seconds: 1)),
-                                    builder: (context, snapshot) {
-                                      final now = DateTime.now();
-                                      return Text(
-                                        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              // FPS 显示 - 绾㈣壊
-                              if (settings.showFps && fps > 0)
-                                Container(
-                                  margin: const EdgeInsets.only(left: 6),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.red.withOpacity(0.7),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    '${fps.toStringAsFixed(0)} FPS',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              // 分辨率显示 - 蓝色
-                              if (settings.showVideoInfo &&
-                                  player.videoWidth > 0 &&
-                                  player.videoHeight > 0)
-                                Container(
-                                  margin: const EdgeInsets.only(left: 6),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue.withOpacity(0.7),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    '${player.videoWidth}x${player.videoHeight}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              // User-Agent 显示 - 紫色
-                              if (settings.showUserAgent)
-                                Container(
-                                  margin: const EdgeInsets.only(left: 6),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.purple.withOpacity(0.7),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    'UA: ${getShortUserAgent(settings.userAgent)}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+                  PlayerInfoOverlay(
+                    isMultiScreen: _isMultiScreenMode(),
                   ),
 
                   // Error Display - Handled via Listener now to show SnackBar
@@ -1974,6 +1763,35 @@ class _PlayerScreenState extends State<PlayerScreen>
         ),
       ),
     ); // PopScope
+  }
+
+  // 构建右侧 EPG 面板（沉浸/分屏/PIP 模式下不显示）。
+  Widget _buildEpgPanel() {
+    if (!_showEpgPanel ||
+        WindowsPipChannel.isInPipMode ||
+        _isMultiScreenMode()) {
+      return const SizedBox.shrink();
+    }
+    return Positioned(
+      top: 0,
+      bottom: 0,
+      right: 0,
+      child: InteractiveEpgWidget(
+        channel: _originalChannel ??
+            (_playerProvider?.currentChannel ??
+                Channel(playlistId: 0, name: 'Unknown', url: '')),
+        isPlayingCatchup: _originalChannel != null,
+        currentCatchupProgram: _currentCatchupProgram,
+        onProgramSelected: (program) {
+          _playCatchup(program);
+          setState(() => _showEpgPanel = false);
+        },
+        onBackToLive: () {
+          _backToLive();
+          setState(() => _showEpgPanel = false);
+        },
+      ),
+    );
   }
 
   Widget _buildVideoPlayer() {
