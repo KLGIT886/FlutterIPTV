@@ -7,8 +7,6 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/navigation/app_router.dart';
 import '../../../core/widgets/tv_focusable.dart';
 import '../../../core/widgets/tv_sidebar.dart';
-import '../../../core/widgets/category_card.dart';
-import '../../../core/widgets/channel_card.dart';
 import '../../../core/widgets/channel_logo_widget.dart';
 import '../../../core/platform/platform_detector.dart';
 import '../../../core/i18n/app_strings.dart';
@@ -18,20 +16,18 @@ import '../../../core/models/app_update.dart';
 import '../../../core/utils/card_size_calculator.dart';
 import '../../../core/utils/throttled_state_mixin.dart'; // ✅ 导入节流 mixin
 import '../../channels/providers/channel_provider.dart';
-import '../../channels/screens/channels_screen.dart';
 import '../../playlist/providers/playlist_provider.dart';
 import '../../playlist/widgets/add_playlist_dialog.dart';
-import '../../playlist/screens/playlist_list_screen.dart';
 import '../../favorites/providers/favorites_provider.dart';
-import '../../favorites/screens/favorites_screen.dart';
 import '../../player/providers/player_provider.dart';
 import '../../settings/providers/settings_provider.dart';
-import '../../settings/screens/settings_screen.dart';
-import '../../search/screens/search_screen.dart';
 import '../../epg/providers/epg_provider.dart';
 import '../../multi_screen/providers/multi_screen_provider.dart';
 import '../../../core/platform/native_player_channel.dart';
 import '../../../core/models/channel.dart';
+import '../widgets/embedded_screens.dart';
+import '../widgets/responsive_category_chips.dart';
+import '../widgets/optimized_channel_card.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -552,15 +548,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
       case 0:
         return _buildMainContent(context);
       case 1:
-        return const _EmbeddedChannelsScreen();
+        return const EmbeddedChannelsScreen();
       case 2:
-        return const _EmbeddedPlaylistListScreen();
+        return const EmbeddedPlaylistListScreen();
       case 3:
-        return const _EmbeddedFavoritesScreen();
+        return const EmbeddedFavoritesScreen();
       case 4:
-        return const _EmbeddedSearchScreen();
+        return const EmbeddedSearchScreen();
       case 5:
-        return const _EmbeddedSettingsScreen();
+        return const EmbeddedSettingsScreen();
       default:
         return _buildMainContent(context);
     }
@@ -1293,7 +1289,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
   }
 
   Widget _buildCategoryChips(ChannelProvider provider) {
-    return _ResponsiveCategoryChips(
+    return ResponsiveCategoryChips(
       groups: provider.getHomeGroups(maxGroups: 8), // ✅ 使用首页独立数据
       onGroupTap: (groupName) => Navigator.pushNamed(
           context, AppRouter.channels,
@@ -1384,7 +1380,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
                         right: index < displayCount - 1 ? cardSpacing : 0),
                     child: SizedBox(
                       width: cardWidth,
-                      child: _OptimizedChannelCard(
+                      child: OptimizedChannelCard(
                         channel: channel,
                         onTap: () => _playChannel(channel),
                         onUp: isFirstRow && PlatformDetector.isTV
@@ -1750,347 +1746,4 @@ class _NavItem {
   final IconData icon;
   final String label;
   const _NavItem({required this.icon, required this.label});
-}
-
-/// 响应式分类标签组件 - 根据宽度自适应，超出时折叠
-class _ResponsiveCategoryChips extends StatefulWidget {
-  final List<dynamic> groups;
-  final Function(String) onGroupTap;
-
-  const _ResponsiveCategoryChips({
-    required this.groups,
-    required this.onGroupTap,
-  });
-
-  @override
-  State<_ResponsiveCategoryChips> createState() =>
-      _ResponsiveCategoryChipsState();
-}
-
-class _ResponsiveCategoryChipsState extends State<_ResponsiveCategoryChips> with ThrottledStateMixin {
-  bool _isExpanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final isMobile = PlatformDetector.isMobile;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final horizontalPadding = isMobile ? 12.0 : 24.0;
-        final availableWidth = constraints.maxWidth - horizontalPadding * 2;
-
-        // 计算每个 chip 的大致宽度（图标 + 文字 + padding）
-        // 手机端使用更小的估算宽度
-        final estimatedChipWidth = isMobile ? 75.0 : 110.0;
-        final maxVisibleCount = (availableWidth / estimatedChipWidth).floor();
-
-        // 如果所有分类都能显示，直接用 Wrap
-        if (widget.groups.length <= maxVisibleCount || _isExpanded) {
-          return _buildExpandedView(isMobile, horizontalPadding);
-        }
-
-        // 否则显示部分 + 展开按钮
-        return _buildCollapsedView(
-            maxVisibleCount, isMobile, horizontalPadding);
-      },
-    );
-  }
-
-  Widget _buildExpandedView(bool isMobile, double horizontalPadding) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Wrap(
-          spacing: isMobile ? 6 : 8,
-          runSpacing: isMobile ? 6 : 8,
-          alignment: WrapAlignment.start,
-          children: [
-            ...widget.groups.map((group) => _buildChip(group.name, isMobile)),
-            if (widget.groups.length > 6) _buildCollapseButton(isMobile),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCollapsedView(
-      int maxVisible, bool isMobile, double horizontalPadding) {
-    // 至少显示 4 个，留一个位置给展开按钮
-    final visibleCount = (maxVisible - 1).clamp(3, widget.groups.length);
-
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Wrap(
-          spacing: isMobile ? 6 : 8,
-          runSpacing: isMobile ? 6 : 8,
-          alignment: WrapAlignment.start,
-          children: [
-            ...widget.groups
-                .take(visibleCount)
-                .map((group) => _buildChip(group.name, isMobile)),
-            _buildExpandButton(widget.groups.length - visibleCount, isMobile),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChip(String name, bool isMobile) {
-    return TVFocusable(
-      onSelect: () => widget.onGroupTap(name),
-      focusScale: 1.0,
-      showFocusBorder: false,
-      builder: (context, isFocused, child) {
-        return Container(
-          padding: EdgeInsets.symmetric(
-              horizontal: isMobile ? 8 : 12,
-              vertical: isMobile ? 3 : 8), // 手机端从5减少到3
-          decoration: BoxDecoration(
-            gradient: isFocused
-                ? AppTheme.getGradient(context)
-                : AppTheme.getSoftGradient(context),
-            borderRadius: BorderRadius.circular(AppTheme.radiusPill),
-            border: Border.all(
-                color: isFocused
-                    ? AppTheme.getPrimaryColor(context)
-                    : AppTheme.getGlassBorderColor(context)),
-          ),
-          child: child,
-        );
-      },
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(CategoryCard.getIconForCategory(name),
-              size: isMobile ? 12 : 14,
-              color: AppTheme.getTextSecondary(context)),
-          SizedBox(width: isMobile ? 4 : 6),
-          Text(name,
-              style: TextStyle(
-                  color: AppTheme.getTextSecondary(context),
-                  fontSize: isMobile ? 10 : 12)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildExpandButton(int hiddenCount, bool isMobile) {
-    return TVFocusable(
-      onSelect: () => immediateSetState(() => _isExpanded = true), // 立即更新展开状态
-      focusScale: 1.0,
-      showFocusBorder: false,
-      builder: (context, isFocused, child) {
-        return Container(
-          padding: EdgeInsets.symmetric(
-              horizontal: isMobile ? 8 : 12,
-              vertical: isMobile ? 3 : 8), // 手机端从5减少到3
-          decoration: BoxDecoration(
-            gradient: isFocused
-                ? AppTheme.getGradient(context)
-                : AppTheme.getSoftGradient(context),
-            borderRadius: BorderRadius.circular(AppTheme.radiusPill),
-            border: Border.all(
-                color: isFocused
-                    ? AppTheme.getPrimaryColor(context)
-                    : AppTheme.getGlassBorderColor(context)),
-          ),
-          child: child,
-        );
-      },
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.more_horiz_rounded,
-              size: isMobile ? 12 : 14,
-              color: AppTheme.getTextSecondary(context)),
-          SizedBox(width: isMobile ? 3 : 4),
-          Text('+$hiddenCount',
-              style: TextStyle(
-                  color: AppTheme.getTextSecondary(context),
-                  fontSize: isMobile ? 10 : 12)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCollapseButton(bool isMobile) {
-    return TVFocusable(
-      onSelect: () => immediateSetState(() => _isExpanded = false), // 立即更新折叠状态
-      focusScale: 1.0,
-      showFocusBorder: false,
-      builder: (context, isFocused, child) {
-        return Container(
-          padding: EdgeInsets.symmetric(
-              horizontal: isMobile ? 8 : 12,
-              vertical: isMobile ? 3 : 8), // 手机端从5减少到3
-          decoration: BoxDecoration(
-            gradient: isFocused
-                ? AppTheme.getGradient(context)
-                : AppTheme.getSoftGradient(context),
-            borderRadius: BorderRadius.circular(AppTheme.radiusPill),
-            border: Border.all(
-                color: isFocused
-                    ? AppTheme.getPrimaryColor(context)
-                    : AppTheme.getGlassBorderColor(context)),
-          ),
-          child: child,
-        );
-      },
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.unfold_less_rounded,
-              size: isMobile ? 12 : 14,
-              color: AppTheme.getTextSecondary(context)),
-          SizedBox(width: isMobile ? 3 : 4),
-          Text(AppStrings.of(context)?.collapse ?? 'Collapse',
-              style: TextStyle(
-                  color: AppTheme.getTextSecondary(context),
-                  fontSize: isMobile ? 10 : 12)),
-        ],
-      ),
-    );
-  }
-}
-
-/// 优化的频道卡片组件 - 使用 Selector 精确控制重建
-class _OptimizedChannelCard extends StatelessWidget {
-  final Channel channel;
-  final VoidCallback onTap;
-  final VoidCallback? onUp; // 添加onUp回调
-
-  const _OptimizedChannelCard({
-    required this.channel,
-    required this.onTap,
-    this.onUp, // 添加onUp参数
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // 读取首页字体缩放设置（变化时触发重建）
-    final fontScale = context.watch<SettingsProvider>().homeFontScale;
-    // 使用 Selector 监听收藏状态和 EPG 数据变化
-    return Selector2<FavoritesProvider, EpgProvider, _ChannelCardData>(
-      selector: (_, favProvider, epgProvider) {
-        final currentProgram =
-            epgProvider.getCurrentProgram(channel.epgId, channel.name);
-        final nextProgram =
-            epgProvider.getNextProgram(channel.epgId, channel.name);
-        return _ChannelCardData(
-          isFavorite: favProvider.isFavorite(channel.id ?? 0),
-          currentProgram: currentProgram?.title,
-          nextProgram: nextProgram?.title,
-        );
-      },
-      builder: (context, data, _) {
-        return ChannelCard(
-          name: channel.name,
-          logoUrl: channel.logoUrl,
-          channel: channel, // 传递完整的 channel 对象
-          groupName: channel.groupName,
-          currentProgram: data.currentProgram,
-          nextProgram: data.nextProgram,
-          isFavorite: data.isFavorite,
-          fontScale: fontScale,
-          onFavoriteToggle: () =>
-              context.read<FavoritesProvider>().toggleFavorite(channel),
-          onTap: onTap,
-          onUp: onUp, // 传递onUp回调
-        );
-      },
-    );
-  }
-}
-
-/// 频道卡片数据，用于 Selector 比较
-class _ChannelCardData {
-  final bool isFavorite;
-  final String? currentProgram;
-  final String? nextProgram;
-
-  _ChannelCardData({
-    required this.isFavorite,
-    this.currentProgram,
-    this.nextProgram,
-  });
-
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is _ChannelCardData &&
-        other.isFavorite == isFavorite &&
-        other.currentProgram == currentProgram &&
-        other.nextProgram == nextProgram;
-  }
-
-  @override
-  int get hashCode => Object.hash(isFavorite, currentProgram, nextProgram);
-}
-
-/// 嵌入式频道页面（手机端底部导航用）
-class _EmbeddedChannelsScreen extends StatefulWidget {
-  const _EmbeddedChannelsScreen();
-
-  @override
-  State<_EmbeddedChannelsScreen> createState() =>
-      _EmbeddedChannelsScreenState();
-}
-
-class _EmbeddedChannelsScreenState extends State<_EmbeddedChannelsScreen> {
-  @override
-  void initState() {
-    super.initState();
-    // 每次显示时清除分类筛选
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ChannelProvider>().clearGroupFilter();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return const ChannelsScreen(embedded: true);
-  }
-}
-
-/// 嵌入式收藏页面
-class _EmbeddedFavoritesScreen extends StatelessWidget {
-  const _EmbeddedFavoritesScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return const FavoritesScreen(embedded: true);
-  }
-}
-
-/// 嵌入式播放列表页面
-class _EmbeddedPlaylistListScreen extends StatelessWidget {
-  const _EmbeddedPlaylistListScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return const PlaylistListScreen();
-  }
-}
-
-/// 嵌入式搜索页面
-class _EmbeddedSearchScreen extends StatelessWidget {
-  const _EmbeddedSearchScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SearchScreen(embedded: true);
-  }
-}
-
-/// 嵌入式设置页面
-class _EmbeddedSettingsScreen extends StatelessWidget {
-  const _EmbeddedSettingsScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SettingsScreen(embedded: true);
-  }
 }
