@@ -650,6 +650,31 @@ class EpgService {
     return count > 3;
   }
 
+  /// 仅测试使用：从 XML 字符串加载 EPG，走与 [loadFromUrl] 相同的解析管道
+  /// （[_parseXmlTvInBackground]），但不发起网络请求、不启用后台 isolate。
+  /// 便于在单元测试中直接注入数据并验证查询/日期窗口/规范化逻辑。
+  /// 生产代码不调用此方法。
+  @visibleForTesting
+  Future<bool> loadFromXmlString(String xml) async {
+    final result = _parseXmlTvInBackground({
+      'bytes': utf8.encode(xml),
+      'isGzip': false,
+    });
+    if (result == null) return false;
+
+    // 复制 loadFromUrl 成功路径：先清空旧缓存，再注入解析结果。
+    _lookupCache.clear();
+    _programs.clear();
+    _channelNames.clear();
+    _nameIndex.clear();
+
+    _programs.addAll(result['programs'] as Map<String, List<EpgProgram>>);
+    _channelNames.addAll(result['channelNames'] as Map<String, String>);
+    _nameIndex.addAll(result['nameIndex'] as Map<String, List<String>>);
+    _lastUpdate = DateTime.now();
+    return true;
+  }
+
   void clear() {
     _programs.clear();
     _channelNames.clear();

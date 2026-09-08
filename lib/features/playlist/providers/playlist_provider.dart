@@ -74,20 +74,23 @@ class PlaylistProvider extends ChangeNotifier {
         ServiceLocator.log.d('播放列表 "${playlist.name}" (ID: ${playlist.id}) - epgUrl: ${playlist.epgUrl ?? "(未配置)"}', tag: 'PlaylistProvider');
       }
 
-      // Load channel counts for each playlist
-      for (int i = 0; i < _playlists.length; i++) {
-        final countResult = await ServiceLocator.database.rawQuery(
-          'SELECT COUNT(*) as count, COUNT(DISTINCT group_name) as groups FROM channels WHERE playlist_id = ?',
-          [_playlists[i].id],
-        );
-
-        if (countResult.isNotEmpty) {
-          _playlists[i] = _playlists[i].copyWith(
-            channelCount: countResult.first['count'] as int? ?? 0,
-            groupCount: countResult.first['groups'] as int? ?? 0,
-          );
-        }
-      }
+      // Load channel counts for all playlists in a single aggregated query
+      // (original code issued one COUNT per playlist → N+1 on every startup).
+      final countRows = await ServiceLocator.database.rawQuery(
+        'SELECT playlist_id, COUNT(*) AS count, COUNT(DISTINCT group_name) AS groups '
+        'FROM channels GROUP BY playlist_id',
+      );
+      final countByPlaylistId = <int?, (int, int)>{
+        for (final row in countRows)
+          row['playlist_id'] as int?: (
+            row['count'] as int? ?? 0,
+            row['groups'] as int? ?? 0,
+          ),
+      };
+      _playlists = _playlists.map((p) {
+        final (count, groups) = countByPlaylistId[p.id] ?? (0, 0);
+        return p.copyWith(channelCount: count, groupCount: groups);
+      }).toList();
 
       // Set active playlist if none selected
       if (_activePlaylist == null && _playlists.isNotEmpty) {
