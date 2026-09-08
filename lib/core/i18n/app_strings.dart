@@ -123,6 +123,9 @@ class AppStrings {
   String get loading => _localizedValues['loading']!;
   String get playbackError => _localizedValues['playbackError']!;
   String get retry => _localizedValues['retry']!;
+  String get initFailed => _localizedValues['initFailed']!;
+  String get retrying => _localizedValues['retrying']!;
+  String get continueAnyway => _localizedValues['continueAnyway']!;
   String get goBack => _localizedValues['goBack']!;
   String get playbackSettings => _localizedValues['playbackSettings']!;
   String get playbackSpeed => _localizedValues['playbackSpeed']!;
@@ -828,6 +831,9 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'loading': '加载中...',
     'playbackError': '播放错误',
     'retry': '重试',
+    'initFailed': '初始化失败',
+    'retrying': '重试中...',
+    'continueAnyway': '仍然继续',
     'goBack': '返回',
     'playbackSettings': '播放设置',
     'playbackSpeed': '播放速度',
@@ -1434,6 +1440,9 @@ class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
     'loading': 'Loading...',
     'playbackError': 'Playback Error',
     'retry': 'Retry',
+    'initFailed': 'Init Failed',
+    'retrying': 'Retrying...',
+    'continueAnyway': 'Continue Anyway',
     'goBack': 'Go Back',
     'playbackSettings': 'Playback Settings',
     'playbackSpeed': 'Playback Speed',

@@ -6,6 +6,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
 import 'core/i18n/app_strings.dart';
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:developer' as developer;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -32,7 +33,37 @@ import 'features/multi_screen/providers/multi_screen_provider.dart';
 import 'features/backup/providers/backup_provider.dart';
 import 'core/widgets/window_title_bar.dart';
 
-void main() async {
+/// 捕获 runApp 所在 zone 中所有未捕获异步异常。
+/// 对台标缓存清理时 Windows 文件被占用的已知良性噪音（errno 32）静默掉，
+/// 其余记录到日志，避免把真实错误吞掉。
+void _onUncaughtError(Object error, StackTrace stackTrace) {
+  // flutter_cache_manager 后台删除被占用的旧台标缓存文件失败（PathAccessException）
+  // 属已知噪音：删除失败不影响功能，直接静默，避免刷屏。
+  if (error is PathAccessException &&
+      (error.path?.toLowerCase().contains('logocache') ?? false)) {
+    return;
+  }
+  try {
+    if (ServiceLocator.isLogInitialized) {
+      ServiceLocator.log.e('Uncaught async error: $error');
+      ServiceLocator.log.e('Stack trace: $stackTrace');
+    } else {
+      debugPrint('Uncaught async error: $error');
+      debugPrint('Stack trace: $stackTrace');
+    }
+  } catch (e) {
+    debugPrint('Uncaught async error: $error');
+    debugPrint('Stack trace: $stackTrace');
+  }
+}
+
+void main() {
+  // 顶层 zone 包裹整个启动流程，使 ensureInitialized 与 runApp 处于同一 zone，
+  // 避免 Zone mismatch；同时捕获所有未捕获异步异常（见 _onUncaughtError）。
+  runZonedGuarded(_bootApp, _onUncaughtError);
+}
+
+Future<void> _bootApp() async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
 
@@ -400,7 +431,35 @@ class _DlnaAwareAppState extends State<_DlnaAwareApp> with WindowListener {
       windowManager.removeListener(this);
     }
     _autoRefreshService.stop();
+    // 移除设置监听，避免全局单例上累积匿名监听器
+    ServiceLocator.settings?.removeListener(_onAutoRefreshSettingsChanged);
     super.dispose();
+  }
+
+  /// 自动刷新设置变化的监听回调（具名方法，供 add/removeListener 复用）
+  void _onAutoRefreshSettingsChanged() {
+    if (!mounted) return;
+    final settings = ServiceLocator.settings;
+    if (settings == null) return;
+
+    // 只在 autoRefresh 状态或间隔变化时才处理
+    final currentAutoRefresh = settings.autoRefresh;
+    final currentInterval = settings.refreshInterval;
+
+    if (currentAutoRefresh != _lastAutoRefreshState ||
+        (currentAutoRefresh && currentInterval != _lastRefreshInterval)) {
+      _lastAutoRefreshState = currentAutoRefresh;
+      _lastRefreshInterval = currentInterval;
+
+      if (currentAutoRefresh) {
+        ServiceLocator.log
+            .d('设置已更改，重新启动服务 - 间隔: $currentInterval小时', tag: 'AutoRefresh');
+        _startAutoRefresh(settings);
+      } else {
+        ServiceLocator.log.d('自动刷新已禁用', tag: 'AutoRefresh');
+        _autoRefreshService.stop();
+      }
+    }
   }
 
   Future<void> _initAutoRefresh() async {

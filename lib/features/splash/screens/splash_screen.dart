@@ -26,6 +26,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   late Animation<double> _textOpacity;
   late Animation<Offset> _textSlide;
 
+  bool _initFailed = false; // 初始化失败标记（失败时显示重试，不再静默跳首页）
+  bool _isRetrying = false; // 重试中标记（禁用按钮，防重复点击）
+
   @override
   void initState() {
     super.initState();
@@ -84,15 +87,32 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       ServiceLocator.log.i('应用初始化完成，耗时: ${initTime}ms', tag: 'SplashScreen');
     } catch (e) {
       ServiceLocator.log.e('应用初始化失败', tag: 'SplashScreen', error: e);
+      // 标记失败，停留在 splash 显示重试 UI；不再静默 push 首页把错误延后到别处崩溃
+      if (mounted) setState(() => _initFailed = true);
     }
 
     // Ensure minimum splash display time
     await Future.delayed(const Duration(milliseconds: 1500));
 
-    if (mounted) {
-      // 使用 pushReplacementNamed 替换 splash，这样退出时不会显示 splash
-      Navigator.of(context).pushReplacementNamed(AppRouter.home);
+    // 仅初始化成功才进入首页；失败则留在当前页，由 build 展示重试/继续按钮
+    if (mounted && !_initFailed) {
+      _goHome();
     }
+  }
+
+  void _goHome() {
+    Navigator.of(context).pushReplacementNamed(AppRouter.home);
+  }
+
+  /// 重试初始化
+  Future<void> _retryInit() async {
+    if (_isRetrying) return;
+    setState(() {
+      _isRetrying = true;
+      _initFailed = false;
+    });
+    await _initializeApp();
+    if (mounted) setState(() => _isRetrying = false);
   }
 
   @override
@@ -232,6 +252,32 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                   ),
                 ),
               ),
+
+              // 初始化失败面板：提供重试与"仍然继续"两个兜底入口
+              if (_initFailed) ...[
+                const SizedBox(height: 24),
+                Text(
+                  AppStrings.of(context)?.initFailed ?? '初始化失败',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppTheme.errorColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: _isRetrying ? null : _retryInit,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: Text(_isRetrying
+                      ? (AppStrings.of(context)?.retrying ?? '重试中...')
+                      : (AppStrings.of(context)?.retry ?? '重试')),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: _goHome,
+                  child: Text(AppStrings.of(context)?.continueAnyway ?? '仍然继续'),
+                ),
+              ],
             ],
           ),
         ),

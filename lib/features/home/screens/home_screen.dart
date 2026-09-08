@@ -49,6 +49,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
   AppUpdate? _availableUpdate; // 可用的更新
   final ScrollController _scrollController = ScrollController(); // 添加滚动控制器
   final FocusNode _continueButtonFocusNode = FocusNode(); // 继续观看按钮的焦点节点
+  // 缓存 provider 引用，供 dispose 移除监听时使用（不能依赖 dispose 中失效的 context）
+  ChannelProvider? _channelProvider;
+  PlaylistProvider? _playlistProvider;
+  FavoritesProvider? _favoritesProvider;
   bool _hasTriggeredEmptyChannelLoad = false; // ✅ 标记是否已触发空频道加载，避免重复触发
 
   @override
@@ -60,11 +64,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
     _checkForUpdates();
     // 监听频道变化
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ChannelProvider>().addListener(_onChannelProviderChanged);
-      context.read<PlaylistProvider>().addListener(_onPlaylistProviderChanged);
-      context
-          .read<FavoritesProvider>()
-          .addListener(_onFavoritesProviderChanged);
+      _channelProvider = context.read<ChannelProvider>();
+      _playlistProvider = context.read<PlaylistProvider>();
+      _favoritesProvider = context.read<FavoritesProvider>();
+      _channelProvider!.addListener(_onChannelProviderChanged);
+      _playlistProvider!.addListener(_onPlaylistProviderChanged);
+      _favoritesProvider!.addListener(_onFavoritesProviderChanged);
     });
   }
 
@@ -136,7 +141,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
     _continueButtonFocusNode.dispose(); // 释放焦点节点
     WidgetsBinding.instance.removeObserver(this); // 移除生命周期监听
     AppRouter.routeObserver.unsubscribe(this); // 移除路由监听
-    // 移除监听器时需要小心，因为 context 可能已经不可用
+    // 移除 provider 监听，避免页面重建后累积重复监听（重复刷新/加载/日志）
+    _channelProvider?.removeListener(_onChannelProviderChanged);
+    _playlistProvider?.removeListener(_onPlaylistProviderChanged);
+    _favoritesProvider?.removeListener(_onFavoritesProviderChanged);
     super.dispose();
   }
 

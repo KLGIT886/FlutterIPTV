@@ -34,13 +34,45 @@ class DatabaseHelper {
       version: _databaseVersion,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
+      // 显式启用 SQLite 外键，使表定义中的 ON DELETE CASCADE 真正生效。
+      // 否则删频道/删播放列表不会级联清理 favorites/watch_history。
+      onConfigure: (db) async {
+        await db.execute('PRAGMA foreign_keys = ON');
+      },
     );
 
     // 检查台标表是否为空，如果为空则导入数据
     await _ensureChannelLogosImported();
 
+    // 清理存量孤儿数据（开启外键前的历史残留）：
+    // 引用了已不存在频道/播放列表的收藏与观看记录
+    await _purgeOrphanedRows();
+
     final initTime = DateTime.now().difference(startTime).inMilliseconds;
     ServiceLocator.log.d('DatabaseHelper: 数据库初始化完成，耗时: ${initTime}ms');
+  }
+
+  /// 清理存量孤儿数据（幂等）：删除引用了已不存在频道/播放列表的
+  /// 收藏与观看记录。开启外键前后遗留的脏数据在此一次性清理，
+  /// 此后删除走 ON DELETE CASCADE 自动级联。
+  Future<void> _purgeOrphanedRows() async {
+    try {
+      final db = _database;
+      if (db == null) return;
+      final removedFav = await db.rawDelete(
+          'DELETE FROM favorites WHERE channel_id NOT IN (SELECT id FROM channels)');
+      final removedHistory = await db.rawDelete(
+          'DELETE FROM watch_history WHERE channel_id NOT IN (SELECT id FROM channels)');
+      await db.rawDelete(
+          'DELETE FROM watch_history WHERE playlist_id NOT IN (SELECT id FROM playlists)');
+      if (removedFav > 0 || removedHistory > 0) {
+        ServiceLocator.log.d(
+            'DatabaseHelper: 清理孤儿数据 favorites=$removedFav, watch_history=$removedHistory',
+            tag: 'DatabaseHelper');
+      }
+    } catch (e) {
+      ServiceLocator.log.w('DatabaseHelper: 清理孤儿数据失败: $e', tag: 'DatabaseHelper');
+    }
   }
 
   /// 确保台标数据已导入

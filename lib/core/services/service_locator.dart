@@ -44,13 +44,10 @@ class ServiceLocator {
   static SettingsProvider? get settings => _settings;
   
   /// Check if log service is initialized
-  static bool get isLogInitialized {
-    try {
-      return true; // _logService is always initialized after initPrefs()
-    } catch (e) {
-      return false;
-    }
-  }
+  static bool _logInitialized = false;
+
+  /// Check if log service is initialized
+  static bool get isLogInitialized => _logInitialized;
 
   static Future<void> initPrefs() async {
     // Initialize SharedPreferences - Fast and critical for theme
@@ -59,6 +56,7 @@ class ServiceLocator {
     // Initialize log service early (after prefs) - pass prefs to avoid circular dependency
     _logService = LogService();
     await _logService.init(prefs: _prefs);
+    _logInitialized = true;
 
     // Detect platform (after log service is initialized)
     await PlatformDetector.init();
