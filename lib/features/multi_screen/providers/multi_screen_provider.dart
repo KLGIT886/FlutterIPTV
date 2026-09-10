@@ -243,7 +243,9 @@ class MultiScreenProvider extends ChangeNotifier {
       // 如果播放器不存在，创建新的播放器
       if (screen.player == null) {
         ServiceLocator.log.d('MultiScreenProvider: Creating new player for screen $screenIndex');
-        _createPlayerForScreen(screenIndex, useSoftwareDecoding: false);
+        // 与另外两处调用点保持一致：必须 await，确保播放器内的全局配置
+        // （http-header-fields / 去交错参数）在 open() 之前完成设置。
+        await _createPlayerForScreen(screenIndex, useSoftwareDecoding: false);
         // 为新播放器挂接流监听（首次创建时）
         _setupPlayerListeners(screenIndex, screen);
       }
@@ -279,7 +281,9 @@ class MultiScreenProvider extends ChangeNotifier {
       // FCC 流禁用缓存以加速切台；普通流恢复默认缓冲（须在 open 前设置）
       await _applyBufferConfig(screen.player!, realUrl);
 
-      await screen.player!.open(Media(realUrl, httpHeaders: {'User-Agent': userAgent}));
+      // User-Agent 已通过全局 mpv 属性 http-header-fields 设置（见
+      // _createPlayerForScreen），此处直接 loadfile，避免临时播放列表文件。
+      await screen.player!.open(Media(realUrl));
       
       final playTime = DateTime.now().difference(playStartTime).inMilliseconds;
       ServiceLocator.log.d('MultiScreenProvider: >>> 屏幕$screenIndex 播放器初始化完成，耗时: ${playTime}ms');
@@ -474,6 +478,15 @@ class MultiScreenProvider extends ChangeNotifier {
     );
     screen.isSoftwareDecoding = effectiveSoftware;
     screen.softwareFallbackAttempted = effectiveSoftware;
+
+    // O1（多屏版）：将 User-Agent 改为全局 mpv 属性一次性设置，替代原先在
+    // open(Media(..., httpHeaders: ...)) 里传 per-Media header。后者会令
+    // media_kit 生成临时播放列表文件（loadlist）来传递 header，每次起播多一次
+    // 磁盘写 + 解析。全局设置后 open() 直接 loadfile，与单屏行为一致。
+    final userAgent =
+        ServiceLocator.settings?.userAgent ?? SettingsProvider.defaultUserAgent;
+    await MpvTuner(player, logTag: 'MultiScreenProvider').safeSetProperty(
+        'http-header-fields', 'User-Agent: $userAgent', 'http-header-fields');
 
     // VideoController 创建后会强制设 hwdec=auto，在此覆盖去交错参数
     // 必须在 open() 之前调用，否则 hwdec=auto 会绕过 vf 滤镜链
