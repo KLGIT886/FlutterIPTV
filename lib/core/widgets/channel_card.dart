@@ -9,6 +9,7 @@ import '../models/channel.dart';
 import '../services/service_locator.dart';
 import 'tv_focusable.dart';
 import 'channel_logo_widget.dart';
+import 'auto_scroll_text.dart';
 
 /// A card widget for displaying channel information
 /// 使用固定宽高比，内部布局自适应
@@ -276,7 +277,7 @@ class _ChannelCardState extends State<ChannelCard> {
                           mainAxisAlignment: MainAxisAlignment.start,
                           children: [
                             // 频道名称 - 始终显示，支持自动滚动
-                            _AutoScrollText(
+                            AutoScrollText(
                               text: widget.name,
                               style: TextStyle(
                                 color: AppTheme.getTextPrimary(context),
@@ -284,7 +285,7 @@ class _ChannelCardState extends State<ChannelCard> {
                                 fontWeight: FontWeight.w600,
                                 height: 1.2,
                               ),
-                              shouldScroll: _isHovered || _isFocused,
+                              forceScroll: _isHovered || _isFocused,
                             ),
                             // EPG或分类信息 - 自适应显示
                             _buildInfoSection(context, isMobile),
@@ -349,14 +350,14 @@ class _ChannelCardState extends State<ChannelCard> {
                 Icon(Icons.play_circle_filled, color: AppTheme.getPrimaryColor(context), size: isMobile ? 7 : 9),
                 SizedBox(width: isMobile ? 2 : 3),
                 Expanded(
-                  child: _AutoScrollText(
+                  child: AutoScrollText(
                     text: widget.currentProgram!,
                     style: TextStyle(
                       color: AppTheme.getPrimaryColor(context), 
                       fontSize: (isMobile ? 7 : 9) * widget.fontScale,
                       height: 1.1,
                     ),
-                    shouldScroll: _isHovered || _isFocused,
+                    forceScroll: _isHovered || _isFocused,
                   ),
                 ),
               ],
@@ -369,7 +370,7 @@ class _ChannelCardState extends State<ChannelCard> {
                 Icon(Icons.schedule, color: AppTheme.getPrimaryColor(context).withOpacity(0.7), size: isMobile ? 7 : 9),
                 SizedBox(width: isMobile ? 2 : 3),
                 Expanded(
-                  child: _AutoScrollText(
+                  child: AutoScrollText(
                     text: widget.nextProgram!,
                     style: TextStyle(
                       color: AppTheme.getPrimaryColor(context).withOpacity(0.8), 
@@ -377,7 +378,7 @@ class _ChannelCardState extends State<ChannelCard> {
                       height: 1.1,
                       fontWeight: FontWeight.w500,
                     ),
-                    shouldScroll: _isHovered || _isFocused,
+                    forceScroll: _isHovered || _isFocused,
                   ),
                 ),
               ],
@@ -388,7 +389,7 @@ class _ChannelCardState extends State<ChannelCard> {
         else ...[
           if (hasGroup) ...[
             SizedBox(height: isMobile ? 1 : 2),
-            _AutoScrollText(
+            AutoScrollText(
               text: widget.groupName!,
               style: TextStyle(
                 color: AppTheme.getPrimaryColor(context).withOpacity(0.8), 
@@ -396,7 +397,7 @@ class _ChannelCardState extends State<ChannelCard> {
                 height: 1.1,
                 fontWeight: FontWeight.w500,
               ),
-              shouldScroll: _isHovered || _isFocused,
+              forceScroll: _isHovered || _isFocused,
             ),
           ],
           SizedBox(height: isMobile ? 1 : 2),
@@ -571,152 +572,6 @@ class _ChannelCardState extends State<ChannelCard> {
       return Padding(
         padding: const EdgeInsets.all(10),
         child: Image.file(File(url), fit: BoxFit.contain, cacheWidth: 160, cacheHeight: 90, errorBuilder: (context, error, stackTrace) => _buildPlaceholder()),
-      );
-    }
-  }
-}
-
-/// 自动滚动文本组件
-/// 当文本超出容器宽度时，在悬停或聚焦状态下自动滚动显示完整内容
-class _AutoScrollText extends StatefulWidget {
-  final String text;
-  final TextStyle? style;
-  final bool shouldScroll;
-
-  const _AutoScrollText({
-    required this.text,
-    this.style,
-    this.shouldScroll = false,
-  });
-
-  @override
-  State<_AutoScrollText> createState() => _AutoScrollTextState();
-}
-
-class _AutoScrollTextState extends State<_AutoScrollText> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-  // This is no longer a State variable, it's just a flag.
-  // Changes to it won't directly trigger a rebuild of _AutoScrollText.
-  bool _isOverflowing = false; 
-  double _scrollDistance = 0;
-  final GlobalKey _textKey = GlobalKey();
-  
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(seconds: 4),
-      vsync: this,
-    );
-    
-    _animation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.linear),
-    );
-
-    // Schedule initial overflow check after first layout
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkOverflow());
-  }
-
-  void _checkOverflow() {
-    if (!mounted) return;
-    
-    final RenderBox? renderBox = _textKey.currentContext?.findRenderObject() as RenderBox?;
-    if (renderBox != null) {
-      final textPainter = TextPainter(
-        text: TextSpan(text: widget.text, style: widget.style),
-        maxLines: 1,
-        textDirection: TextDirection.ltr,
-      )..layout();
-      
-      final containerWidth = renderBox.size.width;
-      final textWidth = textPainter.width;
-      
-      final bool newIsOverflowing = textWidth > containerWidth;
-      
-      if (_isOverflowing != newIsOverflowing) {
-        // Only update if the overflow state actually changed
-        _isOverflowing = newIsOverflowing;
-        if (_isOverflowing) {
-          _scrollDistance = textWidth - containerWidth + 20;
-        } else {
-          _scrollDistance = 0;
-        }
-        // If overflow state changed, and the widget is visible,
-        // we might need to trigger a rebuild for the build method to reflect the change.
-        // However, this is controlled by the parent's `shouldScroll` prop.
-        // So, we rely on parent to rebuild when `shouldScroll` changes.
-        // If the text *just became* overflowing while not scrolled, it will not animate until `shouldScroll` becomes true.
-        // If it was already overflowing and not scrolling, it will remain static.
-      }
-      _updateAnimationState(); // Update animation based on new shouldScroll or overflow state
-    }
-  }
-
-  void _updateAnimationState() {
-    if (_isOverflowing && widget.shouldScroll) {
-      if (!_controller.isAnimating) {
-        _controller.repeat(reverse: true);
-      }
-    } else {
-      if (_controller.isAnimating || _controller.status != AnimationStatus.dismissed) {
-        _controller.stop();
-        _controller.reset();
-      }
-    }
-  }
-
-  @override
-  void didUpdateWidget(_AutoScrollText oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Recalculate overflow if text or style changes
-    if (oldWidget.text != widget.text || oldWidget.style != widget.style) {
-      // Schedule the check to happen after layout to get correct renderBox size
-      WidgetsBinding.instance.addPostFrameCallback((_) => _checkOverflow());
-    }
-    // Always update animation state if shouldScroll changes
-    if (oldWidget.shouldScroll != widget.shouldScroll) {
-      _updateAnimationState();
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // If not overflowing OR not in a state where it should scroll (hovered/focused),
-    // display static text with ellipsis.
-    if (!_isOverflowing || !widget.shouldScroll) {
-      return Text(
-        widget.text,
-        key: _textKey,
-        style: widget.style,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      );
-    } else {
-      // If overflowing AND should scroll, display animated text.
-      return ClipRect(
-        child: AnimatedBuilder(
-          animation: _animation,
-          builder: (context, child) {
-            return Transform.translate(
-              offset: Offset(-_animation.value * _scrollDistance, 0),
-              child: Text(
-                widget.text,
-                key: _textKey,
-                style: widget.style,
-                maxLines: 1, // MaxLines for layout calculation, overflow visible for transform
-                overflow: TextOverflow.visible,
-                softWrap: false,
-              ),
-            );
-          },
-        ),
       );
     }
   }

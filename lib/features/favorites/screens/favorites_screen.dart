@@ -5,16 +5,12 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/navigation/app_router.dart';
 import '../../../core/widgets/tv_focusable.dart';
 import '../../../core/widgets/tv_sidebar.dart';
-import '../../../core/widgets/channel_logo_widget.dart';
-import '../../../core/widgets/auto_scroll_text.dart';
+import '../widgets/favorite_card.dart';
 import '../../../core/platform/platform_detector.dart';
 import '../../../core/i18n/app_strings.dart';
 import '../providers/favorites_provider.dart';
-import '../../settings/providers/settings_provider.dart';
-import '../../channels/providers/channel_provider.dart';
-import '../../multi_screen/providers/multi_screen_provider.dart';
-import '../../../core/platform/native_player_channel.dart';
-import '../../../core/services/service_locator.dart';
+import '../../../core/services/channel_playback.dart';
+import '../../../core/models/channel.dart';
 
 class FavoritesScreen extends StatefulWidget {
   final bool embedded;
@@ -32,74 +28,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     context.read<FavoritesProvider>().loadFavorites();
   }
 
-  void _playChannel(dynamic channel) {
-    final settingsProvider = context.read<SettingsProvider>();
-    
-    // 保存上次播放的频道ID
-    if (settingsProvider.rememberLastChannel && channel.id != null) {
-      settingsProvider.setLastChannelId(channel.id);
-    }
-
-    // 检查是否启用了分屏模式
-    if (settingsProvider.enableMultiScreen) {
-      // TV 端使用原生分屏播放器
-      if (PlatformDetector.isTV && PlatformDetector.isAndroid) {
-        final channelProvider = context.read<ChannelProvider>();
-        // ✅ 使用全部频道而不是分页显示的频道
-        final channels = channelProvider.allChannels;
-        
-        // 找到当前点击频道的索引
-        final clickedIndex = channels.indexWhere((c) => c.url == channel.url);
-        
-        // 准备频道数据
-        final urls = channels.map((c) => c.url).toList();
-        final names = channels.map((c) => c.name).toList();
-        final groups = channels.map((c) => c.groupName ?? '').toList();
-        final sources = channels.map((c) => c.sources).toList();
-        final logos = channels.map((c) => c.logoUrl ?? '').toList();
-        
-        // 启动原生分屏播放器
-        NativePlayerChannel.launchMultiScreen(
-          urls: urls,
-          names: names,
-          groups: groups,
-          sources: sources,
-          logos: logos,
-          initialChannelIndex: clickedIndex >= 0 ? clickedIndex : 0,
-          volumeBoostDb: settingsProvider.volumeBoost,
-          defaultScreenPosition: settingsProvider.defaultScreenPosition,
-          showChannelName: settingsProvider.showMultiScreenChannelName,
-          userAgent: settingsProvider.userAgent,
-          onClosed: () {
-            ServiceLocator.log.d('FavoritesScreen: Native multi-screen closed');
-          },
-        );
-      } else if (PlatformDetector.isDesktop) {
-        final multiScreenProvider = context.read<MultiScreenProvider>();
-        final defaultPosition = settingsProvider.defaultScreenPosition;
-        // 设置音量增强到分屏Provider
-        multiScreenProvider.setVolumeSettings(1.0, settingsProvider.volumeBoost);
-        multiScreenProvider.playChannelAtDefaultPosition(channel, defaultPosition);
-        
-        Navigator.pushNamed(context, AppRouter.player, arguments: {
-          'channelUrl': '',
-          'channelName': '',
-          'channelLogo': null,
-        });
-      } else {
-        Navigator.pushNamed(context, AppRouter.player, arguments: {
-          'channelUrl': channel.url,
-          'channelName': channel.name,
-          'channelLogo': channel.logoUrl,
-        });
-      }
-    } else {
-      Navigator.pushNamed(context, AppRouter.player, arguments: {
-        'channelUrl': channel.url,
-        'channelName': channel.name,
-        'channelLogo': channel.logoUrl,
-      });
-    }
+  void _playChannel(Channel channel) {
+    playChannelFromList(context, channel, logTag: 'FavoritesScreen');
   }
 
   @override
@@ -373,7 +303,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     final isMobile = PlatformDetector.isMobile;
     final isLandscape = isMobile && MediaQuery.of(context).size.width > 600;
     
-    return _FavoriteCardWrapper(
+    return FavoriteCardWrapper(
       index: index,
       channel: channel,
       isLandscape: isLandscape,
@@ -443,166 +373,3 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   }
 }
 
-class _FavoriteCardWrapper extends StatefulWidget {
-  final int index;
-  final dynamic channel;
-  final bool isLandscape;
-  final VoidCallback onPlayChannel;
-  final VoidCallback onRemoveFavorite;
-
-  const _FavoriteCardWrapper({
-    required this.index,
-    required this.channel,
-    required this.isLandscape,
-    required this.onPlayChannel,
-    required this.onRemoveFavorite,
-  });
-
-  @override
-  State<_FavoriteCardWrapper> createState() => _FavoriteCardWrapperState();
-}
-
-class _FavoriteCardWrapperState extends State<_FavoriteCardWrapper> {
-  bool _isHovered = false;
-  bool _isFocused = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return TVFocusable(
-      autofocus: widget.index == 0,
-      onSelect: widget.onPlayChannel,
-      onFocus: () => setState(() => _isFocused = true),
-      onBlur: () => setState(() => _isFocused = false),
-      focusScale: 1.02,
-      showFocusBorder: false,
-      builder: (context, isFocused, child) {
-        return AnimatedContainer(
-          duration: AppTheme.animationFast,
-          decoration: BoxDecoration(
-            color: AppTheme.getSurfaceColor(context),
-            borderRadius: BorderRadius.circular(widget.isLandscape ? 12 : 16),
-            border: Border.all(
-              color: isFocused ? AppTheme.getPrimaryColor(context) : Colors.transparent,
-              width: isFocused ? 2 : 0,
-            ),
-            boxShadow: isFocused
-                ? [
-                    BoxShadow(
-                      color: AppTheme.getPrimaryColor(context).withOpacity(0.2),
-                      blurRadius: 12,
-                    ),
-                  ]
-                : null,
-          ),
-          child: MouseRegion(
-            onEnter: (_) => setState(() => _isHovered = true),
-            onExit: (_) => setState(() => _isHovered = false),
-            child: child,
-          ),
-        );
-      },
-      child: Padding(
-        padding: EdgeInsets.all(widget.isLandscape ? 6 : 10),
-        child: Row(
-          children: [
-            // Drag Handle
-            ReorderableDragStartListener(
-              index: widget.index,
-              child: Container(
-                padding: EdgeInsets.all(widget.isLandscape ? 4 : 6),
-                child: Icon(
-                  Icons.drag_indicator_rounded,
-                  color: AppTheme.textMuted,
-                  size: widget.isLandscape ? 14 : 18,
-                ),
-              ),
-            ),
-
-            SizedBox(width: widget.isLandscape ? 6 : 8),
-
-            // Channel Logo
-            ChannelLogoWidget(
-              channel: widget.channel,
-              width: widget.isLandscape ? 48 : 64,
-              height: widget.isLandscape ? 36 : 48,
-              fit: BoxFit.contain,
-              borderRadius: BorderRadius.circular(widget.isLandscape ? 8 : 10),
-            ),
-
-            SizedBox(width: widget.isLandscape ? 10 : 16),
-
-            // Channel Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AutoScrollText(
-                    text: widget.channel.name,
-                    style: TextStyle(
-                      color: AppTheme.getTextPrimary(context),
-                      fontSize: widget.isLandscape ? 12 : 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    forceScroll: _isHovered || _isFocused,
-                  ),
-                  if (widget.channel.groupName != null) ...[
-                    SizedBox(height: widget.isLandscape ? 1 : 2),
-                    AutoScrollText(
-                      text: widget.channel.groupName!,
-                      style: TextStyle(
-                        color: AppTheme.getTextSecondary(context),
-                        fontSize: widget.isLandscape ? 10 : 11,
-                      ),
-                      forceScroll: _isHovered || _isFocused,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-
-            // Actions
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Play Button
-                TVFocusable(
-                  onSelect: widget.onPlayChannel,
-                  child: Container(
-                    padding: EdgeInsets.all(widget.isLandscape ? 6 : 8),
-                    decoration: BoxDecoration(
-                      color: AppTheme.getPrimaryColor(context).withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(widget.isLandscape ? 6 : 8),
-                    ),
-                    child: Icon(
-                      Icons.play_arrow_rounded,
-                      color: AppTheme.getPrimaryColor(context),
-                      size: widget.isLandscape ? 16 : 20,
-                    ),
-                  ),
-                ),
-                SizedBox(width: widget.isLandscape ? 4 : 6),
-
-                // Remove Button
-                TVFocusable(
-                  onSelect: widget.onRemoveFavorite,
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppTheme.errorColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(widget.isLandscape ? 6 : 8),
-                    ),
-                    child: Icon(
-                      Icons.favorite,
-                      color: AppTheme.errorColor,
-                      size: widget.isLandscape ? 16 : 20,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

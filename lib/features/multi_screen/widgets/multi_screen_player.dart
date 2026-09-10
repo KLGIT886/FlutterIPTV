@@ -11,102 +11,12 @@ import '../../../core/platform/platform_detector.dart';
 import '../../../core/platform/windows_pip_channel.dart';
 import '../../../core/platform/windows_fullscreen_native.dart';
 import '../../../core/i18n/app_strings.dart';
-import '../../../core/services/epg_service.dart';
 import '../../../core/services/service_locator.dart';
 import '../providers/multi_screen_provider.dart';
 import '../../settings/providers/settings_provider.dart';
-import '../../epg/providers/epg_provider.dart';
 import '../../channels/providers/channel_provider.dart';
-
-class _ChannelNameOverlay extends StatelessWidget {
-  final ScreenPlayerState screen;
-  final double nameWidth;
-  final bool forceAutoScroll;
-
-  const _ChannelNameOverlay({
-    required this.screen,
-    required this.nameWidth,
-    required this.forceAutoScroll,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final settingsProvider = context.read<SettingsProvider>();
-
-    // 如果配置为不显示频道名称，则返回空数组
-    if (!settingsProvider.showMultiScreenChannelName) {
-      return const SizedBox.shrink();
-    }
-
-    // 使用 select 只监听当前屏幕频道的 EPG 数据
-    final currentProgram = screen.channel != null
-        ? context.select<EpgProvider, EpgProgram?>(
-            (provider) => provider.getCurrentProgram(
-              screen.channel!.epgId,
-              screen.channel!.name,
-            ),
-          )
-        : null;
-
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.bottomCenter,
-          end: Alignment.topCenter,
-          colors: [Colors.black.withOpacity(0.8), Colors.transparent],
-        ),
-      ),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: SizedBox(
-          width: nameWidth,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AutoScrollText(
-                key: ValueKey('ch_${screen.channel?.id}'),
-                text: screen.channel?.name ?? '',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold),
-                scrollSpeed: 30.0,
-                scrollDelay: const Duration(milliseconds: 1000),
-                textAlign: TextAlign.left,
-                forceScroll: forceAutoScroll,
-              ),
-              if (currentProgram != null) ...[
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Icon(Icons.play_circle_filled,
-                        color: AppTheme.getPrimaryColor(context), size: 10),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: AutoScrollText(
-                        key: ValueKey('pg_${currentProgram.title}'),
-                        text: currentProgram.title,
-                        style: TextStyle(
-                            color: AppTheme.getPrimaryColor(context),
-                            fontSize: 10),
-                        scrollSpeed: 30.0,
-                        scrollDelay: const Duration(milliseconds: 1000),
-                        textAlign: TextAlign.left,
-                        forceScroll: forceAutoScroll,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+import 'multi_screen_channel_name_overlay.dart';
+import 'multi_screen_top_bar.dart';
 
 class MultiScreenPlayer extends StatefulWidget {
   final VoidCallback? onExitMultiScreen;
@@ -271,7 +181,12 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                     top: 0,
                     left: 0,
                     right: 0,
-                    child: _buildTopControls(context),
+                    child: MultiScreenTopBar(
+                      onBack: widget.onBack,
+                      onExitMultiScreen: widget.onExitMultiScreen,
+                      isWindowFullscreen: _isWindowFullscreen,
+                      onToggleFullscreen: _toggleWindowFullscreen,
+                    ),
                   ),
 
                 // Mini模式紡控制埗按挳（最彸上婅（屽终堟樉绀猴級
@@ -336,61 +251,6 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
         setState(() => _showControls = false);
       }
     });
-  }
-
-  Widget _buildTopControls(BuildContext context) {
-    return Container(
-      // 调整顶部间距为 30，使按钮向上移动，减少与右上角信息窗口的距离并齐平
-      padding: const EdgeInsets.fromLTRB(16, 30, 16, 8),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.black.withOpacity(0.7),
-            Colors.transparent,
-          ],
-        ),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
-              onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
-              tooltip: AppStrings.of(context)?.backToPlayer ?? 'Back',
-            ),
-            const Spacer(),
-            IconButton(
-              icon:
-                  const Icon(Icons.picture_in_picture_alt, color: Colors.white),
-              onPressed: () async {
-                await WindowsPipChannel.enterPipMode();
-                setState(() {});
-              },
-              tooltip: AppStrings.of(context)?.miniMode ?? 'Mini Mode',
-            ),
-            if (PlatformDetector.isWindows)
-              IconButton(
-                icon: Icon(
-                  _isWindowFullscreen
-                      ? Icons.fullscreen_exit_rounded
-                      : Icons.fullscreen_rounded,
-                  color: Colors.white,
-                ),
-                onPressed: _toggleWindowFullscreen,
-                tooltip: _isWindowFullscreen ? '退出全屏' : '全屏',
-              ),
-            IconButton(
-              icon: const Icon(Icons.grid_off_rounded, color: Colors.white),
-              onPressed: widget.onExitMultiScreen,
-              tooltip: AppStrings.of(context)?.exitMultiScreen ?? '退出分屏',
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   Widget _buildScreenControlsOverlay(
@@ -669,7 +529,7 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
                       left: 0,
                       bottom: 0,
                       right: 0,
-                      child: _ChannelNameOverlay(
+                      child: ChannelNameOverlay(
                         screen: screen,
                         nameWidth: nameWidth,
                         forceAutoScroll: forceAutoScroll,

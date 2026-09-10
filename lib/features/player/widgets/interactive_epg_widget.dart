@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../core/models/channel.dart';
 import '../../../core/services/epg_service.dart';
+import '../utils/epg_time_utils.dart';
 import '../../epg/providers/epg_provider.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -176,7 +177,7 @@ class _InteractiveEpgWidgetState extends State<InteractiveEpgWidget> {
                             _autoAdjustedDate = true;
                             final today = DateTime.now();
                             final hasToday =
-                                dates.any((d) => _isSameDay(d, today));
+                                dates.any((d) => isSameDay(d, today));
                             if (!hasToday && dates.isNotEmpty) {
                               final target = dates.last;
                               WidgetsBinding.instance.addPostFrameCallback((
@@ -196,9 +197,9 @@ class _InteractiveEpgWidgetState extends State<InteractiveEpgWidget> {
                             itemBuilder: (context, index) {
                               final date = dates[index];
                               final isSelected =
-                                  _isSameDay(date, _selectedDate);
+                                  isSameDay(date, _selectedDate);
                               final isToday =
-                                  _isSameDay(date, DateTime.now());
+                                  isSameDay(date, DateTime.now());
 
                               return InkWell(
                                 onTap: () {
@@ -242,7 +243,7 @@ class _InteractiveEpgWidgetState extends State<InteractiveEpgWidget> {
                                         ),
                                       ),
                                       Text(
-                                        _getWeekday(date),
+                                        weekdayLabel(date),
                                         style: TextStyle(
                                           color: isSelected
                                               ? AppTheme.primaryColor
@@ -328,7 +329,7 @@ class _InteractiveEpgWidgetState extends State<InteractiveEpgWidget> {
                       itemCount: programs.length,
                       itemBuilder: (context, index) {
                         final program = programs[index];
-                        final status = _getProgramStatus(program);
+                        final status = programStatus(program);
                         final isLive = status == ProgramStatus.live;
                         final isPast = status == ProgramStatus.past;
 
@@ -347,7 +348,8 @@ class _InteractiveEpgWidgetState extends State<InteractiveEpgWidget> {
                         // 3. Not too far in past (check catchupDays)
                         final canCatchup = isPast &&
                             widget.channel.hasCatchup &&
-                            _isWithinCatchupRange(program);
+                            isWithinCatchupRange(
+                                program, widget.channel.catchupDays);
 
                         return InkWell(
                           key: _itemKeys[index],
@@ -590,39 +592,4 @@ class _InteractiveEpgWidgetState extends State<InteractiveEpgWidget> {
     return width;
   }
 
-  bool _isSameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
-  }
-
-  String _getWeekday(DateTime date) {
-    const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-    return weekdays[date.weekday - 1];
-  }
-
-  ProgramStatus _getProgramStatus(EpgProgram program) {
-    final now = DateTime.now();
-    if (now.isAfter(program.start) && now.isBefore(program.end)) {
-      return ProgramStatus.live;
-    } else if (now.isAfter(program.end)) {
-      return ProgramStatus.past;
-    } else {
-      return ProgramStatus.future;
-    }
-  }
-
-  bool _isWithinCatchupRange(EpgProgram program) {
-    if (widget.channel.catchupDays == null) {
-      return true; // Default to true if not specified? Or false?
-    }
-    // If catchupDays is set, check if program start is within days.
-    // Assuming catchupDays means "last N days".
-    final diff = DateTime.now().difference(program.start).inDays;
-    return diff <= widget.channel.catchupDays!;
-  }
-}
-
-enum ProgramStatus {
-  past,
-  live,
-  future,
 }

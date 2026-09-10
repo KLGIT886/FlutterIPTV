@@ -3,10 +3,10 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../core/i18n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/platform/platform_detector.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/utils/app_restart_helper.dart';
 import '../../../core/widgets/tv_focusable.dart';
+import 'backup_ui_helpers.dart';
 import '../providers/backup_provider.dart';
 
 /// 本地备份区域组件
@@ -25,87 +25,6 @@ class _LocalBackupSectionState extends State<LocalBackupSection> {
   void initState() {
     super.initState();
     _loadBackupDirectory();
-  }
-
-  // 显示 loading 对话框
-  void _showLoadingDialog(BuildContext context) {
-    final textPrimary = AppTheme.getTextPrimary(context);
-    final textSecondary = AppTheme.getTextSecondary(context);
-    final cardColor = AppTheme.getCardColor(context);
-    
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => PopScope(
-        canPop: false,
-        child: Consumer<BackupProvider>(
-          builder: (context, provider, child) {
-            return AlertDialog(
-              backgroundColor: cardColor,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(
-                    width: 48,
-                    height: 48,
-                    child: CircularProgressIndicator(),
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    provider.progressMessage,
-                    style: TextStyle(
-                      color: textPrimary,
-                      fontSize: 16,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  if (provider.progress > 0) ...[
-                    const SizedBox(height: 16),
-                    LinearProgressIndicator(value: provider.progress),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${(provider.progress * 100).toInt()}%',
-                      style: TextStyle(
-                        color: textSecondary,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  // 获取响应式样式（横屏适配）
-  Map<String, dynamic> _getResponsiveStyle(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
-    final isMobile = PlatformDetector.isMobile;
-    final isLandscape = isMobile && screenWidth > 600 && screenWidth < 900 && screenHeight < screenWidth;
-    final isTV = PlatformDetector.isTV;
-    
-    return {
-      'isLandscape': isLandscape,
-      'containerPadding': isLandscape ? 6.0 : (isTV ? 32.0 : 20.0),
-      'cardPadding': isLandscape ? 8.0 : 20.0,
-      'titleFontSize': isLandscape ? 10.5 : (isTV ? 18.0 : 16.0),
-      'bodyFontSize': isLandscape ? 9.5 : (isTV ? 16.0 : 14.0),
-      'smallFontSize': isLandscape ? 8.5 : (isTV ? 14.0 : 13.0),
-      'iconSize': isLandscape ? 13.0 : 20.0,
-      'spacing': isLandscape ? 4.0 : (isTV ? 24.0 : 16.0),
-      'sectionSpacing': isLandscape ? 8.0 : 24.0,
-      'buttonPadding': EdgeInsets.symmetric(
-        horizontal: isLandscape ? 8.0 : 16.0,
-        vertical: isLandscape ? 4.0 : 12.0,
-      ),
-    };
   }
 
   Future<void> _loadBackupDirectory() async {
@@ -172,7 +91,7 @@ class _LocalBackupSectionState extends State<LocalBackupSection> {
     final primaryColor = AppTheme.getPrimaryColor(context);
 
     // 获取响应式样式
-    final style = _getResponsiveStyle(context);
+    final style = backupResponsiveStyle(context);
 
     return Container(
       color: backgroundColor,
@@ -401,7 +320,7 @@ class _LocalBackupSectionState extends State<LocalBackupSection> {
     final textSecondary = AppTheme.getTextSecondary(context);
     final primaryColor = AppTheme.getPrimaryColor(context);
     final strings = AppStrings.of(context)!;
-    final style = _getResponsiveStyle(context);
+    final style = backupResponsiveStyle(context);
 
     return Container(
       margin: EdgeInsets.only(bottom: style['isLandscape'] ? 6.0 : 12.0),
@@ -553,10 +472,10 @@ class _LocalBackupSectionState extends State<LocalBackupSection> {
   Future<void> _createBackup(BuildContext context) async {
     final strings = AppStrings.of(context)!;
     final provider = context.read<BackupProvider>();
-    final style = _getResponsiveStyle(context);
+    final style = backupResponsiveStyle(context);
 
     // 显示 loading 对话框
-    _showLoadingDialog(context);
+    showBackupLoadingDialog(context);
 
     final success = await provider.createLocalBackup(
       message: '正在创建本地备份...',
@@ -593,7 +512,7 @@ class _LocalBackupSectionState extends State<LocalBackupSection> {
   Future<void> _restoreBackup(BuildContext context, String filePath) async {
     final strings = AppStrings.of(context)!;
     final provider = context.read<BackupProvider>();
-    final style = _getResponsiveStyle(context);
+    final style = backupResponsiveStyle(context);
 
     // 验证备份文件
     final metadata = await provider.validateBackup(filePath);
@@ -747,7 +666,7 @@ class _LocalBackupSectionState extends State<LocalBackupSection> {
         ServiceLocator.log.i('用户确认恢复', tag: 'LocalBackupSection');
         
         // 显示 loading 对话框
-        _showLoadingDialog(context);
+        showBackupLoadingDialog(context);
         
         // 使用 Provider 恢复
         final success = await provider.restoreFromLocal(
@@ -878,7 +797,7 @@ class _LocalBackupSectionState extends State<LocalBackupSection> {
     final cardColor = AppTheme.getCardColor(context);
     final textPrimary = AppTheme.getTextPrimary(context);
     final textSecondary = AppTheme.getTextSecondary(context);
-    final style = _getResponsiveStyle(context);
+    final style = backupResponsiveStyle(context);
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -973,7 +892,7 @@ class _LocalBackupSectionState extends State<LocalBackupSection> {
   Widget _buildInfoRow(BuildContext context, IconData icon, String label, String value) {
     final textPrimary = AppTheme.getTextPrimary(context);
     final textSecondary = AppTheme.getTextSecondary(context);
-    final style = _getResponsiveStyle(context);
+    final style = backupResponsiveStyle(context);
 
     return Row(
       children: [

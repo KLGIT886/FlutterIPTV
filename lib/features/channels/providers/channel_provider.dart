@@ -7,6 +7,9 @@ import '../../../core/services/service_locator.dart';
 import '../../../core/widgets/channel_logo_widget.dart'
     show setLogoLoadingScrolling;
 
+part 'channel_provider_unavailable.dart';
+part 'channel_provider_query.dart';
+
 class ChannelProvider extends ChangeNotifier {
   // ✅ 全局缓存：一次性加载所有频道
   List<Channel> _allChannels = [];
@@ -81,58 +84,6 @@ class ChannelProvider extends ChangeNotifier {
     _notifyTimer?.cancel();
     super.dispose();
   }
-  List<Channel> get filteredChannels {
-    if (_selectedGroup == null) return _allChannels;
-    if (_selectedGroup == unavailableGroupName) {
-      return _allChannels.where((c) => isUnavailableChannel(c.groupName)).toList();
-    }
-    return _allChannels.where((c) => c.groupName == _selectedGroup).toList();
-  }
-
-  // ✅ UI显示的筛选频道（分页显示）
-  List<Channel> get displayedFilteredChannels {
-    if (_selectedGroup == null) return _displayedChannels;
-    if (_selectedGroup == unavailableGroupName) {
-      return _displayedChannels.where((c) => isUnavailableChannel(c.groupName)).toList();
-    }
-    return _displayedChannels.where((c) => c.groupName == _selectedGroup).toList();
-  }
-
-  // ✅ 首页数据：获取指定数量的分类
-  List<ChannelGroup> getHomeGroups({int maxGroups = 8}) {
-    return _allGroups.take(maxGroups).toList();
-  }
-
-  // ✅ 首页数据：每个分类指定数量的频道
-  Map<String, List<Channel>> getHomeChannelsByGroup({int maxGroups = 8, int channelsPerGroup = 12}) {
-    final result = <String, List<Channel>>{};
-    final groups = _allGroups.take(maxGroups);
-    
-    ServiceLocator.log.d(
-        'getHomeChannelsByGroup: _allGroups.length=${_allGroups.length}, _allChannels.length=${_allChannels.length}',
-        tag: 'ChannelProvider');
-    
-    for (final group in groups) {
-      final channels = _allChannels
-          .where((c) => c.groupName == group.name)
-          .take(channelsPerGroup)
-          .toList();
-      
-      // ServiceLocator.log.d(
-      //     'getHomeChannelsByGroup: group=${group.name}, channels.length=${channels.length}',
-      //     tag: 'ChannelProvider');
-      
-      // ✅ 即使没有频道也要包含分类（确保首页显示完整）
-      result[group.name] = channels;
-    }
-    
-    // ServiceLocator.log.d(
-    //     'getHomeChannelsByGroup: result.length=${result.length}',
-    //     tag: 'ChannelProvider');
-    
-    return result;
-  }
-
   // ✅ 清空全局缓存（切换/刷新/删除 playlist 时调用）
   void clearCache() {
     // 1. 取消所有待通知主线程的队列
@@ -368,72 +319,6 @@ class ChannelProvider extends ChangeNotifier {
         tag: 'ChannelProvider');
   }
 
-  // Select a group filter
-  void selectGroup(String? groupName) {
-    _selectedGroup = groupName;
-
-    // 切换分类时，清理台标加载队列，避免堆积
-    try {
-      clearLogoLoadingQueue();
-      ServiceLocator.log.d('切换分类到: $groupName，已清理台标加载队列');
-    } catch (e) {
-      ServiceLocator.log.w('清理台标队列失败: $e');
-    }
-
-    _immediateNotify(); // 立即通知分类切换
-  }
-
-  // Clear group filter
-  void clearGroupFilter() {
-    _selectedGroup = null;
-    _immediateNotify(); // 立即通知清除筛选
-  }
-
-  // Search channels by name
-  List<Channel> searchChannels(String query) {
-    if (query.isEmpty) return filteredChannels;
-
-    final lowerQuery = query.toLowerCase();
-    return _allChannels.where((c) {
-      return c.name.toLowerCase().contains(lowerQuery) ||
-          (c.groupName?.toLowerCase().contains(lowerQuery) ?? false);
-    }).toList();
-  }
-
-  // Get channels by group
-  List<Channel> getChannelsByGroup(String groupName) {
-    return _allChannels.where((c) => c.groupName == groupName).toList();
-  }
-
-  // Get a channel by ID
-  Channel? getChannelById(int id) {
-    try {
-      return _allChannels.firstWhere((c) => c.id == id);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  // Update favorite status for a channel
-  void updateFavoriteStatus(int channelId, bool isFavorite) {
-    final index = _allChannels.indexWhere((c) => c.id == channelId);
-    if (index != -1) {
-      _allChannels[index] = _allChannels[index].copyWith(isFavorite: isFavorite);
-      _throttledNotify(); // 使用节流通知（非关键更新）
-    }
-  }
-
-  // Set currently playing channel
-  void setCurrentlyPlaying(int? channelId) {
-    for (int i = 0; i < _allChannels.length; i++) {
-      final isPlaying = _allChannels[i].id == channelId;
-      if (_allChannels[i].isCurrentlyPlaying != isPlaying) {
-        _allChannels[i] = _allChannels[i].copyWith(isCurrentlyPlaying: isPlaying);
-      }
-    }
-    _throttledNotify(); // 使用节流通知（非关键更新）
-  }
-
   // Add channels from parsing
   Future<void> addChannels(List<Channel> channels) async {
     try {
@@ -489,114 +374,6 @@ class ChannelProvider extends ChangeNotifier {
   // 检查是否是失效频道
   static bool isUnavailableChannel(String? groupName) {
     return groupName != null && groupName.startsWith(unavailableGroupPrefix);
-  }
-
-  // 将频道标记为失效（移动到失效分类，保留原始分组信息）
-  Future<void> markChannelsAsUnavailable(List<int> channelIds) async {
-    if (channelIds.isEmpty) return;
-
-    try {
-      // 批量更新频道分组，保存原始分组名
-      for (final id in channelIds) {
-        final channel = _allChannels.firstWhere((c) => c.id == id,
-            orElse: () => _allChannels.first);
-        final originalGroup = channel.groupName ?? 'Uncategorized';
-        // 如果已经是失效频道，不重复标记
-        if (isUnavailableChannel(originalGroup)) continue;
-
-        final newGroupName = '$unavailableGroupPrefix|$originalGroup';
-
-        await ServiceLocator.database.update(
-          'channels',
-          {'group_name': newGroupName},
-          where: 'id = ?',
-          whereArgs: [id],
-        );
-      }
-
-      // 更新内存中的频道数据
-      for (int i = 0; i < _allChannels.length; i++) {
-        if (channelIds.contains(_allChannels[i].id)) {
-          final originalGroup = _allChannels[i].groupName ?? 'Uncategorized';
-          if (!isUnavailableChannel(originalGroup)) {
-            _allChannels[i] = _allChannels[i].copyWith(
-              groupName: '$unavailableGroupPrefix|$originalGroup',
-            );
-          }
-        }
-      }
-
-      _updateGroups();
-      _immediateNotify(); // 立即通知标记完成
-
-      ServiceLocator.log.d('DEBUG: 已将 ${channelIds.length} 个频道标记为失效');
-    } catch (e) {
-      ServiceLocator.log.d('DEBUG: 标记失效频道时出错: $e');
-      _error = 'Failed to mark channels as unavailable: $e';
-      _immediateNotify(); // 立即通知错误
-    }
-  }
-
-  // 恢复失效频道到原分组
-  Future<bool> restoreChannel(int channelId) async {
-    try {
-      final channel = _allChannels.firstWhere((c) => c.id == channelId);
-      final originalGroup = extractOriginalGroup(channel.groupName);
-
-      if (originalGroup == null) {
-        ServiceLocator.log.d('DEBUG: 频道不是失效频道，无需恢复');
-        return false;
-      }
-
-      await ServiceLocator.database.update(
-        'channels',
-        {'group_name': originalGroup},
-        where: 'id = ?',
-        whereArgs: [channelId],
-      );
-
-      final index = _allChannels.indexWhere((c) => c.id == channelId);
-      if (index != -1) {
-        _allChannels[index] = _allChannels[index].copyWith(groupName: originalGroup);
-      }
-
-      _updateGroups();
-      _immediateNotify(); // 立即通知恢复完成
-
-      ServiceLocator.log.d('DEBUG: 已恢复频道到分组: $originalGroup');
-      return true;
-    } catch (e) {
-      _error = 'Failed to restore channel: $e';
-      _immediateNotify(); // 立即通知错误
-      return false;
-    }
-  }
-
-  // 删除所有失效频道
-  Future<int> deleteAllUnavailableChannels() async {
-    try {
-      final count = await ServiceLocator.database.delete(
-        'channels',
-        where: 'group_name LIKE ?',
-        whereArgs: ['$unavailableGroupPrefix%'],
-      );
-
-      _allChannels.removeWhere((c) => isUnavailableChannel(c.groupName));
-      _updateGroups();
-      _immediateNotify(); // 立即通知删除完成
-
-      ServiceLocator.log.d('DEBUG: 已删除 $count 个失效频道');
-      return count;
-    } catch (e) {
-      _error = 'Failed to delete unavailable channels: $e';
-      _immediateNotify(); // 立即通知错误
-      return 0;
-    }
-  }
-
-  // 获取失效频道数量
-  int get unavailableChannelCount {
-    return _allChannels.where((c) => isUnavailableChannel(c.groupName)).length;
   }
 
   // ✅ 暂停台标加载（例如在快速滚动时）：挂起全局台标加载队列，

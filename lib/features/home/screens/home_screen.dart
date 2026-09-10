@@ -12,6 +12,7 @@ import '../../../core/platform/platform_detector.dart';
 import '../../../core/i18n/app_strings.dart';
 import '../../../core/services/update_service.dart';
 import '../../../core/services/service_locator.dart';
+import '../../../core/services/channel_playback.dart';
 import '../../../core/models/app_update.dart';
 import '../../../core/utils/card_size_calculator.dart';
 import '../../../core/utils/throttled_state_mixin.dart'; // ✅ 导入节流 mixin
@@ -19,7 +20,6 @@ import '../../channels/providers/channel_provider.dart';
 import '../../playlist/providers/playlist_provider.dart';
 import '../../playlist/widgets/add_playlist_dialog.dart';
 import '../../favorites/providers/favorites_provider.dart';
-import '../../player/providers/player_provider.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../../epg/providers/epg_provider.dart';
 import '../../multi_screen/providers/multi_screen_provider.dart';
@@ -1411,99 +1411,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
   }
 
   Future<void> _playChannel(Channel channel) async {
-    ServiceLocator.log
-        .i('播放频道: ${channel.name} (ID: ${channel.id})', tag: 'HomeScreen');
-    // final startTime = DateTime.now();
-
-    // 保存上次播放的频道ID
-    final settingsProvider = context.read<SettingsProvider>();
-    final channelProvider = context.read<ChannelProvider>();
-    final favoritesProvider = context.read<FavoritesProvider>();
-
-    // 设置 providers 用于状态保存和收藏功能
-    NativePlayerChannel.setProviders(
-        favoritesProvider, channelProvider, settingsProvider);
-
-    if (settingsProvider.rememberLastChannel && channel.id != null) {
-      // 保存单频道播放状态
-      settingsProvider.saveLastSingleChannel(channel.id);
-    }
-
-    // 检查是否启用了分屏模式
-    if (settingsProvider.enableMultiScreen) {
-      // TV 端使用原生分屏播放器
-      if (PlatformDetector.isTV && PlatformDetector.isAndroid) {
-        // ✅ 直接使用缓存的所有频道数据
-        final channels = channelProvider.allChannels;
-
-        // 找到当前点击频道的索引
-        final clickedIndex = channels.indexWhere((c) => c.url == channel.url);
-
-        // TV端原生分屏播放器也需要记录观看历史
-        if (channel.id != null) {
-          await ServiceLocator.watchHistory.addWatchHistory(channel.id!, channel.playlistId);
-          ServiceLocator.log.d('HomeScreen: Recorded watch history for channel ${channel.name} (TV multi-screen)');
-        }
-
-        // 准备频道数据
-        final urls = channels.map((c) => c.url).toList();
-        final names = channels.map((c) => c.name).toList();
-        final groups = channels.map((c) => c.groupName ?? '').toList();
-        final sources = channels.map((c) => c.sources).toList();
-        final logos = channels.map((c) => c.logoUrl ?? '').toList();
-
-        // 启动原生分屏播放器
-        await NativePlayerChannel.launchMultiScreen(
-          urls: urls,
-          names: names,
-          groups: groups,
-          sources: sources,
-          logos: logos,
-          initialChannelIndex: clickedIndex >= 0 ? clickedIndex : 0,
-          volumeBoostDb: settingsProvider.volumeBoost,
-          defaultScreenPosition: settingsProvider.defaultScreenPosition,
-          showChannelName: settingsProvider.showMultiScreenChannelName,
-          userAgent: settingsProvider.userAgent,
-          onClosed: () {
-            ServiceLocator.log.d('HomeScreen: Native multi-screen closed, refreshing watch history');
-            // TV端原生分屏播放器关闭后，刷新观看记录
-            _refreshWatchHistory();
-          },
-        );
-      } else if (PlatformDetector.isDesktop) {
-        // 桌面端分屏模式：在指定位置播放频道
-        final multiScreenProvider = context.read<MultiScreenProvider>();
-        final defaultPosition = settingsProvider.defaultScreenPosition;
-        // 设置音量增强到分屏Provider
-        multiScreenProvider.setVolumeSettings(
-            1.0, settingsProvider.volumeBoost);
-        multiScreenProvider.playChannelAtDefaultPosition(
-            channel, defaultPosition);
-
-        // 分屏模式下导航到播放器页面，但不传递频道参数（由MultiScreenProvider处理播放）
-        Navigator.pushNamed(context, AppRouter.player, arguments: {
-          'channelUrl': '', // 空URL表示分屏模式
-          'channelName': '',
-          'channelLogo': null,
-        });
-      } else {
-        // 其他平台普通播放
-        context.read<PlayerProvider>().playChannel(channel);
-        Navigator.pushNamed(context, AppRouter.player, arguments: {
-          'channelUrl': channel.url,
-          'channelName': channel.name,
-          'channelLogo': channel.logoUrl,
-        });
-      }
-    } else {
-      // 普通模式：直接导航到播放器页面，不调用PlayerProvider.playChannel()
-      // 避免重复记录观看历史（PlayerScreen会记录）
-      Navigator.pushNamed(context, AppRouter.player, arguments: {
-        'channelUrl': channel.url,
-        'channelName': channel.name,
-        'channelLogo': channel.logoUrl,
-      });
-    }
+    await playChannelFromList(
+      context,
+      channel,
+      logTag: 'HomeScreen',
+      rememberAsSingle: true,
+      registerNativeProviders: true,
+      recordWatchHistory: true,
+      playMobileMultiScreen: true,
+      onMultiScreenClosed: _refreshWatchHistory,
+    );
   }
 
   List<Channel> _getFavoriteChannels(ChannelProvider provider) {

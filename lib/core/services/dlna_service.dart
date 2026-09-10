@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import './service_locator.dart';
+import './dlna_soap_utils.dart';
+import './dlna_scpd_definitions.dart';
 
 /// DLNA 渲染器服务 (DMR - Digital Media Renderer)
 /// 让手机 App 可以发现并投屏到本设备
@@ -526,7 +528,7 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
 
   /// AVTransport SCPD
   Future<void> _handleAvTransportScpd(HttpRequest request) async {
-    final xml = _getAvTransportScpd();
+    final xml = getAvTransportScpd();
     request.response.headers.contentType = ContentType('text', 'xml', charset: 'utf-8');
     request.response.write(xml);
     await request.response.close();
@@ -534,7 +536,7 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
 
   /// RenderingControl SCPD
   Future<void> _handleRenderingControlScpd(HttpRequest request) async {
-    final xml = _getRenderingControlScpd();
+    final xml = getRenderingControlScpd();
     request.response.headers.contentType = ContentType('text', 'xml', charset: 'utf-8');
     request.response.write(xml);
     await request.response.close();
@@ -542,7 +544,7 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
 
   /// ConnectionManager SCPD
   Future<void> _handleConnectionManagerScpd(HttpRequest request) async {
-    final xml = _getConnectionManagerScpd();
+    final xml = getConnectionManagerScpd();
     request.response.headers.contentType = ContentType('text', 'xml', charset: 'utf-8');
     request.response.write(xml);
     await request.response.close();
@@ -560,11 +562,11 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
       
       final uri = uriMatch?.group(1) ?? '';
       final meta = metaMatch?.group(1) ?? '';
-      final decodedUri = _decodeXmlEntities(uri);
+      final decodedUri = decodeXmlEntities(uri);
       
       String? title;
       if (meta.isNotEmpty) {
-        final decodedMeta = _decodeXmlEntities(meta);
+        final decodedMeta = decodeXmlEntities(meta);
         final titleMatch = RegExp(r'<dc:title>([^<]*)</dc:title>').firstMatch(decodedMeta);
         title = titleMatch?.group(1);
       }
@@ -578,7 +580,7 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
       ServiceLocator.log.d('DLNA: SetURI - $title');
       _notifyAllSubscribers();
       
-      response = _createSoapResponse('SetAVTransportURI', '');
+      response = createSoapResponse('SetAVTransportURI', '');
     } else if (body.contains('"Play"') || body.contains(':Play') || body.contains('Play</')) {
       ServiceLocator.log.d('DLNA: Play');
       // 只有在有 URL 时才触发播放
@@ -596,7 +598,7 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
         ServiceLocator.log.d('DLNA: Play 忽略 - 没有 URL');
       }
       
-      response = _createSoapResponse('Play', '');
+      response = createSoapResponse('Play', '');
     } else if (body.contains('"Pause"') || body.contains(':Pause') || body.contains('Pause</')) {
       ServiceLocator.log.d('DLNA: Pause');
       if (_playStartTime != null) {
@@ -606,7 +608,7 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
       _playStartTime = null;
       onPause?.call();
       _notifyAllSubscribers();
-      response = _createSoapResponse('Pause', '');
+      response = createSoapResponse('Pause', '');
     } else if (body.contains('"Stop"') || body.contains(':Stop') || body.contains('Stop</')) {
       ServiceLocator.log.d('DLNA: Stop');
       _transportState = 'STOPPED';
@@ -614,9 +616,9 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
       _playStartTime = null;
       onStop?.call();
       _notifyAllSubscribers();
-      response = _createSoapResponse('Stop', '');
+      response = createSoapResponse('Stop', '');
     } else if (body.contains('GetTransportInfo')) {
-      response = _createSoapResponse('GetTransportInfo', '''<CurrentTransportState>$_transportState</CurrentTransportState>
+      response = createSoapResponse('GetTransportInfo', '''<CurrentTransportState>$_transportState</CurrentTransportState>
         <CurrentTransportStatus>OK</CurrentTransportStatus>
         <CurrentSpeed>1</CurrentSpeed>''');
     } else if (body.contains('GetPositionInfo')) {
@@ -624,22 +626,22 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
       if (_transportState == 'PLAYING' && _playStartTime != null) {
         currentPos = _currentPosition + DateTime.now().difference(_playStartTime!);
       }
-      final posStr = _formatDuration(currentPos);
-      final durStr = _currentDuration == Duration.zero ? '00:00:00' : _formatDuration(_currentDuration);
+      final posStr = formatDuration(currentPos);
+      final durStr = _currentDuration == Duration.zero ? '00:00:00' : formatDuration(_currentDuration);
       
-      response = _createSoapResponse('GetPositionInfo', '''<Track>1</Track>
+      response = createSoapResponse('GetPositionInfo', '''<Track>1</Track>
         <TrackDuration>$durStr</TrackDuration>
         <TrackMetaData></TrackMetaData>
-        <TrackURI>${_escapeXml(_currentUri)}</TrackURI>
+        <TrackURI>${escapeXml(_currentUri)}</TrackURI>
         <RelTime>$posStr</RelTime>
         <AbsTime>$posStr</AbsTime>
         <RelCount>2147483647</RelCount>
         <AbsCount>2147483647</AbsCount>''');
     } else if (body.contains('GetMediaInfo')) {
-      final durStr = _currentDuration == Duration.zero ? '00:00:00' : _formatDuration(_currentDuration);
-      response = _createSoapResponse('GetMediaInfo', '''<NrTracks>1</NrTracks>
+      final durStr = _currentDuration == Duration.zero ? '00:00:00' : formatDuration(_currentDuration);
+      response = createSoapResponse('GetMediaInfo', '''<NrTracks>1</NrTracks>
         <MediaDuration>$durStr</MediaDuration>
-        <CurrentURI>${_escapeXml(_currentUri)}</CurrentURI>
+        <CurrentURI>${escapeXml(_currentUri)}</CurrentURI>
         <CurrentURIMetaData></CurrentURIMetaData>
         <NextURI></NextURI>
         <NextURIMetaData></NextURIMetaData>
@@ -654,23 +656,23 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
         final unit = unitMatch?.group(1) ?? 'REL_TIME';
         
         if (unit == 'REL_TIME' || unit == 'ABS_TIME') {
-          final position = _parseDuration(target);
+          final position = parseDuration(target);
           _currentPosition = position;
           _playStartTime = DateTime.now();
           onSeek?.call(position);
           ServiceLocator.log.d('DLNA: Seek $target');
         }
       }
-      response = _createSoapResponse('Seek', '');
+      response = createSoapResponse('Seek', '');
     } else if (body.contains('GetTransportSettings')) {
-      response = _createSoapResponse('GetTransportSettings', '''<PlayMode>NORMAL</PlayMode>
+      response = createSoapResponse('GetTransportSettings', '''<PlayMode>NORMAL</PlayMode>
         <RecQualityMode>NOT_IMPLEMENTED</RecQualityMode>''');
     } else if (body.contains('GetDeviceCapabilities')) {
-      response = _createSoapResponse('GetDeviceCapabilities', '''<PlayMedia>NETWORK</PlayMedia>
+      response = createSoapResponse('GetDeviceCapabilities', '''<PlayMedia>NETWORK</PlayMedia>
         <RecMedia>NOT_IMPLEMENTED</RecMedia>
         <RecQualityModes>NOT_IMPLEMENTED</RecQualityModes>''');
     } else {
-      response = _createSoapResponse('Unknown', '');
+      response = createSoapResponse('Unknown', '');
     }
 
     request.response.headers.contentType = ContentType('text', 'xml', charset: 'utf-8');
@@ -685,18 +687,18 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
     String response;
 
     if (body.contains('GetVolume')) {
-      response = _createSoapResponse('GetVolume', '<CurrentVolume>$_volume</CurrentVolume>', service: 'RenderingControl');
+      response = createSoapResponse('GetVolume', '<CurrentVolume>$_volume</CurrentVolume>', service: 'RenderingControl');
     } else if (body.contains('SetVolume')) {
       final volumeMatch = RegExp(r'<DesiredVolume>(\d+)</DesiredVolume>').firstMatch(body);
       if (volumeMatch != null) {
         _volume = int.parse(volumeMatch.group(1)!);
         onSetVolume?.call(_volume);
       }
-      response = _createSoapResponse('SetVolume', '', service: 'RenderingControl');
+      response = createSoapResponse('SetVolume', '', service: 'RenderingControl');
     } else if (body.contains('GetMute')) {
-      response = _createSoapResponse('GetMute', '<CurrentMute>0</CurrentMute>', service: 'RenderingControl');
+      response = createSoapResponse('GetMute', '<CurrentMute>0</CurrentMute>', service: 'RenderingControl');
     } else {
-      response = _createSoapResponse('Unknown', '', service: 'RenderingControl');
+      response = createSoapResponse('Unknown', '', service: 'RenderingControl');
     }
 
     request.response.headers.contentType = ContentType('text', 'xml', charset: 'utf-8');
@@ -711,13 +713,13 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
     String response;
 
     if (body.contains('GetProtocolInfo')) {
-      response = _createSoapResponse('GetProtocolInfo', '''
+      response = createSoapResponse('GetProtocolInfo', '''
         <Source></Source>
         <Sink>http-get:*:video/mp4:*,http-get:*:video/x-matroska:*,http-get:*:video/avi:*,http-get:*:video/mpeg:*,http-get:*:audio/mpeg:*,http-get:*:audio/mp4:*,http-get:*:application/x-mpegURL:*,http-get:*:video/x-flv:*</Sink>''', service: 'ConnectionManager');
     } else if (body.contains('GetCurrentConnectionIDs')) {
-      response = _createSoapResponse('GetCurrentConnectionIDs', '<ConnectionIDs>0</ConnectionIDs>', service: 'ConnectionManager');
+      response = createSoapResponse('GetCurrentConnectionIDs', '<ConnectionIDs>0</ConnectionIDs>', service: 'ConnectionManager');
     } else {
-      response = _createSoapResponse('Unknown', '', service: 'ConnectionManager');
+      response = createSoapResponse('Unknown', '', service: 'ConnectionManager');
     }
 
     request.response.headers.contentType = ContentType('text', 'xml', charset: 'utf-8');
@@ -725,441 +727,4 @@ USN: $_deviceUuid::urn:schemas-upnp-org:device:MediaRenderer:1\r
     await request.response.close();
   }
 
-  /// 创建 SOAP 响应
-  String _createSoapResponse(String action, String body, {String service = 'AVTransport'}) {
-    return '''<?xml version="1.0" encoding="UTF-8"?>
-<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
-  <s:Body>
-    <u:${action}Response xmlns:u="urn:schemas-upnp-org:service:$service:1">
-      $body
-    </u:${action}Response>
-  </s:Body>
-</s:Envelope>''';
-  }
-
-  /// 解码 XML 实体
-  String _decodeXmlEntities(String text) {
-    return text
-        .replaceAll('&lt;', '<')
-        .replaceAll('&gt;', '>')
-        .replaceAll('&amp;', '&')
-        .replaceAll('&quot;', '"')
-        .replaceAll('&apos;', "'");
-  }
-  
-  /// 转义 XML 特殊字符
-  String _escapeXml(String text) {
-    return text
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&apos;');
-  }
-
-  /// 格式化时长为 HH:MM:SS
-  String _formatDuration(Duration duration) {
-    final hours = duration.inHours.toString().padLeft(2, '0');
-    final minutes = (duration.inMinutes % 60).toString().padLeft(2, '0');
-    final seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
-    return '$hours:$minutes:$seconds';
-  }
-
-  /// 解析时长字符串
-  Duration _parseDuration(String str) {
-    final parts = str.split(':');
-    if (parts.length == 3) {
-      return Duration(
-        hours: int.tryParse(parts[0]) ?? 0,
-        minutes: int.tryParse(parts[1]) ?? 0,
-        seconds: int.tryParse(parts[2]) ?? 0,
-      );
-    }
-    return Duration.zero;
-  }
-
-
-  /// AVTransport SCPD XML
-  String _getAvTransportScpd() {
-    return '''<?xml version="1.0" encoding="UTF-8"?>
-<scpd xmlns="urn:schemas-upnp-org:service-1-0">
-  <specVersion>
-    <major>1</major>
-    <minor>0</minor>
-  </specVersion>
-  <actionList>
-    <action>
-      <name>SetAVTransportURI</name>
-      <argumentList>
-        <argument>
-          <name>InstanceID</name>
-          <direction>in</direction>
-          <relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>CurrentURI</name>
-          <direction>in</direction>
-          <relatedStateVariable>AVTransportURI</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>CurrentURIMetaData</name>
-          <direction>in</direction>
-          <relatedStateVariable>AVTransportURIMetaData</relatedStateVariable>
-        </argument>
-      </argumentList>
-    </action>
-    <action>
-      <name>Play</name>
-      <argumentList>
-        <argument>
-          <name>InstanceID</name>
-          <direction>in</direction>
-          <relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>Speed</name>
-          <direction>in</direction>
-          <relatedStateVariable>TransportPlaySpeed</relatedStateVariable>
-        </argument>
-      </argumentList>
-    </action>
-    <action>
-      <name>Pause</name>
-      <argumentList>
-        <argument>
-          <name>InstanceID</name>
-          <direction>in</direction>
-          <relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable>
-        </argument>
-      </argumentList>
-    </action>
-    <action>
-      <name>Stop</name>
-      <argumentList>
-        <argument>
-          <name>InstanceID</name>
-          <direction>in</direction>
-          <relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable>
-        </argument>
-      </argumentList>
-    </action>
-    <action>
-      <name>Seek</name>
-      <argumentList>
-        <argument>
-          <name>InstanceID</name>
-          <direction>in</direction>
-          <relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>Unit</name>
-          <direction>in</direction>
-          <relatedStateVariable>A_ARG_TYPE_SeekMode</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>Target</name>
-          <direction>in</direction>
-          <relatedStateVariable>A_ARG_TYPE_SeekTarget</relatedStateVariable>
-        </argument>
-      </argumentList>
-    </action>
-    <action>
-      <name>GetTransportInfo</name>
-      <argumentList>
-        <argument>
-          <name>InstanceID</name>
-          <direction>in</direction>
-          <relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>CurrentTransportState</name>
-          <direction>out</direction>
-          <relatedStateVariable>TransportState</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>CurrentTransportStatus</name>
-          <direction>out</direction>
-          <relatedStateVariable>TransportStatus</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>CurrentSpeed</name>
-          <direction>out</direction>
-          <relatedStateVariable>TransportPlaySpeed</relatedStateVariable>
-        </argument>
-      </argumentList>
-    </action>
-    <action>
-      <name>GetPositionInfo</name>
-      <argumentList>
-        <argument>
-          <name>InstanceID</name>
-          <direction>in</direction>
-          <relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>Track</name>
-          <direction>out</direction>
-          <relatedStateVariable>CurrentTrack</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>TrackDuration</name>
-          <direction>out</direction>
-          <relatedStateVariable>CurrentTrackDuration</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>TrackMetaData</name>
-          <direction>out</direction>
-          <relatedStateVariable>CurrentTrackMetaData</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>TrackURI</name>
-          <direction>out</direction>
-          <relatedStateVariable>CurrentTrackURI</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>RelTime</name>
-          <direction>out</direction>
-          <relatedStateVariable>RelativeTimePosition</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>AbsTime</name>
-          <direction>out</direction>
-          <relatedStateVariable>AbsoluteTimePosition</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>RelCount</name>
-          <direction>out</direction>
-          <relatedStateVariable>RelativeCounterPosition</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>AbsCount</name>
-          <direction>out</direction>
-          <relatedStateVariable>AbsoluteCounterPosition</relatedStateVariable>
-        </argument>
-      </argumentList>
-    </action>
-  </actionList>
-  <serviceStateTable>
-    <stateVariable sendEvents="no">
-      <name>A_ARG_TYPE_InstanceID</name>
-      <dataType>ui4</dataType>
-    </stateVariable>
-    <stateVariable sendEvents="no">
-      <name>AVTransportURI</name>
-      <dataType>string</dataType>
-    </stateVariable>
-    <stateVariable sendEvents="no">
-      <name>AVTransportURIMetaData</name>
-      <dataType>string</dataType>
-    </stateVariable>
-    <stateVariable sendEvents="yes">
-      <name>TransportState</name>
-      <dataType>string</dataType>
-      <allowedValueList>
-        <allowedValue>STOPPED</allowedValue>
-        <allowedValue>PLAYING</allowedValue>
-        <allowedValue>TRANSITIONING</allowedValue>
-        <allowedValue>PAUSED_PLAYBACK</allowedValue>
-        <allowedValue>NO_MEDIA_PRESENT</allowedValue>
-      </allowedValueList>
-    </stateVariable>
-    <stateVariable sendEvents="no">
-      <name>TransportStatus</name>
-      <dataType>string</dataType>
-    </stateVariable>
-    <stateVariable sendEvents="no">
-      <name>TransportPlaySpeed</name>
-      <dataType>string</dataType>
-    </stateVariable>
-    <stateVariable sendEvents="no">
-      <name>CurrentTrack</name>
-      <dataType>ui4</dataType>
-    </stateVariable>
-    <stateVariable sendEvents="no">
-      <name>CurrentTrackDuration</name>
-      <dataType>string</dataType>
-    </stateVariable>
-    <stateVariable sendEvents="no">
-      <name>CurrentTrackMetaData</name>
-      <dataType>string</dataType>
-    </stateVariable>
-    <stateVariable sendEvents="no">
-      <name>CurrentTrackURI</name>
-      <dataType>string</dataType>
-    </stateVariable>
-    <stateVariable sendEvents="no">
-      <name>RelativeTimePosition</name>
-      <dataType>string</dataType>
-    </stateVariable>
-    <stateVariable sendEvents="no">
-      <name>AbsoluteTimePosition</name>
-      <dataType>string</dataType>
-    </stateVariable>
-    <stateVariable sendEvents="no">
-      <name>RelativeCounterPosition</name>
-      <dataType>i4</dataType>
-    </stateVariable>
-    <stateVariable sendEvents="no">
-      <name>AbsoluteCounterPosition</name>
-      <dataType>i4</dataType>
-    </stateVariable>
-    <stateVariable sendEvents="no">
-      <name>A_ARG_TYPE_SeekMode</name>
-      <dataType>string</dataType>
-    </stateVariable>
-    <stateVariable sendEvents="no">
-      <name>A_ARG_TYPE_SeekTarget</name>
-      <dataType>string</dataType>
-    </stateVariable>
-  </serviceStateTable>
-</scpd>''';
-  }
-
-  /// RenderingControl SCPD XML
-  String _getRenderingControlScpd() {
-    return '''<?xml version="1.0" encoding="UTF-8"?>
-<scpd xmlns="urn:schemas-upnp-org:service-1-0">
-  <specVersion>
-    <major>1</major>
-    <minor>0</minor>
-  </specVersion>
-  <actionList>
-    <action>
-      <name>GetVolume</name>
-      <argumentList>
-        <argument>
-          <name>InstanceID</name>
-          <direction>in</direction>
-          <relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>Channel</name>
-          <direction>in</direction>
-          <relatedStateVariable>A_ARG_TYPE_Channel</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>CurrentVolume</name>
-          <direction>out</direction>
-          <relatedStateVariable>Volume</relatedStateVariable>
-        </argument>
-      </argumentList>
-    </action>
-    <action>
-      <name>SetVolume</name>
-      <argumentList>
-        <argument>
-          <name>InstanceID</name>
-          <direction>in</direction>
-          <relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>Channel</name>
-          <direction>in</direction>
-          <relatedStateVariable>A_ARG_TYPE_Channel</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>DesiredVolume</name>
-          <direction>in</direction>
-          <relatedStateVariable>Volume</relatedStateVariable>
-        </argument>
-      </argumentList>
-    </action>
-    <action>
-      <name>GetMute</name>
-      <argumentList>
-        <argument>
-          <name>InstanceID</name>
-          <direction>in</direction>
-          <relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>Channel</name>
-          <direction>in</direction>
-          <relatedStateVariable>A_ARG_TYPE_Channel</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>CurrentMute</name>
-          <direction>out</direction>
-          <relatedStateVariable>Mute</relatedStateVariable>
-        </argument>
-      </argumentList>
-    </action>
-  </actionList>
-  <serviceStateTable>
-    <stateVariable sendEvents="no">
-      <name>A_ARG_TYPE_InstanceID</name>
-      <dataType>ui4</dataType>
-    </stateVariable>
-    <stateVariable sendEvents="no">
-      <name>A_ARG_TYPE_Channel</name>
-      <dataType>string</dataType>
-    </stateVariable>
-    <stateVariable sendEvents="no">
-      <name>Volume</name>
-      <dataType>ui2</dataType>
-      <allowedValueRange>
-        <minimum>0</minimum>
-        <maximum>100</maximum>
-        <step>1</step>
-      </allowedValueRange>
-    </stateVariable>
-    <stateVariable sendEvents="no">
-      <name>Mute</name>
-      <dataType>boolean</dataType>
-    </stateVariable>
-  </serviceStateTable>
-</scpd>''';
-  }
-
-  /// ConnectionManager SCPD XML
-  String _getConnectionManagerScpd() {
-    return '''<?xml version="1.0" encoding="UTF-8"?>
-<scpd xmlns="urn:schemas-upnp-org:service-1-0">
-  <specVersion>
-    <major>1</major>
-    <minor>0</minor>
-  </specVersion>
-  <actionList>
-    <action>
-      <name>GetProtocolInfo</name>
-      <argumentList>
-        <argument>
-          <name>Source</name>
-          <direction>out</direction>
-          <relatedStateVariable>SourceProtocolInfo</relatedStateVariable>
-        </argument>
-        <argument>
-          <name>Sink</name>
-          <direction>out</direction>
-          <relatedStateVariable>SinkProtocolInfo</relatedStateVariable>
-        </argument>
-      </argumentList>
-    </action>
-    <action>
-      <name>GetCurrentConnectionIDs</name>
-      <argumentList>
-        <argument>
-          <name>ConnectionIDs</name>
-          <direction>out</direction>
-          <relatedStateVariable>CurrentConnectionIDs</relatedStateVariable>
-        </argument>
-      </argumentList>
-    </action>
-  </actionList>
-  <serviceStateTable>
-    <stateVariable sendEvents="no">
-      <name>SourceProtocolInfo</name>
-      <dataType>string</dataType>
-    </stateVariable>
-    <stateVariable sendEvents="no">
-      <name>SinkProtocolInfo</name>
-      <dataType>string</dataType>
-    </stateVariable>
-    <stateVariable sendEvents="no">
-      <name>CurrentConnectionIDs</name>
-      <dataType>string</dataType>
-    </stateVariable>
-  </serviceStateTable>
-</scpd>''';
-  }
 }
