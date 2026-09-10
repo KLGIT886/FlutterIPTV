@@ -5,7 +5,7 @@ All notable changes to FlutterIPTV will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.6.6] - 2026-09-10
+## [1.6.4] - 2026-09-10
 
 ### Fixed
 - **体验闭环与错误文案（P2-B1）**：
@@ -26,9 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **多屏释放竞态防护**：`_disposeScreenPlayer` 异步释放后仅在屏幕仍指向同一 player 时才置空，避免"暂停→快速恢复"时新播放器被旧异步释放误清空。/ **Multi-screen dispose race**: async dispose no longer clobbers a newer player.
   - **VideoController 释放**：确认 `ScreenPlayerState.dispose()` 已置空 `videoController` 引用（media_kit 的 `VideoController` 无 `dispose()`，置空交由 GC 为正确做法）。/ **VideoController**: reference is already nulled on dispose (media_kit has no `dispose()` for it).
 
-## [1.6.5] - 2026-09-10
-
-### Fixed
 - **资源泄漏 / 稳定性（P1）**：
   - **设置监听器泄漏**：`main.dart` 中 `addListener` 用了匿名闭包，而 `removeListener` 指向从未注册过的具名方法，导致 `SettingsProvider` 单例上监听器随使用累积。现已统一使用具名方法，配对移除。/ **Settings listener leak**: the anonymous `addListener` closure could never be removed by the `removeListener` call (which referenced a different named method), leaking listeners on the settings singleton; now both use the same named method.
   - **多屏退出原生资源泄漏**：`MultiScreenProvider.dispose()` 同步调用异步的 `screen.dispose()`、`pauseAllScreens()` 同步 `dispose()` 播放器，退出时 4 个 mpv 实例的原生资源未被释放。现已改为异步触发释放并兜底捕获异常。/ **Multi-screen native leak**: dispose paths called async player teardown without awaiting; now fire the async release and catch errors so mpv instances are released on exit.
@@ -38,9 +35,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **EPG 面板宽度每帧重算**：`_computePanelWidth` 在每次 `build` 对当日全部节目跑 `TextPainter.layout()`。现按（频道+选中日+EPG 版本）缓存结果，仅数据变化时才重算。/ **EPG panel width recomputed per frame**: `_computePanelWidth` ran a `TextPainter` for every program on each build; now cached by (channel + selected date + EPG version).
   - **启动孤儿行全表扫描**：每次冷启动都跑 `NOT IN` 扫描清理孤儿数据。P0 增量刷新后孤儿基本不再产生，已用一次性标志位降级，避免无谓的全表扫描。/ **Startup orphan scan**: the `NOT IN` orphan purge ran on every cold start; now gated behind a one-time flag since incremental refresh prevents orphans.
 
-## [1.6.4] - 2026-09-10
-
-### Fixed
 - **刷新播放列表丢失观看历史**：刷新改为增量 upsert（按「名称 + URL」复用既有频道 id），不再整表删除重建，收藏与观看记录的外键关联不会被级联清空；只有真正下线的频道才删除。/ **Watch history lost on refresh**: playlist refresh now upserts in place by reusing existing channel ids (name + URL), so favorites and watch history are no longer cascade-deleted; only channels that really went offline are removed.
 - **EPG 频道匹配失败**：查询侧的 channelId 与解析侧一致地规范化，大小写/符号不一致的频道，以及仅含 `<programme>` 而无 `<channel>` 节点的节目源，不再长久显示"暂无节目单"。/ **EPG channel matching**: channel ids are normalized on the lookup side as well, fixing channels with case/symbol mismatches and sources that only provide `<programme>` without `<channel>` nodes.
 - **快速连续切台播错流**：为播放流程引入代际校验，先发请求在 302 解析 / `open()` 完成后会自我作废，不再把旧流写进播放器或把旧错误提示盖到当前频道上。/ **Fast channel switching**: added a playback-generation guard so superseded requests discard themselves after their awaits instead of opening a stale stream or overwriting current state.

@@ -83,6 +83,72 @@ void main() {
       expect(url!.contains('\${('), isFalse);
       expect(RegExp(r'/\d{14}\.ts$').hasMatch(url), isTrue);
     });
+
+    // ---- rtp2httpd 规范补充：|UTC 后缀 / YmdHMS 短格式 / (b|e)timestamp ----
+
+    test('rtp2httpd: \${(b)yyyyMMdd|UTC} 支持 |UTC 后缀并输出 UTC', () {
+      final url = buildCatchupUrl(
+        baseChannel(catchupSource: 'http://vod/?d=\${(b)yyyyMMdd|UTC}'),
+        program,
+      );
+      expect(url!.contains('\${'), isFalse, reason: '不应残留占位符');
+      expect(url.contains('|UTC'), isFalse, reason: '|UTC 应被剔除');
+      final u = program.start.toUtc();
+      final expectDay = '${u.year.toString().padLeft(4, '0')}'
+          '${u.month.toString().padLeft(2, '0')}'
+          '${u.day.toString().padLeft(2, '0')}';
+      expect(url, contains('d=$expectDay'));
+    });
+
+    test('rtp2httpd: 短格式 {(b)YmdHMS}（本地）渲染为 14 位数字', () {
+      final url = buildCatchupUrl(
+        baseChannel(catchupSource: 'http://vod/{(b)YmdHMS}.ts'),
+        program,
+      );
+      expect(url!.contains('{'), isFalse, reason: '不应残留大括号占位符');
+      expect(RegExp(r'/\d{14}\.ts$').hasMatch(url), isTrue);
+    });
+
+    test('rtp2httpd: 短格式 + |UTC = {(b)YmdHMS|UTC}', () {
+      final url = buildCatchupUrl(
+        baseChannel(catchupSource: 'http://vod/{(b)YmdHMS|UTC}.ts'),
+        program,
+      );
+      final u = program.start.toUtc();
+      final expect14 = '${u.year.toString().padLeft(4, '0')}'
+          '${u.month.toString().padLeft(2, '0')}'
+          '${u.day.toString().padLeft(2, '0')}'
+          '${u.hour.toString().padLeft(2, '0')}'
+          '${u.minute.toString().padLeft(2, '0')}'
+          '${u.second.toString().padLeft(2, '0')}';
+      expect(url, contains(expect14));
+    });
+
+    test('rtp2httpd: \${(b)timestamp} / \${(e)timestamp} 输出 Unix 秒', () {
+      final startSec = program.start.toUtc().millisecondsSinceEpoch ~/ 1000;
+      final endSec = program.end.toUtc().millisecondsSinceEpoch ~/ 1000;
+      final url = buildCatchupUrl(
+        baseChannel(
+            catchupSource: 'http://vod/?s=\${(b)timestamp}&e=\${(e)timestamp}'),
+        program,
+      );
+      expect(url, contains('s=$startSec'));
+      expect(url, contains('e=$endSec'));
+    });
+
+    test('rtp2httpd: {utc:YmdHMS} 短格式；{utc:yyyyMMdd} 长格式', () {
+      final shortUrl = buildCatchupUrl(
+        baseChannel(catchupSource: 'http://vod/{utc:YmdHMS}'),
+        program,
+      );
+      expect(RegExp(r'/\d{14}$').hasMatch(shortUrl!), isTrue);
+
+      final longUrl = buildCatchupUrl(
+        baseChannel(catchupSource: 'http://vod/{utc:yyyyMMdd}'),
+        program,
+      );
+      expect(RegExp(r'/\d{8}$').hasMatch(longUrl!), isTrue);
+    });
   });
 
   // ---------- P2-1: MpvTuner 静态判定 ----------
