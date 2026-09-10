@@ -7,6 +7,7 @@ import '../../../core/services/service_locator.dart';
 import '../../../core/utils/app_restart_helper.dart';
 import '../../../core/widgets/tv_focusable.dart';
 import 'backup_ui_helpers.dart';
+import 'backup_list_item.dart';
 import '../providers/backup_provider.dart';
 
 /// 本地备份区域组件
@@ -315,148 +316,13 @@ class _LocalBackupSectionState extends State<LocalBackupSection> {
   }
 
   Widget _buildBackupItem(BuildContext context, dynamic backup, int index) {
-    final cardColor = AppTheme.getCardColor(context);
-    final textPrimary = AppTheme.getTextPrimary(context);
-    final textSecondary = AppTheme.getTextSecondary(context);
-    final primaryColor = AppTheme.getPrimaryColor(context);
-    final strings = AppStrings.of(context)!;
-    final style = backupResponsiveStyle(context);
-
-    return Container(
-      margin: EdgeInsets.only(bottom: style['isLandscape'] ? 6.0 : 12.0),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-        border: Border.all(
-          color: AppTheme.getGlassBorderColor(context),
-          width: 1,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-          onTap: () => _restoreBackup(context, backup.path),
-          child: Padding(
-            padding: EdgeInsets.all(style['isLandscape'] ? 8.0 : 16.0),
-            child: Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(style['isLandscape'] ? 8.0 : 12.0),
-                  decoration: BoxDecoration(
-                    color: primaryColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                  ),
-                  child: Icon(
-                    Icons.archive_rounded,
-                    color: primaryColor,
-                    size: style['iconSize'] * 1.2,
-                  ),
-                ),
-                SizedBox(width: style['spacing']),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        backup.name,
-                        style: TextStyle(
-                          color: textPrimary,
-                          fontSize: style['bodyFontSize'],
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Icon(Icons.access_time_rounded, size: style['smallFontSize'] + 1, color: textSecondary),
-                          SizedBox(width: style['spacing'] / 4),
-                          Text(
-                            backup.formattedDate,
-                            style: TextStyle(
-                              color: textSecondary,
-                              fontSize: style['smallFontSize'],
-                            ),
-                          ),
-                          SizedBox(width: style['spacing']),
-                          Icon(Icons.storage_rounded, size: style['smallFontSize'] + 1, color: textSecondary),
-                          SizedBox(width: style['spacing'] / 4),
-                          Text(
-                            backup.formattedSize,
-                            style: TextStyle(
-                              color: textSecondary,
-                              fontSize: style['smallFontSize'],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(width: style['spacing'] * 0.75),
-                TVFocusable(
-                  autofocus: index == 0,
-                  focusScale: 1.0,
-                  showFocusBorder: false,
-                  onSelect: () => _restoreBackup(context, backup.path),
-                  builder: (context, isFocused, child) {
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: isFocused ? primaryColor.withOpacity(0.1) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                      ),
-                      child: child,
-                    );
-                  },
-                  child: OutlinedButton.icon(
-                    onPressed: () => _restoreBackup(context, backup.path),
-                    icon: Icon(Icons.restore_rounded, size: style['iconSize']),
-                    label: Text(
-                      strings.restoreBackup,
-                      style: TextStyle(fontSize: style['bodyFontSize']),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: primaryColor,
-                      side: BorderSide(color: primaryColor),
-                      padding: EdgeInsets.symmetric(
-                        horizontal: style['isLandscape'] ? 8.0 : 16.0,
-                        vertical: style['isLandscape'] ? 4.0 : 10.0,
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(width: style['spacing'] / 2),
-                TVFocusable(
-                  focusScale: 1.0,
-                  showFocusBorder: false,
-                  onSelect: () => _deleteBackup(context, backup.path),
-                  builder: (context, isFocused, child) {
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: isFocused ? AppTheme.errorColor.withOpacity(0.1) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                      ),
-                      child: child,
-                    );
-                  },
-                  child: IconButton(
-                    onPressed: () => _deleteBackup(context, backup.path),
-                    icon: const Icon(Icons.delete_outline_rounded),
-                    color: AppTheme.errorColor,
-                    tooltip: strings.delete,
-                    iconSize: style['iconSize'],
-                    padding: EdgeInsets.all(style['isLandscape'] ? 4.0 : 8.0),
-                    constraints: BoxConstraints(
-                      minWidth: style['isLandscape'] ? 28.0 : 48.0,
-                      minHeight: style['isLandscape'] ? 28.0 : 48.0,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return BackupListItem(
+      backup: backup,
+      index: index,
+      headerIcon: Icons.archive_rounded,
+      restoreIcon: Icons.restore_rounded,
+      onRestore: () => _restoreBackup(context, backup.path),
+      onDelete: () => _deleteBackup(context, backup.path),
     );
   }
 

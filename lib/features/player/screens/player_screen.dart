@@ -33,6 +33,8 @@ import '../widgets/interactive_epg_widget.dart';
 import '../utils/catchup_url_builder.dart';
 import '../../../core/services/epg_service.dart';
 
+part 'player_screen_layers.dart';
+
 class PlayerScreen extends StatefulWidget {
   final String channelUrl;
   final String channelName;
@@ -124,6 +126,9 @@ class _PlayerScreenState extends State<PlayerScreen>
     // 延迟到 didChangeDependencies 之后再检查播放器
     // 因为需要先初始化 _localMultiScreenMode
   }
+
+  /// 供 part 扩展文件（视频层/分屏层/EPG 面板）刷新 UI：setState 为 protected，扩展内不可直接调用。
+  void refreshPlayerUi(void Function() fn) => setState(fn);
 
   Future<void> _enableWakelock() async {
     // 手机端使用原生方法确保屏幕常亮
@@ -1568,99 +1573,6 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   // 构建右侧 EPG 面板（沉浸/分屏/PIP 模式下不显示）。
-  Widget _buildEpgPanel() {
-    if (!_showEpgPanel ||
-        WindowsPipChannel.isInPipMode ||
-        _isMultiScreenMode()) {
-      return const SizedBox.shrink();
-    }
-    return Positioned(
-      top: 0,
-      bottom: 0,
-      right: 0,
-      child: InteractiveEpgWidget(
-        channel: _originalChannel ??
-            (_playerProvider?.currentChannel ??
-                Channel(playlistId: 0, name: 'Unknown', url: '')),
-        isPlayingCatchup: _originalChannel != null,
-        currentCatchupProgram: _currentCatchupProgram,
-        onProgramSelected: (program) {
-          _playCatchup(program);
-          setState(() => _showEpgPanel = false);
-        },
-        onBackToLive: () {
-          _backToLive();
-          setState(() => _showEpgPanel = false);
-        },
-      ),
-    );
-  }
-
-  Widget _buildVideoPlayer() {
-    // 使用本地状态判断是否显示分屏模式
-    if (_isMultiScreenMode()) {
-      return _buildMultiScreenPlayer();
-    }
-
-    return Consumer<PlayerProvider>(
-      builder: (context, provider, _) {
-        // 已熶竴使用敤 media_kit
-        if (provider.videoController == null) {
-          return const SizedBox.expand(
-            child: Center(
-              child: CircularProgressIndicator(),
-            ),
-          );
-        }
-
-        return ExcludeSemantics(
-          // Exclude semantics from video texture widget to prevent AXTree update
-          // errors when the platform video surface rebuilds.
-          child: Video(
-            controller: provider.videoController!,
-            controls: NoVideoControls,
-          ),
-        );
-      },
-    );
-  }
-
-  // 多屏播放器
-  Widget _buildMultiScreenPlayer() {
-    return MultiScreenPlayer(
-      onExitMultiScreen: () {
-        // 退出分屏模式，使用活动屏幕的频道全屏播放（不修改设置）
-        final multiScreenProvider = context.read<MultiScreenProvider>();
-        final activeChannel = multiScreenProvider.activeChannel;
-
-        // 切回单屏前：释放多屏播放器，但保留每屏频道状态，方便再次进入
-        multiScreenProvider.pauseAllScreens();
-
-        // 切换到常规模式
-        setState(() {
-          _localMultiScreenMode = false;
-        });
-
-        if (activeChannel != null) {
-          // 使用主播放器播放活动频道
-          unawaited(_resumeSingleFromMultiScreen(activeChannel));
-        }
-      },
-      onBack: () async {
-        // 先保存分屏状态，再清空
-        _saveMultiScreenState();
-        // 返回时清空所有分屏（等待完成）
-        final multiScreenProvider = context.read<MultiScreenProvider>();
-        await multiScreenProvider.clearAllScreens();
-        if (mounted) {
-          Navigator.of(context).pop();
-        }
-      },
-    );
-  }
-
-  // 切换到分屏模式
-
   Future<void> _resumeSingleFromMultiScreen(Channel activeChannel) async {
     final playerProvider = context.read<PlayerProvider>();
     final channelProvider = context.read<ChannelProvider>();

@@ -2,6 +2,8 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+
+import '../../../core/player/mpv_tuner.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
@@ -483,13 +485,6 @@ class MultiScreenProvider extends ChangeNotifier {
     await _applyDeinterlaceFilter(player);
   }
 
-  /// 判断源是否为 FCC（Fast Channel Change）流
-  /// 通过 URL 是否包含 fcc 关键字判断（忽略大小写及 $ 标签后缀）
-  bool _isFccSource(String url) {
-    final clean = url.split('\$').first.trim();
-    return clean.toLowerCase().contains('fcc');
-  }
-
   /// 当前缓冲强度对应的缓冲区大小
   int get _currentBufferSize => switch (_bufferStrength) {
         'fast' => 32 * 1024 * 1024,
@@ -498,104 +493,33 @@ class MultiScreenProvider extends ChangeNotifier {
         _ => 32 * 1024 * 1024,
       };
 
-  /// 根据源是否 FCC 配置 mpv 缓冲参数（须在 open() 之前调用）
-  ///
-  /// FCC 流用于快速切台，缓存会引入额外延迟，因此禁用缓存并把 demuxer 读取
-  /// 上限收紧为 10M、向后回读禁用；普通流则恢复 media_kit 默认的启用缓存，
-  /// demuxer 上限用当前缓冲强度对应的 bufferSize。
-  Future<void> _applyBufferConfig(Player player, String realUrl) async {
-    final isFcc = _isFccSource(realUrl);
-    ServiceLocator.log.d(
-        'MultiScreenProvider: 缓冲配置: ${isFcc ? "FCC(禁用缓存)" : "普通流"}, '
-        'cache=${isFcc ? "no" : "yes"}, '
-        'demuxer-max-bytes=${isFcc ? "10485760" : _currentBufferSize}, '
-        'demuxer-max-back-bytes=${isFcc ? "0" : _currentBufferSize}');
-    await _safeSetProperty(player, 'cache', isFcc ? 'no' : 'yes', 'cache');
-    if (isFcc) {
-      await _safeSetProperty(player, 'demuxer-max-bytes',
-          '${10 * 1024 * 1024}', 'demuxer-max-bytes');
-      await _safeSetProperty(
-          player, 'demuxer-max-back-bytes', '0', 'demuxer-max-back-bytes');
-    } else {
-      await _safeSetProperty(player, 'demuxer-max-bytes',
-          '$_currentBufferSize', 'demuxer-max-bytes');
-      await _safeSetProperty(player, 'demuxer-max-back-bytes',
-          '$_currentBufferSize', 'demuxer-max-back-bytes');
-    }
-  }
+  /// 根据源是否 FCC 配置 mpv 缓冲参数（实现合并到 MpvTuner；分屏不重写 lavf-o）。
+  Future<void> _applyBufferConfig(Player player, String realUrl) => MpvTuner(
+          player, logTag: 'MultiScreenProvider')
+      .applyBufferConfig(realUrl, _currentBufferSize, includeLavfOpts: false);
 
-  /// 安全调用 setProperty，单个失败不影响其他调用
-  /// 返回 true 表示成功，false 表示失败
+  /// 安全调用 setProperty（实现见 MpvTuner）
   Future<bool> _safeSetProperty(
-      Player player, String property, String value, String label) async {
-    try {
-      final nativePlayer = player.platform as dynamic;
-      await nativePlayer.setProperty(property, value);
-      return true;
-    } catch (e) {
-      ServiceLocator.log.d('MultiScreenProvider: 设置 $label 失败: $e');
-      return false;
-    }
-  }
+          Player player, String property, String value, String label) =>
+      MpvTuner(player, logTag: 'MultiScreenProvider')
+          .safeSetProperty(property, value, label);
 
-  /// 安全读取 getProperty，失败返回 null
-  Future<String?> _safeGetProperty(Player player, String property, String label) async {
-    try {
-      final nativePlayer = player.platform as dynamic;
-      return await nativePlayer.getProperty(property);
-    } catch (e) {
-      ServiceLocator.log.d('MultiScreenProvider: 读取 $label 失败: $e');
-      return null;
-    }
-  }
+  /// 安全读取 getProperty，失败返回 null（实现见 MpvTuner）
+  Future<String?> _safeGetProperty(
+          Player player, String property, String label) =>
+      MpvTuner(player, logTag: 'MultiScreenProvider')
+          .safeGetProperty(property, label);
 
-  /// 验证滤镜链/去交错是否真正生效（修复验证盲区）
-  Future<bool> _verifyFilterChainActive(Player player, String label) async {
-    final failureSignaled = Completer<bool>();
+  /// 验证滤镜链/去交错是否真正生效（实现合并到 MpvTuner）。
+  Future<bool> _verifyFilterChainActive(Player player, String label) =>
+      MpvTuner(player, logTag: 'MultiScreenProvider')
+          .verifyFilterChainActive(label);
 
-    void checkFailure(String msg) {
-      if (msg.contains('Disabling filter') ||
-          msg.contains('Impossible to convert') ||
-          msg.contains('failed to configure the filter graph') ||
-          msg.contains('no such filter') ||
-          msg.contains('error creating filters') ||
-          msg.contains('Error parsing option') ||
-          msg.contains('option not found')) {
-        if (!failureSignaled.isCompleted) failureSignaled.complete(true);
-      }
-    }
-
-    final logSub = player.stream.log.listen((log) => checkFailure(log.text));
-    final errSub = player.stream.error.listen((err) {
-      if (err.isNotEmpty) checkFailure(err);
-    });
-    final failed = await failureSignaled.future.timeout(
-      const Duration(milliseconds: 350),
-      onTimeout: () => false,
-    );
-    await logSub.cancel();
-    await errSub.cancel();
-    if (failed) {
-      ServiceLocator.log.d('MultiScreenProvider: 滤镜链验证失败($label): 检测到 mpv 滤镜配置错误');
-    }
-    return !failed;
-  }
-
-  /// 返回用户配置的 hwdec 模式，考虑软解码设置
-  String _getConfiguredHwdecMode() {
-    if (_decodingMode == 'software') return 'no';
-    switch (_windowsHwdecMode) {
-      case 'auto-copy':
-        return 'auto-copy';
-      case 'd3d11va':
-        return 'd3d11va';
-      case 'dxva2':
-        return 'dxva2';
-      case 'auto-safe':
-      default:
-        return 'auto-safe';
-    }
-  }
+  /// 返回用户配置的 hwdec 模式，考虑软解码设置（实现合并到 MpvTuner）。
+  String _getConfiguredHwdecMode() => MpvTuner.configuredHwdecMode(
+        software: _decodingMode == 'software',
+        windowsHwdecMode: _windowsHwdecMode,
+      );
 
   /// 应用去交错（反隔行）配置（多屏版）
   ///
