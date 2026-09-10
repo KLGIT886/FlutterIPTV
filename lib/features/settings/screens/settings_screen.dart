@@ -19,6 +19,7 @@ import '../widgets/settings_tiles.dart';
 import '../widgets/settings_dialogs.dart';
 import '../widgets/settings_playback_labels.dart';
 import '../../epg/providers/epg_provider.dart';
+import '../../../core/database/database_helper.dart';
 import '../../backup/screens/backup_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -823,10 +824,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       strings?.epgEnabledAndLoaded ??
                           'EPG enabled and loaded successfully');
                 } else {
+                  // 失败时在通用提示后追加 P1-9 透传的具体原因，便于用户排查
+                  final reason = context.read<EpgProvider>().error;
                   showError(
                       context,
-                      strings?.epgEnabledButFailed ??
-                          'EPG enabled but failed to load');
+                      (strings?.epgEnabledButFailed ??
+                              'EPG enabled but failed to load') +
+                          (reason != null ? ': $reason' : ''));
                 }
               } else {
                 showSuccess(
@@ -924,6 +928,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
               context,
               MaterialPageRoute(builder: (context) => const BackupScreen()),
             );
+          },
+        ),
+        buildActionTile(
+          context,
+          title: '修复数据库',
+          subtitle: '清理引用已删除频道的孤立收藏/观看记录',
+          icon: Icons.auto_fix_high_rounded,
+          onTap: () async {
+            final messenger = ScaffoldMessenger.of(context);
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (_) => const AlertDialog(
+                content: Row(
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(width: 16),
+                    Text('正在修复数据库…'),
+                  ],
+                ),
+              ),
+            );
+            try {
+              await DatabaseHelper().repairDatabase();
+              if (context.mounted) Navigator.pop(context);
+              messenger.showSnackBar(const SnackBar(
+                content: Text('数据库修复完成'),
+                backgroundColor: Colors.green,
+              ));
+            } catch (e) {
+              if (context.mounted) Navigator.pop(context);
+              messenger.showSnackBar(SnackBar(
+                content: Text('修复失败: $e'),
+                backgroundColor: Colors.red,
+              ));
+            }
           },
         ),
       ],

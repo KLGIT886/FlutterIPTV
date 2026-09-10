@@ -9,6 +9,16 @@ void main() {
   // 每个用例前重置单例状态，避免用例间相互污染。
   tearDown(() => EpgService().clear());
 
+  test('P1-9: 畸形 EPG（缺少 <tv> 根节点）应透传具体错误而非静默返回', () async {
+    const xml = '<notTv></notTv>';
+    final ok = await EpgService().loadFromXmlString(xml);
+
+    expect(ok, isFalse, reason: '畸形 XML 应加载失败');
+    final err = EpgService().lastError;
+    expect(err, isNotNull, reason: '应暴露具体解析原因，而非笼统的"加载失败"');
+    expect(err, contains('tv'), reason: '错误应指出缺少 <tv> 根节点');
+  });
+
   test('getAvailableDates: 跨天节目(22点->次日0点)不产生次日空页', () async {
     const xml = '''
 <tv>

@@ -103,7 +103,8 @@ class DlnaProvider extends ChangeNotifier {
           final saved = prefs.getBool(_keyDlnaEnabled);
           ServiceLocator.log.d('验证保存结果 - saved=$saved', tag: 'DLNA');
         } catch (e) {
-          ServiceLocator.log.d('保存启用状态失败 - $e', tag: 'DLNA');
+          // 持久化失败会导致下次启动不自动开启 DLNA 且无感知，故至少用 warning 暴露
+          ServiceLocator.log.w('保存启用状态失败 - $e', tag: 'DLNA');
         }
         notifyListeners();
         return true;
@@ -122,7 +123,7 @@ class DlnaProvider extends ChangeNotifier {
         await prefs.setBool(_keyDlnaEnabled, false);
         ServiceLocator.log.d('已保存禁用状态 - key=$_keyDlnaEnabled, value=false', tag: 'DLNA');
       } catch (e) {
-        ServiceLocator.log.d('保存禁用状态失败 - $e', tag: 'DLNA');
+        ServiceLocator.log.w('保存禁用状态失败 - $e', tag: 'DLNA');
       }
       notifyListeners();
       return true;

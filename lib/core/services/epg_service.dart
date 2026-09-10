@@ -52,6 +52,27 @@ class EpgProgram {
   }
 }
 
+/// 当前节目缓存项。
+///
+/// 节目按开始时间升序，因此只需记住命中位置，下一次查询优先在该位置附近验证，
+/// 命中时是 O(1)，未命中（节目已结束）时从该位置继续二分，避免全量遍历。
+class _CurrentProgramCache {
+  final int version;
+  final EpgProgram? program;
+
+  const _CurrentProgramCache({
+    required this.version,
+    required this.program,
+  });
+}
+
+/// 可用日历日列表缓存项。
+class _AvailableDatesCache {
+  final int version;
+  final List<DateTime> dates;
+  const _AvailableDatesCache({required this.version, required this.dates});
+}
+
 /// EPG 服务 - 解析和管理 EPG 数据
 class EpgService {
   static final EpgService _instance = EpgService._internal();
@@ -76,38 +97,94 @@ class EpgService {
   // EPG 查询缓存 (channelKey -> channelId)
   final Map<String, String?> _lookupCache = {};
 
+  // 数据版本号：_programs 每次整体替换时递增，用于让"当前节目"缓存失效。
+  // （_lookupCache 只缓存命中结果，这里需要额外的失效信号）
+  int _dataVersion = 0;
+
+  // 当前节目缓存 (channelKey -> 缓存项)，避免 build 路径对整张节目单做线性扫描
+  final Map<String, _CurrentProgramCache> _currentProgramCache = {};
+
+  // 可用日历日列表缓存（按频道 key），随 _dataVersion 失效（P2-4）
+  final Map<String, _AvailableDatesCache> _availableDatesCache = {};
+
   DateTime? _lastUpdate;
   bool _isLoading = false;
+  String? _lastError;
 
   bool get isLoading => _isLoading;
   DateTime? get lastUpdate => _lastUpdate;
+  /// 最近一次加载失败的具体原因（解析异常 / HTTP 错误 / 数据格式错误）。
+  /// 用于在 UI 上展示"加载失败"之外的真实错误，避免用户只见笼统提示。
+  String? get lastError => _lastError;
 
-  /// 获取频道当前节目
-  EpgProgram? getCurrentProgram(String? channelId, String? channelName) {
-    final programs = _findPrograms(channelId, channelName);
-    if (programs == null) return null;
+  /// 重叠节目回扫窗口：节目通常连续不重叠，极少数源会出现长节目横跨多个短节目，
+  /// 此时需向前回扫才能取到与原线性扫描一致（开始时间最早）的覆盖节目。
+  static const int _maxOverlapScan = 32;
 
-    final now = DateTime.now();
-    for (final program in programs) {
-      if (now.isAfter(program.start) && now.isBefore(program.end)) {
-        return program;
+  /// 二分查找：返回第一个 start 严格晚于 [time] 的索引（即 upperBound）。
+  static int _upperBound(List<EpgProgram> programs, DateTime time) {
+    var lo = 0;
+    var hi = programs.length;
+    while (lo < hi) {
+      final mid = lo + ((hi - lo) >> 1);
+      if (programs[mid].start.isAfter(time)) {
+        hi = mid;
+      } else {
+        lo = mid + 1;
       }
     }
-    return null;
+    return lo;
+  }
+
+  /// 获取频道当前节目
+  ///
+  /// 该方法在频道卡片 / 播放器控件的 build 路径上被逐项调用，
+  /// 因此用二分 + 缓存替代全量遍历（节目列表已按 start 升序）。
+  EpgProgram? getCurrentProgram(String? channelId, String? channelName) {
+    final programs = _findPrograms(channelId, channelName);
+    if (programs == null || programs.isEmpty) return null;
+
+    final now = DateTime.now();
+    final cacheKey = '${channelId ?? ''}_${channelName ?? ''}';
+
+    // 命中缓存且节目仍在进行中 → O(1) 返回
+    final cached = _currentProgramCache[cacheKey];
+    if (cached != null && cached.version == _dataVersion) {
+      final cachedProgram = cached.program;
+      if (cachedProgram != null &&
+          !now.isBefore(cachedProgram.start) &&
+          now.isBefore(cachedProgram.end)) {
+        return cachedProgram;
+      }
+    }
+
+    // 定位最后一个 start <= now 的节目，再在回扫窗口内取开始时间最早的覆盖者
+    var idx = _upperBound(programs, now) - 1;
+    final backLimit = idx - _maxOverlapScan;
+    EpgProgram? found;
+    while (idx >= 0 && idx > backLimit) {
+      final program = programs[idx];
+      if (now.isAfter(program.start) && now.isBefore(program.end)) {
+        found = program;
+      }
+      idx--;
+    }
+
+    _currentProgramCache[cacheKey] = _CurrentProgramCache(
+      version: _dataVersion,
+      program: found,
+    );
+    return found;
   }
 
   /// 获取频道下一个节目
   EpgProgram? getNextProgram(String? channelId, String? channelName) {
     final programs = _findPrograms(channelId, channelName);
-    if (programs == null) return null;
+    if (programs == null || programs.isEmpty) return null;
 
     final now = DateTime.now();
-    for (final program in programs) {
-      if (program.start.isAfter(now)) {
-        return program;
-      }
-    }
-    return null;
+    final idx = _upperBound(programs, now);
+    return idx < programs.length ? programs[idx] : null;
   }
 
   /// 获取频道今日节目列表
@@ -140,6 +217,13 @@ class EpgService {
     final programs = _findPrograms(channelId, channelName);
     if (programs == null || programs.isEmpty) return [DateTime.now()];
 
+    // 命中缓存（且数据版本未变）直接返回，避免每次面板重建都 O(n) 遍历全部节目（P2-4）
+    final cacheKey = '${channelId ?? ''}_${channelName ?? ''}';
+    final cached = _availableDatesCache[cacheKey];
+    if (cached != null && cached.version == _dataVersion) {
+      return cached.dates;
+    }
+
     DateTime min = programs.first.start;
     for (final p in programs) {
       if (p.start.isBefore(min)) min = p.start;
@@ -160,6 +244,11 @@ class EpgService {
         d = DateTime(d.year, d.month, d.day + 1)) {
       dates.add(d);
     }
+
+    _availableDatesCache[cacheKey] = _AvailableDatesCache(
+      version: _dataVersion,
+      dates: dates,
+    );
     return dates;
   }
 
@@ -193,12 +282,17 @@ class EpgService {
       // 命中缓存但 id 已失效（数据被替换），当作未命中重新匹配
     }
 
-    // 先用 channelId 查找
-    if (channelId != null &&
-        channelId.isNotEmpty &&
-        _programs.containsKey(channelId)) {
-      _lookupCache[cacheKey] = channelId;
-      return _programs[channelId];
+    // 先用 channelId 查找。
+    // _programs 的 key 在解析时已被规范化（见 _parseXmlTvInBackground），
+    // 因此这里必须用同样的规范化后再比较，否则 'hunanstv' 永远匹配不到 'HUNANSTV'，
+    // 只能退化到名称索引；当 XMLTV 只有 <programme> 而没有 <channel> 节点时
+    // _nameIndex 为空，会直接导致该频道永远显示"暂无节目单"。
+    if (channelId != null && channelId.isNotEmpty) {
+      final normalizedId = _normalizeNameStatic(channelId);
+      if (_programs.containsKey(normalizedId)) {
+        _lookupCache[cacheKey] = normalizedId;
+        return _programs[normalizedId];
+      }
     }
 
     // 用频道名称索引快速查找
@@ -322,6 +416,7 @@ class EpgService {
   Future<bool> loadFromUrl(String url) async {
     if (_isLoading) return false;
     _isLoading = true;
+    _lastError = null;
 
     try {
       ServiceLocator.log.d('EPG: Loading from $url');
@@ -331,7 +426,9 @@ class EpgService {
           );
 
       if (response.statusCode != 200) {
-        ServiceLocator.log.d('EPG: HTTP error ${response.statusCode}');
+        _lastError = 'EPG HTTP 请求失败：状态码 ${response.statusCode}';
+        ServiceLocator.log.e('EPG: HTTP error ${response.statusCode}',
+            tag: 'EPG');
         return false;
       }
 
@@ -343,61 +440,72 @@ class EpgService {
 
       final result = await compute(_parseXmlTvInBackground, computeData);
 
-      if (result != null) {
-        // compute 返回后已回到主 isolate，直接同步应用数据。
-        // 不能用 scheduleMicrotask 异步写入：否则 loadFromUrl 返回 true 时
-        // 数据尚未就绪，调用方随后查询会拿到空数据（节目单看似加载不全）。
-        // 先清空查询缓存，避免用旧数据的频道 id 映射去匹配新数据。
-        _lookupCache.clear();
-        _programs.clear();
-        _channelNames.clear();
-        _nameIndex.clear();
-
-        _programs.addAll(result['programs'] as Map<String, List<EpgProgram>>);
-        _channelNames.addAll(result['channelNames'] as Map<String, String>);
-        _nameIndex.addAll(result['nameIndex'] as Map<String, List<String>>);
-
-        _lastUpdate = DateTime.now();
-        ServiceLocator.log.d(
-            'EPG: Loaded ${_programs.length} channels, ${_programs.values.fold(0, (sum, list) => sum + list.length)} programs');
-
-        // 诊断日志：打印湖南卫视等频道的节目数与日期范围，定位"节目单被截断"
-        // for (final id in const ['hunanstv', 'HUNANSTV', 'jiangxistv']) {
-        //   final list = _programs[id];
-        //   if (list == null || list.isEmpty) continue;
-        //   final minStart = list
-        //       .map((p) => p.start)
-        //       .reduce((a, b) => a.isBefore(b) ? a : b);
-        //   final maxEnd = list
-        //       .map((p) => p.end)
-        //       .reduce((a, b) => a.isAfter(b) ? a : b);
-        //   ServiceLocator.log.d(
-        //       'EPG诊断: id=$id 共${list.length}条, 最早=$minStart, 最晚=$maxEnd');
-        //   // 按天分布（programme 开始日期）
-        //   final byDay = <String, int>{};
-        //   for (final p in list) {
-        //     final d = p.start;
-        //     final key = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-        //     byDay[key] = (byDay[key] ?? 0) + 1;
-        //   }
-        //   final sorted = byDay.entries.toList()
-        //     ..sort((a, b) => a.key.compareTo(b.key));
-        //   ServiceLocator.log.d(
-        //       'EPG诊断: id=$id 按天分布: ${sorted.map((e) => '${e.key}=${e.value}').join(', ')}');
-        // }
-        return true;
+      // 解析失败时 _parseXmlTvInBackground 返回带 'error' 键的 map（而非 null），
+      // 这里透传具体原因，避免用户只见笼统的"加载失败"。
+      if (result['error'] != null) {
+        _lastError = result['error'] as String;
+        ServiceLocator.log.e('EPG: 解析失败: $_lastError', tag: 'EPG');
+        return false;
       }
-      return false;
-    } catch (e) {
-      ServiceLocator.log.d('EPG: Error loading: $e');
+
+      // compute 返回后已回到主 isolate，直接同步应用数据。
+      // 不能用 scheduleMicrotask 异步写入：否则 loadFromUrl 返回 true 时
+      // 数据尚未就绪，调用方随后查询会拿到空数据（节目单看似加载不全）。
+      // 先清空查询缓存，避免用旧数据的频道 id 映射去匹配新数据。
+      _lookupCache.clear();
+      _currentProgramCache.clear();
+      _availableDatesCache.clear();
+      _dataVersion++;
+      _programs.clear();
+      _channelNames.clear();
+      _nameIndex.clear();
+
+      _programs.addAll(result['programs'] as Map<String, List<EpgProgram>>);
+      _channelNames.addAll(result['channelNames'] as Map<String, String>);
+      _nameIndex.addAll(result['nameIndex'] as Map<String, List<String>>);
+
+      _lastUpdate = DateTime.now();
+      ServiceLocator.log.d(
+          'EPG: Loaded ${_programs.length} channels, ${_programs.values.fold(0, (sum, list) => sum + list.length)} programs');
+
+      // 诊断日志：打印湖南卫视等频道的节目数与日期范围，定位"节目单被截断"
+      // for (final id in const ['hunanstv', 'HUNANSTV', 'jiangxistv']) {
+      //   final list = _programs[id];
+      //   if (list == null || list.isEmpty) continue;
+      //   final minStart = list
+      //       .map((p) => p.start)
+      //       .reduce((a, b) => a.isBefore(b) ? a : b);
+      //   final maxEnd = list
+      //       .map((p) => p.end)
+      //       .reduce((a, b) => a.isAfter(b) ? a : b);
+      //   ServiceLocator.log.d(
+      //       'EPG诊断: id=$id 共${list.length}条, 最早=$minStart, 最晚=$maxEnd');
+      //   // 按天分布（programme 开始日期）
+      //   final byDay = <String, int>{};
+      //   for (final p in list) {
+      //     final d = p.start;
+      //     final key = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      //     byDay[key] = (byDay[key] ?? 0) + 1;
+      //   }
+      //   final sorted = byDay.entries.toList()
+      //     ..sort((a, b) => a.key.compareTo(b.key));
+      //   ServiceLocator.log.d(
+      //       'EPG诊断: id=$id 按天分布: ${sorted.map((e) => '${e.key}=${e.value}').join(', ')}');
+      // }
+      return true;
+    } catch (e, st) {
+      _lastError = 'EPG 加载异常：$e';
+      ServiceLocator.log.e('EPG: Error loading', error: e, stackTrace: st);
       return false;
     } finally {
       _isLoading = false;
     }
   }
 
-  /// 在后台 isolate 中解析 XML
-  static Map<String, dynamic>? _parseXmlTvInBackground(
+  /// 在后台 isolate 中解析 XML。
+  /// 返回非 null 的 map：成功时含 programs/channelNames/nameIndex 键；
+  /// 失败时含 'error' 键（值为具体原因），由调用方透传，避免静默返回 null。
+  static Map<String, dynamic> _parseXmlTvInBackground(
       Map<String, dynamic> data) {
     try {
       final bytes = data['bytes'] as List<int>;
@@ -413,7 +521,9 @@ class EpgService {
 
       final document = XmlDocument.parse(content);
       final tv = document.findElements('tv').firstOrNull;
-      if (tv == null) return null;
+      if (tv == null) {
+        return {'error': 'EPG XML 缺少 <tv> 根节点，无法解析节目单'};
+      }
 
       final programs = <String, List<EpgProgram>>{};
       final channelNames = <String, String>{};
@@ -497,7 +607,8 @@ class EpgService {
         'nameIndex': nameIndex,
       };
     } catch (e) {
-      return null;
+      // 解析异常不再静默：返回带 error 的 map，由 loadFromUrl 透传并 log.e。
+      return {'error': 'EPG XML 解析异常：$e'};
     }
   }
 
@@ -656,14 +767,21 @@ class EpgService {
   /// 生产代码不调用此方法。
   @visibleForTesting
   Future<bool> loadFromXmlString(String xml) async {
+    _lastError = null;
     final result = _parseXmlTvInBackground({
       'bytes': utf8.encode(xml),
       'isGzip': false,
     });
-    if (result == null) return false;
+    if (result['error'] != null) {
+      _lastError = result['error'] as String;
+      return false;
+    }
 
     // 复制 loadFromUrl 成功路径：先清空旧缓存，再注入解析结果。
     _lookupCache.clear();
+    _currentProgramCache.clear();
+    _availableDatesCache.clear();
+    _dataVersion++;
     _programs.clear();
     _channelNames.clear();
     _nameIndex.clear();
@@ -680,6 +798,8 @@ class EpgService {
     _channelNames.clear();
     _nameIndex.clear();
     _lookupCache.clear();
+    _currentProgramCache.clear();
+    _dataVersion++;
     _lastUpdate = null;
   }
 }

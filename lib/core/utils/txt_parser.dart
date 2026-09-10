@@ -12,42 +12,61 @@ import '../services/service_locator.dart';
 /// Channel Name,URL
 /// Channel Name,URL
 class TXTParser {
-  /// Parse TXT content from a URL
-  static Future<List<Channel>> parseFromUrl(String url, int playlistId, {String? mergeRule}) async {
+  /// Parse TXT content from a URL.
+  /// [cancelToken] 可在导入过程中取消下载；[connectTimeout]/[receiveTimeout] 已内置。
+  static Future<List<Channel>> parseFromUrl(String url, int playlistId,
+      {String? mergeRule, CancelToken? cancelToken}) async {
+    ServiceLocator.log.d('DEBUG: 开始从URL获取TXT播放列表内容: $url');
+
+    final dio = Dio();
+    // Increased timeout for large playlists
+    dio.options.connectTimeout = const Duration(seconds: 15);
+    dio.options.receiveTimeout = const Duration(seconds: 30);
+
+    final response = await dio.get(
+      url,
+      options: Options(
+        responseType: ResponseType.plain,
+        validateStatus: (status) => status != null && status < 400,
+      ),
+      cancelToken: cancelToken,
+    );
+
+    ServiceLocator.log.d('DEBUG: 成功获取TXT播放列表内容，状态码: ${response.statusCode}');
+    return parseFromContent(
+      response.data.toString(),
+      playlistId,
+      mergeRule: mergeRule,
+    );
+  }
+
+  /// 解析已经获取到的 TXT 内容字符串（不再发起网络请求）。
+  /// 供调用方在已经下载过内容（例如用于备份）后复用同一份数据，
+  /// 避免 [parseFromUrl] 与备份下载各拉取一次整份列表。
+  static Future<List<Channel>> parseFromContent(
+    String content,
+    int playlistId, {
+    String? mergeRule,
+  }) async {
     try {
-      ServiceLocator.log.d('DEBUG: 开始从URL获取TXT播放列表内容: $url');
+      final contentLength = content.length;
+      ServiceLocator.log.d('DEBUG: TXT 内容大小: $contentLength 字符');
 
-      final dio = Dio();
-      // Increased timeout for large playlists
-      dio.options.connectTimeout = const Duration(seconds: 15);
-      dio.options.receiveTimeout = const Duration(seconds: 30);
-
-      final response = await dio.get(
-        url,
-        options: Options(
-          responseType: ResponseType.plain,
-          validateStatus: (status) => status != null && status < 400,
-        ),
-      );
-
-      ServiceLocator.log.d('DEBUG: 成功获取TXT播放列表内容，状态码: ${response.statusCode}');
-      final contentLength = response.data.toString().length;
-      ServiceLocator.log.d('DEBUG: 内容大小: $contentLength 字符');
-
-      // Only use isolate for large files (>500KB) to avoid overhead
-      final useIsolate = contentLength > 500 * 1024;
-      ServiceLocator.log.d('DEBUG: ${useIsolate ? "使用" : "不使用"} isolate 解析 (大小: ${(contentLength / 1024).toStringAsFixed(1)}KB)');
+      // Only use isolate for large files (>100KB) to avoid blocking the UI thread
+      final useIsolate = contentLength > 100 * 1024;
+      ServiceLocator.log.d(
+          'DEBUG: ${useIsolate ? "使用" : "不使用"} isolate 解析 (大小: ${(contentLength / 1024).toStringAsFixed(1)}KB)');
 
       final List<Channel> channels;
       if (useIsolate) {
         channels = await compute(
-            _parseInIsolate, _ParseParams(response.data.toString(), playlistId, mergeRule));
+            _parseInIsolate, _ParseParams(content, playlistId, mergeRule));
       } else {
         // Parse directly in main thread for small files
-        channels = parse(response.data.toString(), playlistId, mergeRule: mergeRule);
+        channels = parse(content, playlistId, mergeRule: mergeRule);
       }
 
-      ServiceLocator.log.d('DEBUG: TXT URL解析完成，共解析出 ${channels.length} 个频道');
+      ServiceLocator.log.d('DEBUG: TXT 解析完成，共解析出 ${channels.length} 个频道');
 
       return channels;
     } catch (e) {

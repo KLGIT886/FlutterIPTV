@@ -491,29 +491,9 @@ class _DlnaAwareAppState extends State<_DlnaAwareApp> with WindowListener {
         ServiceLocator.log.d('自动刷新已禁用', tag: 'AutoRefresh');
       }
 
-      // 监听设置变化
-      settings.addListener(() {
-        if (!mounted) return;
-
-        // 只在 autoRefresh 状态或间隔变化时才处理
-        final currentAutoRefresh = settings.autoRefresh;
-        final currentInterval = settings.refreshInterval;
-
-        if (currentAutoRefresh != _lastAutoRefreshState ||
-            (currentAutoRefresh && currentInterval != _lastRefreshInterval)) {
-          _lastAutoRefreshState = currentAutoRefresh;
-          _lastRefreshInterval = currentInterval;
-
-          if (currentAutoRefresh) {
-            ServiceLocator.log
-                .d('设置已更改，重新启动服务 - 间隔: $currentInterval小时', tag: 'AutoRefresh');
-            _startAutoRefresh(settings);
-          } else {
-            ServiceLocator.log.d('自动刷新已禁用', tag: 'AutoRefresh');
-            _autoRefreshService.stop();
-          }
-        }
-      });
+      // 监听设置变化：使用具名方法，与 removeListener(_onAutoRefreshSettingsChanged)
+      // 精确配对，避免匿名闭包无法移除导致 SettingsProvider 单例上监听器泄漏。
+      settings.addListener(_onAutoRefreshSettingsChanged);
 
       ServiceLocator.log.d('_initAutoRefresh() 完成', tag: 'AutoRefresh');
     } catch (e, stackTrace) {

@@ -6,6 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/tv_focusable.dart';
 import '../../../core/i18n/app_strings.dart';
 import '../../../core/platform/platform_detector.dart';
+import '../../../core/utils/error_messages.dart';
 import '../providers/playlist_provider.dart';
 import '../../channels/providers/channel_provider.dart';
 import '../../favorites/providers/favorites_provider.dart';
@@ -853,7 +854,7 @@ class _AddPlaylistDialogState extends State<AddPlaylistDialog> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
+            content: Text(friendlyPlaylistError(e.toString(), context)),
             backgroundColor: AppTheme.errorColor,
           ),
         );

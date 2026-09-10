@@ -9,6 +9,8 @@ class EpgProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   DateTime? _lastUpdate;
+  String? _lastUrl;
+  String? _lastFallbackUrl;
 
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -45,6 +47,8 @@ class EpgProvider extends ChangeNotifier {
 
     _isLoading = true;
     _error = null;
+    _lastUrl = url;
+    _lastFallbackUrl = fallbackUrl;
 
     // Only notify if not silent (user-initiated refresh)
     if (!silent) {
@@ -76,7 +80,9 @@ class EpgProvider extends ChangeNotifier {
       }
 
       if (!success) {
-        _error = 'Failed to load EPG data from all sources';
+        // 优先展示服务层透传的具体原因（解析异常/HTTP 错误），而非笼统提示
+        _error = _epgService.lastError ??
+            'Failed to load EPG data from all sources';
       }
     } catch (e) {
       _error = e.toString();
@@ -91,6 +97,13 @@ class EpgProvider extends ChangeNotifier {
     }
 
     return success;
+  }
+
+  /// 使用上次尝试的 URL/兜底 URL 重新加载 EPG。
+  /// 供播放器 EPG 面板与设置页的错误提示"重试"按钮调用。
+  Future<bool> retry() async {
+    if (_lastUrl == null) return false;
+    return loadEpg(_lastUrl!, fallbackUrl: _lastFallbackUrl, silent: false);
   }
 
   /// 获取频道当前节目

@@ -35,6 +35,11 @@ class _InteractiveEpgWidgetState extends State<InteractiveEpgWidget> {
   bool _hasInitialScrolled = false;
   bool _autoAdjustedDate = false;
 
+  // 面板宽度缓存：build 每次都会调用 _computePanelWidth，而其中对每个节目跑
+  // TextPainter.layout() 开销较大（P1-11）。仅在 (频道+选中日+EPG 数据版本) 变化时才重算。
+  double? _cachedPanelWidth;
+  String? _cachedPanelWidthKey;
+
   @override
   void initState() {
     super.initState();
@@ -63,9 +68,10 @@ class _InteractiveEpgWidgetState extends State<InteractiveEpgWidget> {
 
   @override
   Widget build(BuildContext context) {
-    // 使用 GestureDetector 拦截点击事件，防止穿透到下层播放器
     // 宽度自适应：贴合最长节目名占用，最多铺满屏宽
     final panelWidth = _computePanelWidth(context);
+    // 监听 EPG 加载状态，以便加载失败时展示具体错误原因与重试入口（P2-1）
+    final epgProvider = context.watch<EpgProvider>();
     return GestureDetector(
         onTap: () {}, // 吞掉点击事件
         child: Container(
@@ -87,6 +93,38 @@ class _InteractiveEpgWidgetState extends State<InteractiveEpgWidget> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // EPG 加载失败提示：展示 P1-9 透传的具体原因，并提供重试入口
+              if (epgProvider.error != null)
+                Container(
+                  color: Colors.red.withOpacity(0.85),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline,
+                          color: Colors.white, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          epgProvider.error!,
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 13),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: epgProvider.retry,
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                        child: const Text('重试'),
+                      ),
+                    ],
+                  ),
+                ),
               // Header
               Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -505,10 +543,21 @@ class _InteractiveEpgWidgetState extends State<InteractiveEpgWidget> {
 
   /// 计算面板自适应宽度：贴合当前选中日节目名最长文本的占用，最多铺满屏宽。
   /// 节目名短则收窄（不因偏宽面板产生大量空白），超出屏宽则截到屏宽（长名省略）。
+  /// 结果按 (频道+选中日+EPG 数据版本) 缓存，避免每次 build 对全部节目重跑 TextPainter。
   double _computePanelWidth(BuildContext context) {
     final epgProvider = context.watch<EpgProvider>();
+    final channelKey = widget.channel.epgId ?? widget.channel.name;
+    // EPG 数据更新后 lastUpdate 会变化，作为版本号纳入缓存 key 以触发重算
+    final dataVersion = epgProvider.lastUpdate?.microsecondsSinceEpoch ?? 0;
+    final key =
+        '$channelKey|${_selectedDate.year}-${_selectedDate.month}-${_selectedDate.day}|$dataVersion';
+
+    if (_cachedPanelWidthKey == key && _cachedPanelWidth != null) {
+      return _cachedPanelWidth!;
+    }
+
     final programs = epgProvider.getProgramsForDate(
-      widget.channel.epgId ?? widget.channel.name,
+      channelKey,
       widget.channel.name,
       _selectedDate,
     );
@@ -516,25 +565,29 @@ class _InteractiveEpgWidgetState extends State<InteractiveEpgWidget> {
     const double minPanelWidth = 380.0;
     final screenWidth = MediaQuery.of(context).size.width;
 
+    double width;
     if (programs.isEmpty) {
-      return screenWidth < minPanelWidth ? screenWidth : minPanelWidth;
+      width = screenWidth < minPanelWidth ? screenWidth : minPanelWidth;
+    } else {
+      // 测量当前列表中最长的节目名宽度（单行，与列表项标题字体一致）
+      double maxTitleWidth = 0;
+      for (final p in programs) {
+        final painter = TextPainter(
+          text: TextSpan(text: p.title, style: const TextStyle(fontSize: 15)),
+          maxLines: 1,
+          textDirection: ui.TextDirection.ltr,
+        )..layout();
+        if (painter.width > maxTitleWidth) maxTitleWidth = painter.width;
+      }
+
+      // 左日期列66 + 分隔1 + 时间列 + 状态指示 + 间距与左右padding 的固定占用
+      final neededWidth = maxTitleWidth + 66 + 1 + 60 + 32 + 30;
+      width = neededWidth.clamp(minPanelWidth, screenWidth).toDouble();
     }
 
-    // 测量当前列表中最长的节目名宽度（单行，与列表项标题字体一致）
-    double maxTitleWidth = 0;
-    for (final p in programs) {
-      final painter = TextPainter(
-        text: TextSpan(
-            text: p.title, style: const TextStyle(fontSize: 15)),
-        maxLines: 1,
-        textDirection: ui.TextDirection.ltr,
-      )..layout();
-      if (painter.width > maxTitleWidth) maxTitleWidth = painter.width;
-    }
-
-    // 左日期列66 + 分隔1 + 时间列 + 状态指示 + 间距与左右padding 的固定占用
-    final neededWidth = maxTitleWidth + 66 + 1 + 60 + 32 + 30;
-    return neededWidth.clamp(minPanelWidth, screenWidth).toDouble();
+    _cachedPanelWidthKey = key;
+    _cachedPanelWidth = width;
+    return width;
   }
 
   bool _isSameDay(DateTime a, DateTime b) {

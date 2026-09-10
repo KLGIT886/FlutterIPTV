@@ -9,6 +9,7 @@ import 'dart:math' as math;
 import '../../../core/models/channel.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/log_service.dart';
+import '../../../core/utils/mpv_error_classifier.dart';
 import '../../settings/providers/settings_provider.dart';
 
 /// 单个屏幕的播放器状态
@@ -215,6 +216,20 @@ class MultiScreenProvider extends ChangeNotifier {
       ServiceLocator.log.d('MultiScreenProvider: Recorded watch history for channel ${channel.name} (Windows multi-screen)');
     }
     
+    // 软解回退只针对当次播放：该屏换到别的频道时，重建播放器恢复到配置的解码
+    // 模式。否则一次偶发的硬解失败会让这一屏永久停在 hwdec=no
+    // （4K 软解卡顿 + HLG 色彩异常），只能清空该屏或重启应用恢复。
+    final previousChannelId = screen.channel?.id;
+    if (screen.softwareFallbackAttempted &&
+        screen.isSoftwareDecoding &&
+        previousChannelId != channel.id) {
+      ServiceLocator.log.i(
+          'MultiScreenProvider: 屏幕$screenIndex 此前触发过软解回退，换台时恢复配置的解码模式');
+      await _createPlayerForScreen(screenIndex, useSoftwareDecoding: false);
+      // 播放器实例已更换，必须重新挂接流监听
+      _setupPlayerListeners(screenIndex, screen);
+    }
+
     screen.isLoading = true;
     screen.error = null;
     screen.channel = channel;
@@ -713,11 +728,17 @@ class MultiScreenProvider extends ChangeNotifier {
         // ════════════════════════════════════════════
         if (isHDR) {
           if (srcGamma == 'hlg') {
-            // HLG 广播源：HLG 设计为兼容 SDR 显示器，75% 电平即 100% SDR 白
-            // 不干预色彩，让 mpv 走默认的 HLG→SDR 广播标准下变换
-            await _safeSetProperty(player, 'hdr-compute-peak', 'yes', 'hdr-compute-peak');
+            // HLG 广播源：必须显式指定目标色彩空间，理由同 PlayerProvider。
+            // vo=libmpv 下 mpv 探测不到显示器能力，auto 会退化成"不转换"，
+            // 导致 bt.2020 + HLG 原样送 SDR 显示器（发灰、欠饱和）。
+            await _safeSetProperty(player, 'target-prim', 'bt.709', 'target-prim');
+            await _safeSetProperty(player, 'target-trc', 'bt.1886', 'target-trc');
+            await _safeSetProperty(player, 'tone-mapping', 'bt.2390', 'tone-mapping');
+            await _safeSetProperty(player, 'tone-mapping-param', 'default', 'tone-mapping-param');
+            await _safeSetProperty(player, 'target-peak', '100', 'target-peak');
+            await _safeSetProperty(player, 'hdr-compute-peak', 'no', 'hdr-compute-peak');
             ServiceLocator.log.i(
-                'MultiScreenProvider: HDR 源(HLG): mpv 默认 HLG→SDR 转换 (gamma=$srcGamma, primaries=$srcPrimaries)');
+                'MultiScreenProvider: HDR 源(HLG): 显式下变换到 SDR (gamma=$srcGamma, primaries=$srcPrimaries)');
           } else {
             // PQ/HDR10 源：主动色调映射到 SDR
             await _safeSetProperty(player, 'target-prim', 'bt.709', 'target-prim');
@@ -864,6 +885,11 @@ class MultiScreenProvider extends ChangeNotifier {
     if (!_allowSoftwareFallback) return false;
     if (screen.softwareFallbackAttempted || screen.isSoftwareDecoding) return false;
     final lower = error.toLowerCase();
+
+    // 码流不完整 / 丢包类错误换软解无效，但它常让硬解初始化失败并报出含
+    // decoder/hwdec 字样的错误。若不过滤，一次起播丢包就会把该屏永久降级。
+    if (isTransientStreamError(lower)) return false;
+
     return lower.contains('codec') ||
         lower.contains('decoder') ||
         lower.contains('hwdec') ||
@@ -874,7 +900,7 @@ class MultiScreenProvider extends ChangeNotifier {
     final screen = _screens[screenIndex];
     if (screen.channel == null) return;
     screen.softwareFallbackAttempted = true;
-    _createPlayerForScreen(screenIndex, useSoftwareDecoding: true);
+    await _createPlayerForScreen(screenIndex, useSoftwareDecoding: true);
     // 回退会替换播放器，必须重新挂接流监听，否则新播放器的状态/错误无法被捕获
     _setupPlayerListeners(screenIndex, screen);
     await playChannelOnScreen(screenIndex, screen.channel!, skipHistory: true);
@@ -901,13 +927,18 @@ class MultiScreenProvider extends ChangeNotifier {
 
   Future<void> _disposeScreenPlayer(int screenIndex) async {
     final screen = _screens[screenIndex];
-    if (screen.player != null) {
-      await screen.player!.stop();
-      await screen.player!.dispose();
+    final player = screen.player;
+    if (player != null) {
+      await player.stop();
+      await player.dispose();
+      // 仅当该屏幕仍指向同一 player 时才置空（P2-9）。防止"暂停→快速恢复"
+      // 期间已创建的新播放器被这次异步释放误清空。
+      if (screen.player == player) {
+        screen.player = null;
+        screen.videoController = null;
+        screen.isPlaying = false;
+      }
     }
-    screen.player = null;
-    screen.videoController = null;
-    screen.isPlaying = false;
   }
   
   // 应用音量到指定屏幕
@@ -984,8 +1015,21 @@ class MultiScreenProvider extends ChangeNotifier {
   void pauseAllScreens() {
     for (int i = 0; i < 4; i++) {
       final screen = _screens[i];
-      // 停止并释放播放器，但保留频道信息
-      screen.player?.dispose();
+      final player = screen.player;
+      // 异步释放播放器资源，但保留频道信息；避免同步 dispose 跳过
+      // 原生 mpv 实例的异步清理导致资源泄漏。捕获局部引用以免被置空影响。
+      if (player != null) {
+        unawaited(
+          () async {
+            try {
+              await player.stop();
+              await player.dispose();
+            } catch (e) {
+              ServiceLocator.log.e('暂停屏幕释放播放器失败', error: e, tag: 'MultiScreen');
+            }
+          }(),
+        );
+      }
       screen.player = null;
       screen.videoController = null;
       screen.isPlaying = false;
@@ -1106,9 +1150,18 @@ class MultiScreenProvider extends ChangeNotifier {
 
   @override
   void dispose() {
-    for (final screen in _screens) {
-      screen.dispose();
-    }
+    // ScreenPlayerState.dispose() 为异步（需 await 原生 mpv 实例释放）。
+    // ChangeNotifier.dispose 签名为 void 无法 await，故统一触发异步释放并兜底捕获异常，
+    // 避免退出应用时 4 个 mpv 实例原生资源泄漏。
+    unawaited(
+      () async {
+        try {
+          await Future.wait(_screens.map((s) => s.dispose()).toList());
+        } catch (e) {
+          ServiceLocator.log.e('释放多屏资源失败', error: e, tag: 'MultiScreen');
+        }
+      }(),
+    );
     super.dispose();
   }
 }

@@ -11,6 +11,9 @@ class DatabaseHelper {
   static const String _databaseName = 'flutter_iptv.db';
   static const int _databaseVersion = 9; // Added catchup support to channels
 
+  /// 孤儿行清理一次性标志位（SharedPreferences 键）。见 [initialize] 中的降级逻辑。
+  static const String _kOrphanPurgeDone = 'db_orphan_purge_done_v1';
+
   /// 当前数据库 schema 版本（供备份元数据等引用，避免硬编码漂移）
   static int get databaseVersion => _databaseVersion;
 
@@ -34,6 +37,7 @@ class DatabaseHelper {
       version: _databaseVersion,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
+      onDowngrade: _onDowngrade,
       // 显式启用 SQLite 外键，使表定义中的 ON DELETE CASCADE 真正生效。
       // 否则删频道/删播放列表不会级联清理 favorites/watch_history。
       onConfigure: (db) async {
@@ -44,17 +48,27 @@ class DatabaseHelper {
     // 检查台标表是否为空，如果为空则导入数据
     await _ensureChannelLogosImported();
 
-    // 清理存量孤儿数据（开启外键前的历史残留）：
-    // 引用了已不存在频道/播放列表的收藏与观看记录
-    await _purgeOrphanedRows();
+    // 清理存量孤儿数据（开启外键前的历史残留）：引用了已不存在频道/播放列表的
+    // 收藏与观看记录。P0-1 改为增量 upsert + ON DELETE CASCADE 后，孤儿基本不再产生，
+    // 故用一次性标志位降级为只执行一次，避免每次冷启动都跑全表 NOT IN 扫描（P1-13）。
+    if (ServiceLocator.prefs.getBool(_kOrphanPurgeDone) != true) {
+      await _purgeOrphanedRows();
+      await ServiceLocator.prefs.setBool(_kOrphanPurgeDone, true);
+    }
 
     final initTime = DateTime.now().difference(startTime).inMilliseconds;
     ServiceLocator.log.d('DatabaseHelper: 数据库初始化完成，耗时: ${initTime}ms');
   }
 
-  /// 清理存量孤儿数据（幂等）：删除引用了已不存在频道/播放列表的
-  /// 收藏与观看记录。开启外键前后遗留的脏数据在此一次性清理，
-  /// 此后删除走 ON DELETE CASCADE 自动级联。
+  /// 手动清理存量孤儿数据（引用了已不存在频道/播放列表的收藏与观看记录）。
+  /// 供设置页"修复数据库"按钮调用，与启动时的自动一次性清理相互独立。
+  Future<void> repairDatabase() async {
+    await _purgeOrphanedRows();
+  }
+
+  /// 清理存量孤儿数据：删除引用了已不存在频道/播放列表的
+  /// 收藏与观看记录。仅由 [initialize] 在一次性标志位未置位时调用，
+  /// 此后删除走 ON DELETE CASCADE 自动级联，不再需要周期性扫描。
   Future<void> _purgeOrphanedRows() async {
     try {
       final db = _database;
@@ -251,62 +265,45 @@ class DatabaseHelper {
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       // Add channel_count column to playlists table
-      try {
-        await db.execute(
-            'ALTER TABLE playlists ADD COLUMN channel_count INTEGER DEFAULT 0');
-      } catch (e) {
-        // Ignore if column already exists
-        ServiceLocator.log.d('Migration error (ignored): $e');
-      }
+      await _addColumnIfNotExists(
+          db, 'playlists', 'channel_count', 'INTEGER DEFAULT 0');
     }
     if (oldVersion < 3) {
       // Add sources column to channels table for multi-source support
-      try {
-        await db.execute('ALTER TABLE channels ADD COLUMN sources TEXT');
-      } catch (e) {
-        // Ignore if column already exists
-        ServiceLocator.log.d('Migration error (ignored): $e');
-      }
+      await _addColumnIfNotExists(db, 'channels', 'sources', 'TEXT');
     }
     if (oldVersion < 4) {
       // Add epg_url column to playlists table
-      try {
-        await db.execute('ALTER TABLE playlists ADD COLUMN epg_url TEXT');
-      } catch (e) {
-        // Ignore if column already exists
-        ServiceLocator.log.d('Migration error (ignored): $e');
-      }
+      await _addColumnIfNotExists(db, 'playlists', 'epg_url', 'TEXT');
     }
     if (oldVersion < 5) {
-      // Create channel_logos table
+      // Create channel_logos table (IF NOT EXISTS 幂等)
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS channel_logos (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          channel_name TEXT NOT NULL,
+          logo_url TEXT NOT NULL,
+          search_keys TEXT,
+          created_at INTEGER NOT NULL
+        )
+      ''');
+      await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_channel_logos_name ON channel_logos(channel_name)');
+      // 导入失败不再静默：以 log.e 暴露，便于排查台标缺失。
       try {
-        await db.execute('''
-          CREATE TABLE IF NOT EXISTS channel_logos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            channel_name TEXT NOT NULL,
-            logo_url TEXT NOT NULL,
-            search_keys TEXT,
-            created_at INTEGER NOT NULL
-          )
-        ''');
-        await db.execute(
-            'CREATE INDEX IF NOT EXISTS idx_channel_logos_name ON channel_logos(channel_name)');
-
-        // Import channel logos data
         await _importChannelLogos(db);
-      } catch (e) {
-        ServiceLocator.log.d('Migration error (ignored): $e');
+      } catch (e, st) {
+        ServiceLocator.log.e('数据库迁移: 导入台标数据失败', error: e, stackTrace: st);
       }
     }
     if (oldVersion < 6) {
       // Add playlist_id column to watch_history table
+      await _addColumnIfNotExists(
+          db, 'watch_history', 'playlist_id', 'INTEGER');
+      await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_history_playlist ON watch_history(playlist_id)');
+      // 将已有记录的 playlist_id 指向第一个可用播放列表
       try {
-        await db.execute(
-            'ALTER TABLE watch_history ADD COLUMN playlist_id INTEGER');
-        await db.execute(
-            'CREATE INDEX IF NOT EXISTS idx_history_playlist ON watch_history(playlist_id)');
-
-        // Update existing records to use the first available playlist_id
         final playlists = await db.query('playlists', limit: 1);
         if (playlists.isNotEmpty) {
           final firstPlaylistId = playlists.first['id'];
@@ -316,48 +313,68 @@ class DatabaseHelper {
             where: 'playlist_id IS NULL',
           );
         }
-      } catch (e) {
-        ServiceLocator.log.d('Migration error (ignored): $e');
+      } catch (e, st) {
+        ServiceLocator.log.e('数据库迁移: 回填 watch_history.playlist_id 失败',
+            error: e, stackTrace: st);
       }
     }
     if (oldVersion < 7) {
       // Add fallback_logo_url column to channels table
-      try {
-        await db
-            .execute('ALTER TABLE channels ADD COLUMN fallback_logo_url TEXT');
-        ServiceLocator.log.i('数据库迁移: 添加 fallback_logo_url 字段到 channels 表');
-      } catch (e) {
-        ServiceLocator.log.d('Migration error (ignored): $e');
-      }
+      await _addColumnIfNotExists(
+          db, 'channels', 'fallback_logo_url', 'TEXT');
+      ServiceLocator.log.i('数据库迁移: 添加 fallback_logo_url 字段到 channels 表');
     }
     if (oldVersion < 8) {
       // Add backup_path and last_backup_time columns to playlists table
-      try {
-        await db.execute('ALTER TABLE playlists ADD COLUMN backup_path TEXT');
-        ServiceLocator.log.i('数据库迁移: 添加 backup_path 字段到 playlists 表');
-      } catch (e) {
-        ServiceLocator.log.d('Migration error (ignored): $e');
-      }
-
-      try {
-        await db.execute(
-            'ALTER TABLE playlists ADD COLUMN last_backup_time INTEGER');
-        ServiceLocator.log.i('数据库迁移: 添加 last_backup_time 字段到 playlists 表');
-      } catch (e) {
-        ServiceLocator.log.d('Migration error (ignored): $e');
-      }
+      await _addColumnIfNotExists(db, 'playlists', 'backup_path', 'TEXT');
+      await _addColumnIfNotExists(
+          db, 'playlists', 'last_backup_time', 'INTEGER');
+      ServiceLocator.log.i('数据库迁移: 添加 backup_path/last_backup_time 字段到 playlists 表');
     }
     if (oldVersion < 9) {
       // Add catchup columns to channels table
-      try {
-        await db.execute('ALTER TABLE channels ADD COLUMN catchup TEXT');
-        await db.execute('ALTER TABLE channels ADD COLUMN catchup_source TEXT');
-        await db
-            .execute('ALTER TABLE channels ADD COLUMN catchup_days INTEGER');
-        ServiceLocator.log.i('数据库迁移: 添加 catchup 相关字段到 channels 表');
-      } catch (e) {
-        ServiceLocator.log.d('Migration error (ignored): $e');
-      }
+      await _addColumnIfNotExists(db, 'channels', 'catchup', 'TEXT');
+      await _addColumnIfNotExists(db, 'channels', 'catchup_source', 'TEXT');
+      await _addColumnIfNotExists(db, 'channels', 'catchup_days', 'INTEGER');
+      ServiceLocator.log.i('数据库迁移: 添加 catchup 相关字段到 channels 表');
+    }
+  }
+
+  /// 版本回退处理：删除全部用户表后按当前 schema 重建。
+  /// 由于没有做数据向下兼容，回退时直接重建可避免旧版本代码读取到
+  /// 新版本字段导致的 "no such column" 崩溃。历史数据会丢失，符合降级语义。
+  Future<void> _onDowngrade(
+      Database db, int oldVersion, int newVersion) async {
+    ServiceLocator.log.w(
+        '数据库版本回退 ($oldVersion -> $newVersion)，将删除并重建',
+        tag: 'DatabaseHelper');
+    await _dropAllTables(db);
+    await _onCreate(db, newVersion);
+  }
+
+  /// 幂等地为表添加列：仅当列不存在才执行 ALTER，避免重复执行迁移时
+  /// 抛出 "duplicate column"；真实异常（如列类型冲突、表不存在）会向上冒泡，
+  /// 由调用方以 log.e 记录，不再被静默吞掉导致后续查询静默失败。
+  Future<void> _addColumnIfNotExists(
+    Database db,
+    String table,
+    String column,
+    String definition,
+  ) async {
+    final info = await db.rawQuery('PRAGMA table_info($table)');
+    final exists = info.any((row) => row['name'] == column);
+    if (!exists) {
+      await db.execute('ALTER TABLE $table ADD COLUMN $column $definition');
+    }
+  }
+
+  /// 删除全部非系统表（用于版本回退重建）。
+  Future<void> _dropAllTables(Database db) async {
+    final tables = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
+    for (final row in tables) {
+      final name = row['name'] as String;
+      await db.execute('DROP TABLE IF EXISTS $name');
     }
   }
 

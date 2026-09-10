@@ -7,6 +7,7 @@ import 'dart:math' as math;
 
 import '../../../core/models/channel.dart';
 import '../../../core/platform/platform_detector.dart';
+import '../../../core/utils/mpv_error_classifier.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/channel_test_service.dart';
 import '../../../core/services/log_service.dart';
@@ -48,17 +49,41 @@ class PlayerProvider extends ChangeNotifier {
   bool _isAutoSwitching = false; // 标记是否正在自动切换源
   bool _isAutoDetecting = false; // 标记是否正在自动检测源
   bool _isSoftwareDecoding = false;
+
+  // 软解回退是「针对当次播放的临时降级」，不是可持久的状态。
+  // 一旦触发，_initMediaKitPlayer(useSoftwareDecoding: true) 会把整个 Player
+  // 重建为 hwdec=no；若不记录并在换频道时恢复，偶发的一次硬解失败就会把
+  // 整个会话永久钉死在软解（4K 卡顿 + HLG 色彩异常），只能重启应用恢复。
+  bool _softwareFallbackActive = false;
+  int? _fallbackChannelId;
+
   bool _noVideoFallbackAttempted = false;
   bool _allowSoftwareFallback = true;
   String _windowsHwdecMode = 'auto-safe';
   String _d3d11vppMode = 'bob';
   bool _isDisposed = false;
   StreamSubscription<VideoParams>? _videoParamsSubscription;
+
+  // media_kit 事件订阅句柄。重建播放器（软解回退 / 缓冲强度变更）前必须全部取消，
+  // 否则旧 Player 的回调会继续触发 notifyListeners 并访问已释放的原生实例。
+  final List<StreamSubscription<dynamic>> _playerSubscriptions = [];
+
+  // 播放代际计数器：playChannel 内含 302 解析、滤镜设置、open 等多个挂起点，
+  // 快速连续切台时旧流程完成后必须能自我作废，避免把旧流写进播放器。
+  int _playbackGeneration = 0;
+
+  // 播放器重建中标记：error 回调可能连发，需防止软解回退重入。
+  bool _isReinitializingPlayer = false;
+
   bool _deinterlaceConfiguredForCurrentStream = false;
   bool _initialHwdecSet = false;
   int _deinterlaceGeneration = 0; // 代际计数器，用于检测过时的 videoParams 回调
   String _videoOutput = 'auto';
   String _vo = 'unknown';
+
+  // O5: 记录一次"起播"的起点时间戳与首帧是否已上报，用于度量真实起播耗时（首帧）。
+  DateTime? _playStartTimestamp;
+  bool _firstFrameReported = false;
   int _bufferSize = 0; // 当前缓冲强度对应的缓冲区大小（用于恢复非FCC流的demuxer设置）
 
   // Override duration for catchup playback
@@ -95,11 +120,18 @@ class PlayerProvider extends ChangeNotifier {
       _state == PlayerState.loading || _state == PlayerState.buffering;
   bool get hasError => _state == PlayerState.error && _error != null;
 
-  /// Create Media object with custom User-Agent header
+  /// Create Media object.
+  /// User-Agent 已通过全局 mpv 属性 http-header-fields 统一设置（见 _initMediaKitPlayer），
+  /// 此处不再传 httpHeaders，避免 media_kit 为每个 Media 生成临时播放列表文件来传递
+  /// header，从而减少起播时的额外磁盘 I/O 与解析（O1）。
   Media _createMedia(String url) {
-    final userAgent = ServiceLocator.settings?.userAgent ?? SettingsProvider.defaultUserAgent;
-    ServiceLocator.log.d('PlayerProvider: 创建Media对象 User-Agent: $userAgent');
-    return Media(url, httpHeaders: {'User-Agent': userAgent});
+    return Media(url);
+  }
+
+  /// O5: 标记一次起播起点，供缓冲监听在首帧就绪时计算"真实起播耗时"。
+  void _markPlayStart(DateTime start) {
+    _playStartTimestamp = start;
+    _firstFrameReported = false;
   }
 
   /// Check if current content is seekable (VOD or replay)
@@ -346,6 +378,7 @@ class PlayerProvider extends ChangeNotifier {
         ServiceLocator.log.d('>>> 重试: 使用播放地址: $realUrl', tag: 'PlayerProvider');
 
         final playStartTime = DateTime.now();
+        _markPlayStart(playStartTime); // O5: 记录起播起点
         // 代际计数器已在 _resetDeinterlaceDetection() 中递增，确保旧回调不影响新流
         await _applyDeinterlaceFilter();
         // FCC 流禁用缓存以加速切台；普通流恢复默认缓冲（须在 open 前设置）
@@ -468,6 +501,11 @@ class PlayerProvider extends ChangeNotifier {
 
   Future<void> _initMediaKitPlayer(
       {bool useSoftwareDecoding = false, String bufferStrength = 'fast'}) async {
+    // 先取消旧订阅与旧参数流，再释放旧实例：
+    // 否则旧 Player 的回调会在重建期间继续触发 notifyListeners / setProperty。
+    _cancelPlayerSubscriptions();
+    _videoParamsSubscription?.cancel();
+    _videoParamsSubscription = null;
     _mediaKitPlayer?.dispose();
     _debugInfoTimer?.cancel();
     // Load decoding settings (overridden by explicit useSoftwareDecoding)
@@ -575,8 +613,17 @@ class PlayerProvider extends ChangeNotifier {
     _hwdecMode = effectiveSoftware ? 'no' : _configuredHwdec;
     _vo = vo ?? 'auto';
 
+    // VideoController 持有的纹理由 Player 管理，旧的随 Player 释放，
+    // 这里直接替换为新实例（重建期间不会残留已释放的纹理）。
     _videoController = VideoController(_mediaKitPlayer!, configuration: config);
     _setupMediaKitListeners();
+    // O1: 将 User-Agent 改为全局 mpv 属性一次性设置，替代原先在 _createMedia 内给每个
+    // Media 传 httpHeaders（后者会令 media_kit 生成临时播放列表文件 loadlist 以传递
+    // header，增加一次磁盘写与解析，拖慢起播）。全局设置后 open() 直接 loadfile。
+    final userAgent =
+        ServiceLocator.settings?.userAgent ?? SettingsProvider.defaultUserAgent;
+    await _safeSetProperty(
+        'http-header-fields', 'User-Agent: $userAgent', 'http-header-fields');
     _updateDebugInfo();
 
     // VideoController 创建后会强制设 hwdec=auto，在此覆盖去交错参数
@@ -858,11 +905,20 @@ class PlayerProvider extends ChangeNotifier {
         // ════════════════════════════════════════════
         if (isHDR) {
           if (srcGamma == 'hlg') {
-            // HLG 广播源：HLG 设计为兼容 SDR 显示器，75% 电平即 100% SDR 白
-            // 不干预色彩，让 mpv 走默认的 HLG→SDR 广播标准下变换
-            await _safeSetProperty('hdr-compute-peak', 'yes', 'hdr-compute-peak');
+            // HLG 广播源：必须显式指定目标色彩空间。
+            // 在 vo=libmpv 下帧交给 Flutter 纹理渲染，mpv 探测不到显示器能力，
+            // target-prim/trc 为 auto 时会退化成"不转换"（日志表现为
+            // [convert] (disabled)），bt.2020 + HLG 被原样送到 SDR 显示器，
+            // 画面发灰、欠饱和。
+            // HLG 没有峰值亮度元数据，故不开 hdr-compute-peak。
+            await _safeSetProperty('target-prim', 'bt.709', 'target-prim');
+            await _safeSetProperty('target-trc', 'bt.1886', 'target-trc');
+            await _safeSetProperty('tone-mapping', 'bt.2390', 'tone-mapping');
+            await _safeSetProperty('tone-mapping-param', 'default', 'tone-mapping-param');
+            await _safeSetProperty('target-peak', '100', 'target-peak');
+            await _safeSetProperty('hdr-compute-peak', 'no', 'hdr-compute-peak');
             ServiceLocator.log.i(
-                'HDR 源(HLG): mpv 默认 HLG→SDR 转换 (gamma=$srcGamma, primaries=$srcPrimaries)',
+                'HDR 源(HLG): 显式下变换到 SDR (gamma=$srcGamma, primaries=$srcPrimaries)',
                 tag: 'PlayerProvider');
           } else {
             // PQ/HDR10 源：主动色调映射到 SDR
@@ -1013,12 +1069,26 @@ class PlayerProvider extends ChangeNotifier {
     }
   }
 
+  /// 订阅播放器事件并记录句柄，便于重建播放器时统一取消
+  void _sub<T>(Stream<T> stream, void Function(T) onData) {
+    _playerSubscriptions.add(stream.listen(onData));
+  }
+
+  /// 取消全部播放器事件订阅。
+  /// 必须在释放/重建 Player 之前调用，否则旧回调仍会 notifyListeners。
+  void _cancelPlayerSubscriptions() {
+    for (final subscription in _playerSubscriptions) {
+      subscription.cancel();
+    }
+    _playerSubscriptions.clear();
+  }
+
   void _setupMediaKitListeners() {
     ServiceLocator.log.d('设置播放器监听器', tag: 'PlayerProvider');
 
     // 始终激活 mpv 日志监听器，确保所有冗余日志被过滤
     // 不依赖 LogLevel 开关，因为 mpv 日志过滤对于保持输出干净至关重要
-    _mediaKitPlayer!.stream.log.listen((log) {
+    _sub(_mediaKitPlayer!.stream.log, (log) {
       final message = log.text.toLowerCase();
 
       // 硬解 GUID 能力枚举（如 "h264: {86695f12-340e-...} 103 106"）：纯解码器
@@ -1081,7 +1151,7 @@ class PlayerProvider extends ChangeNotifier {
       }
       });
 
-    _mediaKitPlayer!.stream.playing.listen((playing) {
+    _sub(_mediaKitPlayer!.stream.playing, (playing) {
       ServiceLocator.log.d('播放状态变化: playing=$playing', tag: 'PlayerProvider');
       if (playing) {
         _state = PlayerState.playing;
@@ -1100,7 +1170,7 @@ class PlayerProvider extends ChangeNotifier {
       notifyListeners();
     });
 
-    _mediaKitPlayer!.stream.buffering.listen((buffering) {
+    _sub(_mediaKitPlayer!.stream.buffering, (buffering) {
       ServiceLocator.log.d('缓冲状态: buffering=$buffering', tag: 'PlayerProvider');
       if (buffering &&
           _state != PlayerState.idle &&
@@ -1110,21 +1180,30 @@ class PlayerProvider extends ChangeNotifier {
         _state = _mediaKitPlayer!.state.playing
             ? PlayerState.playing
             : PlayerState.paused;
+        // O5: 首帧就绪（缓冲结束）即用户感知的"起播完成"。记录真实起播耗时，
+        // 比 loadfile 派发时刻更能反映实际体验（含网络探测与解码）。
+        if (!_firstFrameReported && _playStartTimestamp != null) {
+          final ttf =
+              DateTime.now().difference(_playStartTimestamp!).inMilliseconds;
+          ServiceLocator.log
+              .i('>>> 真实起播耗时(首帧): ${ttf}ms', tag: 'PlayerProvider');
+          _firstFrameReported = true;
+        }
       }
       notifyListeners();
     });
 
-    _mediaKitPlayer!.stream.position.listen((pos) {
+    _sub(_mediaKitPlayer!.stream.position, (pos) {
       _position = pos;
       notifyListeners();
     });
 
-    _mediaKitPlayer!.stream.duration.listen((dur) {
+    _sub(_mediaKitPlayer!.stream.duration, (dur) {
       _duration = dur;
       notifyListeners();
     });
 
-    _mediaKitPlayer!.stream.tracks.listen((tracks) {
+    _sub(_mediaKitPlayer!.stream.tracks, (tracks) {
       ServiceLocator.log.d(
           '轨道信息更新: 视频轨:${tracks.video.length}, 音频轨:${tracks.audio.length}',
           tag: 'PlayerProvider');
@@ -1155,12 +1234,12 @@ class PlayerProvider extends ChangeNotifier {
       notifyListeners();
     });
 
-    _mediaKitPlayer!.stream.volume.listen((vol) {
+    _sub(_mediaKitPlayer!.stream.volume, (vol) {
       _volume = vol / 100;
       notifyListeners();
     });
 
-    _mediaKitPlayer!.stream.error.listen((err) {
+    _sub(_mediaKitPlayer!.stream.error, (err) {
       if (err.isNotEmpty) {
         ServiceLocator.log.e('播放器错误: $err', tag: 'PlayerProvider');
 
@@ -1180,21 +1259,21 @@ class PlayerProvider extends ChangeNotifier {
 
         if (_shouldTrySoftwareFallback(err)) {
           ServiceLocator.log.w('尝试软件回退', tag: 'PlayerProvider');
-          _attemptSoftwareFallback();
+          unawaited(_attemptSoftwareFallback());
         } else {
           _setError(err);
         }
       }
     });
 
-    _mediaKitPlayer!.stream.width.listen((width) {
+    _sub(_mediaKitPlayer!.stream.width, (width) {
       if (width != null && width > 0) {
         ServiceLocator.log.d('视频宽度: $width', tag: 'PlayerProvider');
       }
       notifyListeners();
     });
 
-    _mediaKitPlayer!.stream.height.listen((height) {
+    _sub(_mediaKitPlayer!.stream.height, (height) {
       if (height != null && height > 0) {
         ServiceLocator.log.d('视频高度: $height', tag: 'PlayerProvider');
       }
@@ -1408,6 +1487,11 @@ class PlayerProvider extends ChangeNotifier {
   bool _shouldTrySoftwareFallback(String error) {
     final lowerError = error.toLowerCase();
     if (!_allowSoftwareFallback) return false;
+
+    // 码流不完整 / 丢包类错误换软解毫无帮助，但它常会让硬解初始化失败并报出
+    // 含 decoder/hwdec 字样的错误。若不过滤，一次起播丢包就会把整个会话降级。
+    if (isTransientStreamError(lowerError)) return false;
+
     return (lowerError.contains('codec') ||
             lowerError.contains('decoder') ||
             lowerError.contains('hwdec') ||
@@ -1415,17 +1499,46 @@ class PlayerProvider extends ChangeNotifier {
         _retryCount < _maxRetries;
   }
 
-  void _attemptSoftwareFallback() {
-    if (!_allowSoftwareFallback) return;
-    _retryCount++;
-    final channelToPlay = _currentChannel;
-    _initMediaKitPlayer(useSoftwareDecoding: true);
-    if (channelToPlay != null) playChannel(channelToPlay);
+  /// 判断某次播放流程是否已被后续操作（再次切台 / stop / dispose）作废
+  bool _isStalePlayback(int generation) =>
+      _isDisposed || generation != _playbackGeneration;
+
+  Future<void> _attemptSoftwareFallback() async {
+    if (!_allowSoftwareFallback || _isDisposed) return;
+    // error 回调可能连发，未加保护会并发创建多个播放器实例
+    if (_isReinitializingPlayer) return;
+    _isReinitializingPlayer = true;
+    try {
+      _retryCount++;
+      final channelToPlay = _currentChannel;
+      // 必须 await：_initMediaKitPlayer 内部存在多处 await，不等待会让
+      // playChannel 在「旧实例已释放、新实例未就绪」时调用 open()，
+      // 由于写成了 _mediaKitPlayer?.open(...) 而静默失败，表现为黑屏且不报错。
+      await _initMediaKitPlayer(useSoftwareDecoding: true);
+      // 记录这次降级，换频道时由 playChannel 恢复到用户配置的解码模式
+      _softwareFallbackActive = true;
+      _fallbackChannelId = channelToPlay?.id;
+      if (channelToPlay != null && !_isDisposed) {
+        await playChannel(channelToPlay);
+      }
+    } catch (e) {
+      ServiceLocator.log.e('软件解码回退失败', tag: 'PlayerProvider', error: e);
+      if (!_isDisposed) {
+        _setError('Software fallback failed: $e');
+      }
+    } finally {
+      _isReinitializingPlayer = false;
+    }
   }
 
   // ============ Public API ============
 
   Future<void> playChannel(Channel channel) async {
+    // 领取代际号：之后每处 await 都校验，若期间又发起新的播放则自我作废。
+    // 否则快速连续切台时，先发请求的 302 解析/open 完成后会把旧流写进播放器，
+    // 并覆盖 _state 与错误提示。
+    final generation = ++_playbackGeneration;
+
     ServiceLocator.log
         .i('========== 开始播放频道==========', tag: 'PlayerProvider');
     ServiceLocator.log
@@ -1468,6 +1581,19 @@ class PlayerProvider extends ChangeNotifier {
       // Android TV 使用原生播放器，通过 MethodChannel 处理
       // 其他平台（包括 Android 手机）都使用 media_kit
       if (!_useNativePlayer) {
+        // 软解回退只针对当次播放生效：切到别的频道时先重建播放器，
+        // 恢复到用户配置的解码模式（否则整个会话都被钉死在 hwdec=no）。
+        if (_softwareFallbackActive && _fallbackChannelId != channel.id) {
+          ServiceLocator.log.i(
+            '检测到此前触发过软解回退，切换频道时恢复配置的解码模式',
+            tag: 'PlayerProvider',
+          );
+          _softwareFallbackActive = false;
+          _fallbackChannelId = null;
+          await _initMediaKitPlayer();
+          if (_isStalePlayback(generation)) return;
+        }
+
         // 解析真实播放地址（处理 302 重定向）
         ServiceLocator.log
             .i('>>> Start resolving redirect', tag: 'PlayerProvider');
@@ -1482,24 +1608,40 @@ class PlayerProvider extends ChangeNotifier {
             .i('>>> 302重定向解析完成，耗时: ${redirectTime}ms', tag: 'PlayerProvider');
         ServiceLocator.log.d('>>> 使用播放地址: $realUrl', tag: 'PlayerProvider');
 
+        // 302 解析是耗时网络操作，期间用户可能已切到别的频道
+        if (_isStalePlayback(generation)) {
+          ServiceLocator.log
+              .d('播放请求已过期（302 解析后），放弃本次播放', tag: 'PlayerProvider');
+          return;
+        }
+
         // 开始播放
         ServiceLocator.log
             .i('>>> Start initializing player', tag: 'PlayerProvider');
         final playStartTime = DateTime.now();
+        _markPlayStart(playStartTime); // O5: 记录起播起点
         // 代际计数器已在 _resetDeinterlaceDetection() 中递增，确保旧回调不影响新流
         await _applyDeinterlaceFilter();
         // FCC 流禁用缓存以加速切台；普通流恢复默认缓冲（须在 open 前设置）
         await _applyBufferConfig(realUrl);
+        if (_isStalePlayback(generation)) {
+          ServiceLocator.log
+              .d('播放请求已过期（open 前），放弃本次播放', tag: 'PlayerProvider');
+          return;
+        }
         await _mediaKitPlayer?.open(_createMedia(realUrl));
 
         final playTime =
             DateTime.now().difference(playStartTime).inMilliseconds;
         ServiceLocator.log
             .i('>>> 播放器初始化完成，耗时: ${playTime}ms', tag: 'PlayerProvider');
+        if (_isStalePlayback(generation)) return;
         _state = PlayerState.playing;
         notifyListeners();
         _scheduleNoVideoFallbackIfNeeded();
       }
+
+      if (_isStalePlayback(generation)) return;
 
       // 记录观看历史
       final channelId = channel.id;
@@ -1519,6 +1661,8 @@ class PlayerProvider extends ChangeNotifier {
           tag: 'PlayerProvider');
     } catch (e) {
       ServiceLocator.log.e('播放频道失败', tag: 'PlayerProvider', error: e);
+      // 旧请求的错误不应覆盖当前频道的播放状态
+      if (_isStalePlayback(generation)) return;
       _setError('Failed to play channel: $e');
       return;
     }
@@ -1526,10 +1670,14 @@ class PlayerProvider extends ChangeNotifier {
 
   Future<void> reinitializePlayer({required String bufferStrength}) async {
     if (_useNativePlayer) return;
+    // 用户显式改设置触发的重建：丢弃此前的软解降级记录
+    _softwareFallbackActive = false;
+    _fallbackChannelId = null;
     final channelToPlay = _currentChannel;
     _state = PlayerState.loading;
     notifyListeners();
-    _initMediaKitPlayer(bufferStrength: bufferStrength);
+    // 必须 await：否则 playChannel 会在新实例就绪前调用 open() 而静默失败
+    await _initMediaKitPlayer(bufferStrength: bufferStrength);
     if (channelToPlay != null) {
       await playChannel(channelToPlay);
     }
@@ -1544,6 +1692,7 @@ class PlayerProvider extends ChangeNotifier {
     }
 
     final startTime = DateTime.now();
+    _markPlayStart(startTime); // O5: 记录起播起点
     _state = PlayerState.loading;
     _error = null;
     _lastErrorMessage = null; // 重置错误防抖
@@ -1613,6 +1762,8 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   Future<void> stop({bool silent = false}) async {
+    // 作废进行中的播放流程，避免 stop 之后旧请求继续 open
+    _playbackGeneration++;
     _state = PlayerState.idle;
     _error = null;
     _overrideDuration = null; // Clear override duration
@@ -1862,6 +2013,7 @@ class PlayerProvider extends ChangeNotifier {
             .d('>>> 切换源: 使用播放地址: $realUrl', tag: 'PlayerProvider');
 
         final playStartTime = DateTime.now();
+        _markPlayStart(playStartTime); // O5: 记录起播起点
         // 代际计数器已在 _resetDeinterlaceDetection() 中递增，确保旧回调不影响新流
         await _applyDeinterlaceFilter();
         // FCC 流禁用缓存以加速切台；普通流恢复默认缓冲（须在 open 前设置）
@@ -1905,9 +2057,15 @@ class PlayerProvider extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    // 作废所有进行中的播放流程（302 解析 / open 等 await 之后的回调）
+    _playbackGeneration++;
+    _cancelPlayerSubscriptions();
+    _videoParamsSubscription?.cancel();
+    _videoParamsSubscription = null;
     _debugInfoTimer?.cancel();
     _retryTimer?.cancel();
     _mediaKitPlayer?.dispose();
+    _videoController = null;
     super.dispose();
   }
 
@@ -1927,7 +2085,7 @@ class PlayerProvider extends ChangeNotifier {
           _videoHeight == 0) {
         ServiceLocator.log
             .w('PlayerProvider: 音频帧变慢时画面卡顿，尝试软件回退', tag: 'PlayerProvider');
-        _attemptSoftwareFallback();
+        unawaited(_attemptSoftwareFallback());
       }
     });
   }

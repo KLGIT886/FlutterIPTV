@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/widgets.dart';
 import '../../../core/models/channel.dart';
 import '../../../core/models/channel_group.dart';
 import '../../../core/services/service_locator.dart';
+import '../../../core/widgets/channel_logo_widget.dart'
+    show setLogoLoadingScrolling;
 
 class ChannelProvider extends ChangeNotifier {
   // ✅ 全局缓存：一次性加载所有频道
@@ -596,14 +599,19 @@ class ChannelProvider extends ChangeNotifier {
     return _allChannels.where((c) => isUnavailableChannel(c.groupName)).length;
   }
 
-  // ✅ 暂停台标加载（例如在快速滚动时）
+  // ✅ 暂停台标加载（例如在快速滚动时）：挂起全局台标加载队列，
+  // 避免快速滚动时大量台标网络请求造成卡顿 / IO 拥堵（P2-5）。
+  // Windows 桌面端不启用该暂停逻辑：桌面滚动事件特性不同，开启后会导致
+  // 台标延迟甚至卡住不加载，故直接跳过（仅 Windows 禁用，其他平台保留）。
   void pauseLogoLoading() {
-    // TODO: 实现台标加载暂停逻辑（当前为空操作，保留 API 兼容性）
+    if (Platform.isWindows) return;
+    setLogoLoadingScrolling(true);
   }
 
-  // ✅ 恢复台标加载
+  // ✅ 恢复台标加载：滚动停止后由滚动监听器调用，恢复队列处理。
   void resumeLogoLoading() {
-    // TODO: 实现台标加载恢复逻辑（当前为空操作，保留 API 兼容性）
+    if (Platform.isWindows) return;
+    setLogoLoadingScrolling(false);
   }
 
   // ✅ 清理台标加载队列（取消当前所有后台加载任务）

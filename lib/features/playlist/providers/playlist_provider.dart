@@ -8,7 +8,9 @@ import '../../../core/models/playlist.dart';
 import '../../../core/models/channel.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/utils/m3u_parser.dart';
+import '../../../core/utils/playlist_refresh_plan.dart';
 import '../../../core/utils/txt_parser.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../favorites/providers/favorites_provider.dart';
 import '../../settings/providers/settings_provider.dart';
 
@@ -18,6 +20,8 @@ class PlaylistProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   double _importProgress = 0.0;
+  /// 当前导入/下载使用的取消令牌，便于用户中止长时间的整份列表下载。
+  CancelToken? _importCancelToken;
 
   /// Last extracted EPG URL from M3U file (for UI display only)
   String? _lastExtractedEpgUrl;
@@ -285,17 +289,23 @@ class PlaylistProvider extends ChangeNotifier {
         _importProgress = 0.15;
         notifyListeners();
         
-        // 下载内容用于备份
+        // 仅下载一次（P1-12）：同一份内容既用于备份，也直接交给解析器，
+        // 避免解析器内部再次整份下载导致重复流量与双倍耗时。
+        _importCancelToken = CancelToken();
         try {
-          originalContent = await _downloadContentFromUrl(url);
+          originalContent =
+              await _downloadContentFromUrl(url, cancelToken: _importCancelToken);
         } catch (e) {
-          ServiceLocator.log.w('下载内容用于备份失败: $e', tag: 'PlaylistProvider');
+          ServiceLocator.log.w('下载播放列表内容失败: $e', tag: 'PlaylistProvider');
+          rethrow;
         }
-        
+
         if (format == 'txt') {
-          channels = await TXTParser.parseFromUrl(url, playlistId, mergeRule: effectiveMergeRule);
+          channels = await TXTParser.parseFromContent(
+              originalContent, playlistId, mergeRule: effectiveMergeRule);
         } else {
-          channels = await M3UParser.parseFromUrl(url, playlistId, mergeRule: effectiveMergeRule);
+          channels = await M3UParser.parseFromContent(
+              originalContent, playlistId, mergeRule: effectiveMergeRule);
           epgUrl = M3UParser.lastParseResult?.epgUrl;
         }
       } else if (content != null) {
@@ -692,50 +702,76 @@ class PlaylistProvider extends ChangeNotifier {
         notifyListeners();
       }
 
-      // 在删除旧频道之前，先保存观看记录的频道信息（名称和URL）
-      ServiceLocator.log.d('保存观看记录的频道信息...', tag: 'PlaylistProvider');
-      final savedChannelInfo = await ServiceLocator.watchHistory.saveWatchHistoryChannelInfo(playlist.id!);
-      ServiceLocator.log.d('已保存 ${savedChannelInfo.length} 条观看记录的频道信息', tag: 'PlaylistProvider');
+      // ✅ 增量刷新（upsert）：复用既有频道 id，保持 favorites / watch_history 的
+      // 外键关联不被级联删除。只有真正下线的频道才会被删除（级联清理符合预期）。
+      ServiceLocator.log.d('读取现有频道以复用记录ID...', tag: 'PlaylistProvider');
+      final existingRows = await ServiceLocator.database.rawQuery(
+        'SELECT id, name, url FROM channels WHERE playlist_id = ?',
+        [playlist.id],
+      );
 
-      // ✅ 在删除旧频道之前，保存收藏的频道名称和位置
-      ServiceLocator.log.d('保存收藏频道信息...', tag: 'PlaylistProvider');
-      final favoriteChannelNames = await _saveFavoriteChannelNames(playlist.id!);
-      ServiceLocator.log.d('已保存 ${favoriteChannelNames.length} 个收藏频道', tag: 'PlaylistProvider');
+      final refreshPlan = buildPlaylistRefreshPlan(
+        incoming: channels
+            .map((c) => (name: c.name, url: c.url))
+            .toList(growable: false),
+        existing: existingRows
+            .map((r) => (
+                  id: r['id'] as int,
+                  name: r['name'] as String,
+                  url: r['url'] as String,
+                ))
+            .toList(growable: false),
+      );
 
-      // 使用事务确保数据一致性：先删除旧数据，再插入新数据
-      // 如果插入失败，事务会回滚，旧数据不会丢失
+      // 使用事务确保数据一致性：复用/新增失败时整体回滚，旧数据不会丢失
+      const chunkSize = 500;
       await ServiceLocator.database.db.transaction((txn) async {
-        // Delete existing channels
-        ServiceLocator.log.d('开始删除现有频道数据...', tag: 'PlaylistProvider');
-        final deleteResult = await txn.delete(
-          'channels',
-          where: 'playlist_id = ?',
-          whereArgs: [playlist.id],
-        );
-        ServiceLocator.log.d('已删除 $deleteResult 个旧频道记录', tag: 'PlaylistProvider');
-
-        // Insert new channels - 使用批量插入以提高性能，分块处理避免内存问题
-        const chunkSize = 500;
         for (int i = 0; i < channels.length; i += chunkSize) {
           final end = (i + chunkSize < channels.length) ? i + chunkSize : channels.length;
-          final chunk = channels.sublist(i, end);
-          
+
           final batch = txn.batch();
-          for (final channel in chunk) {
-            final channelMap = channel.toMap();
-            batch.insert('channels', channelMap);
+          for (int j = i; j < end; j++) {
+            final channel = channels[j];
+            final existingId = refreshPlan.reusedIds[j];
+
+            // 保留既有 is_active，避免覆盖用户侧状态
+            final channelMap = channel.toMap()..remove('is_active');
+            if (existingId != null) {
+              batch.update(
+                'channels',
+                channelMap,
+                where: 'id = ?',
+                whereArgs: [existingId],
+              );
+            } else {
+              channelMap['is_active'] = 1;
+              batch.insert('channels', channelMap);
+            }
           }
           await batch.commit(noResult: true);
-          ServiceLocator.log.d('已插入 $end/${channels.length} 个新频道记录', tag: 'PlaylistProvider');
+          ServiceLocator.log.d('已处理 $end/${channels.length} 个频道记录', tag: 'PlaylistProvider');
+        }
+
+        // 删除本次未被复用的旧频道（频道确实下线）
+        final staleIds = refreshPlan.staleIds;
+        if (staleIds.isNotEmpty) {
+          for (int i = 0; i < staleIds.length; i += chunkSize) {
+            final end = (i + chunkSize < staleIds.length) ? i + chunkSize : staleIds.length;
+            final batch = txn.batch();
+            for (final id in staleIds.sublist(i, end)) {
+              batch.delete('channels', where: 'id = ?', whereArgs: [id]);
+            }
+            await batch.commit(noResult: true);
+          }
+          ServiceLocator.log.d('已清理下线频道 ${staleIds.length} 个', tag: 'PlaylistProvider');
         }
       });
 
-      // ✅ 恢复收藏关联
-      if (favoriteChannelNames.isNotEmpty) {
-        ServiceLocator.log.d('开始恢复收藏关联...', tag: 'PlaylistProvider');
-        final restoredCount = await _restoreFavoritesByName(playlist.id!, favoriteChannelNames);
-        ServiceLocator.log.d('已恢复 $restoredCount 个收藏频道', tag: 'PlaylistProvider');
-      }
+      ServiceLocator.log.i(
+        '频道增量刷新完成：复用 ${refreshPlan.reusedCount} 个，'
+        '新增 ${refreshPlan.insertedCount} 个，下线 ${refreshPlan.staleIds.length} 个',
+        tag: 'PlaylistProvider',
+      );
 
       // Update playlist timestamp and EPG URL
       ServiceLocator.log.d('更新播放列表时间戳和EPG URL...', tag: 'PlaylistProvider');
@@ -763,10 +799,7 @@ class PlaylistProvider extends ChangeNotifier {
         notifyListeners();
       }
 
-      // 更新观看记录的频道ID（通过名称和URL匹配新的频道ID）
-      ServiceLocator.log.d('开始更新观看记录的频道ID...', tag: 'PlaylistProvider');
-      await ServiceLocator.watchHistory.updateChannelIdsAfterRefresh(playlist.id!, savedChannelInfo);
-      ServiceLocator.log.d('观看记录频道ID更新完成', tag: 'PlaylistProvider');
+      // 频道 id 保持不变，收藏与观看历史无需重建关联
 
       // 清除重定向缓存（因为播放列表已更新，URL可能已变化）
       ServiceLocator.redirectCache.clearAllCache();
@@ -1114,7 +1147,7 @@ class PlaylistProvider extends ChangeNotifier {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                  '${playlist.name} 刷新失败: ${_error?.replaceAll("Exception:", "").trim() ?? "未知错误"}'),
+                  '${playlist.name} 刷新失败: ${friendlyPlaylistError(_error, context)}'),
               duration: const Duration(seconds: 5),
               backgroundColor: Colors.red,
             ),
@@ -1148,81 +1181,6 @@ class PlaylistProvider extends ChangeNotifier {
     }
   }
 
-  /// ✅ 保存收藏频道的名称和位置（刷新前）
-  Future<Map<String, int>> _saveFavoriteChannelNames(int playlistId) async {
-    try {
-      ServiceLocator.log.i('开始查询播放列表 $playlistId 的收藏频道', tag: 'PlaylistProvider');
-      
-      final results = await ServiceLocator.database.rawQuery('''
-        SELECT c.name, f.position
-        FROM favorites f
-        INNER JOIN channels c ON f.channel_id = c.id
-        WHERE c.playlist_id = ?
-        ORDER BY f.position
-      ''', [playlistId]);
-      
-      ServiceLocator.log.i('查询到 ${results.length} 条收藏记录', tag: 'PlaylistProvider');
-      
-      final Map<String, int> favoriteMap = {};
-      for (final row in results) {
-        final name = row['name'] as String;
-        final position = row['position'] as int;
-        favoriteMap[name] = position;
-        ServiceLocator.log.d('收藏频道: $name (位置: $position)', tag: 'PlaylistProvider');
-      }
-      
-      return favoriteMap;
-    } catch (e) {
-      ServiceLocator.log.e('保存收藏频道信息失败', tag: 'PlaylistProvider', error: e);
-      return {};
-    }
-  }
-
-  /// ✅ 根据频道名称恢复收藏关联（刷新后）
-  Future<int> _restoreFavoritesByName(int playlistId, Map<String, int> favoriteMap) async {
-    try {
-      ServiceLocator.log.i('开始恢复 ${favoriteMap.length} 个收藏频道', tag: 'PlaylistProvider');
-      int restoredCount = 0;
-      
-      for (final entry in favoriteMap.entries) {
-        final channelName = entry.key;
-        final position = entry.value;
-        
-        ServiceLocator.log.d('查找频道: $channelName', tag: 'PlaylistProvider');
-        
-        // 查找新插入的频道ID
-        final results = await ServiceLocator.database.rawQuery('''
-          SELECT id FROM channels 
-          WHERE playlist_id = ? AND name = ? 
-          LIMIT 1
-        ''', [playlistId, channelName]);
-        
-        if (results.isNotEmpty) {
-          final channelId = results.first['id'] as int;
-          
-          ServiceLocator.log.d('找到频道ID: $channelId，恢复收藏', tag: 'PlaylistProvider');
-          
-          // 重新创建收藏记录
-          await ServiceLocator.database.insert('favorites', {
-            'channel_id': channelId,
-            'position': position,
-            'created_at': DateTime.now().millisecondsSinceEpoch,
-          });
-          
-          restoredCount++;
-        } else {
-          ServiceLocator.log.w('未找到收藏频道: $channelName', tag: 'PlaylistProvider');
-        }
-      }
-      
-      ServiceLocator.log.i('成功恢复 $restoredCount 个收藏频道', tag: 'PlaylistProvider');
-      return restoredCount;
-    } catch (e) {
-      ServiceLocator.log.e('恢复收藏关联失败', tag: 'PlaylistProvider', error: e);
-      return 0;
-    }
-  }
-  
   // ============ 备份相关方法 ============
   
   /// 后台创建缺失的备份（不阻塞UI）
@@ -1297,8 +1255,12 @@ class PlaylistProvider extends ChangeNotifier {
   }
   
   /// 从URL下载内容
-  Future<String> _downloadContentFromUrl(String url) async {
+  Future<String> _downloadContentFromUrl(String url,
+      {CancelToken? cancelToken}) async {
     final dio = Dio();
+    // 显式超时，避免大列表在无网络/慢速情况下无限挂起（P1-12）
+    dio.options.connectTimeout = const Duration(seconds: 15);
+    dio.options.receiveTimeout = const Duration(seconds: 30);
     final response = await dio.get(
       url,
       options: Options(
@@ -1306,13 +1268,20 @@ class PlaylistProvider extends ChangeNotifier {
         followRedirects: true,
         validateStatus: (status) => status! < 500,
       ),
+      cancelToken: cancelToken,
     );
-    
+
     if (response.statusCode == 200) {
       return response.data.toString();
     } else {
       throw Exception('HTTP ${response.statusCode}');
     }
+  }
+
+  /// 取消正在进行的导入下载（若有），避免长时间卡在整份列表下载上。
+  void cancelImport() {
+    _importCancelToken?.cancel('用户取消导入');
+    _importCancelToken = null;
   }
   
   /// 保存备份文件
