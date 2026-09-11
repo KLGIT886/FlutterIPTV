@@ -61,6 +61,22 @@ class PlayerProvider extends ChangeNotifier {
 
   bool _noVideoFallbackAttempted = false;
   bool _allowSoftwareFallback = true;
+  /// 上次软回退时刻，用于节流，截断「无画面误判 / error 连发 / 快速切台」
+  /// 反复触发软回退+重建播放器 的死循环。
+  DateTime? _lastSoftwareFallbackAt;
+  /// 本会话是否出现过视频画面（宽度>0）。
+  ///
+  /// 一旦见过画面，说明视频链路正常，此后 no-video 兜底不再触发——因为切台/
+  /// 重建瞬间宽度会被重置为 0，此时兜底会误判"无画面"并触发**软回退重建 + 重播**，
+  /// 形成死循环（表现为起播慢 / 黑屏），严重时拖垮原生层。
+  ///
+  /// 注意：这是**会话级**（不随换台重置）的有意设计——若改成每次起播重置，
+  /// 上述"切台瞬间 width=0"的误判就会被放回来，起播反而变慢（实测结论）。
+  /// 代价：真正"有声音无画面"的源在本会话内不再享受该兜底。
+  bool _hasSeenVideo = false;
+  /// 同一 Player 的 open 串行链：快速连续切台时若并发 open，
+  /// 会在原生层（先 stop 再 load）争用，导致起播失败与崩溃。
+  Future<void>? _openSerial;
   String _windowsHwdecMode = 'auto-safe';
   String _d3d11vppMode = 'bob';
   bool _isDisposed = false;
@@ -385,7 +401,9 @@ class PlayerProvider extends ChangeNotifier {
         await _applyDeinterlaceFilter();
         // FCC 流禁用缓存以加速切台；普通流恢复默认缓冲（须在 open 前设置）
         await _applyBufferConfig(realUrl);
-        await _mediaKitPlayer?.open(_createMedia(realUrl));
+        await _openSerialized(() async {
+          await _mediaKitPlayer?.open(_createMedia(realUrl));
+        });
 
         final playTime =
             DateTime.now().difference(playStartTime).inMilliseconds;
@@ -838,6 +856,9 @@ class PlayerProvider extends ChangeNotifier {
           // SDR 源（包括 4K SDR、1080p 等）：清零所有 HDR 残留参数
           await _safeSetProperty('target-prim', 'auto', 'target-prim');
           await _safeSetProperty('target-trc', 'auto', 'target-trc');
+          await _safeSetProperty('tone-mapping', 'auto', 'tone-mapping');
+          await _safeSetProperty('tone-mapping-param', 'default', 'tone-mapping-param');
+          await _safeSetProperty('target-peak', 'auto', 'target-peak');
           await _safeSetProperty('hdr-compute-peak', 'no', 'hdr-compute-peak');
           ServiceLocator.log.i(
               'SDR 源: 标准输出 (gamma=$srcGamma, primaries=$srcPrimaries)',
@@ -1170,6 +1191,7 @@ class PlayerProvider extends ChangeNotifier {
 
     _sub(_mediaKitPlayer!.stream.width, (width) {
       if (width != null && width > 0) {
+        _hasSeenVideo = true;
         ServiceLocator.log.d('视频宽度: $width', tag: 'PlayerProvider');
       }
       notifyListeners();
@@ -1405,8 +1427,35 @@ class PlayerProvider extends ChangeNotifier {
   bool _isStalePlayback(int generation) =>
       _isDisposed || generation != _playbackGeneration;
 
+  /// 串行化对同一 Player 的 [Player.open]。
+  ///
+  /// [Player.open] 内部会先 stop 再 load，快速连续切台时并发 open 会在原生层
+  /// 争用（解码器/渲染器重配交错），表现为起播失败或崩溃。通过把动作串入
+  /// [_openSerial] 链保证同一时刻只有一个 open 执行；链上吞掉异常，避免
+  /// 某次 open 失败卡死整条链。
+  Future<T> _openSerialized<T>(Future<T> Function() action) {
+    final prev = _openSerial ?? Future<void>.value();
+    final next = prev.then((_) => action());
+    _openSerial = next.then((_) {}, onError: (_) {});
+    return next;
+  }
+
   Future<void> _attemptSoftwareFallback() async {
     if (!_allowSoftwareFallback || _isDisposed) return;
+    // 节流：距上次软回退不足 8 秒则放弃本次，截断软回退+重建死循环。
+    // 无画面兜底定时器(3s)/error 回调/快速切台 会反复触发本方法，
+    // 每次重建都重播又再触发，导致频繁重建、最终原生层崩溃。
+    //
+    // 注意：这是**跨频道全局**的 8 秒窗口，不随换台重置。因为它的防护目标
+    // （error 连发、快速切台反复重建）本身就是跨频道场景；若按频道/换台重置，
+    // 快速换台时会重新放开重建抖动。代价是"8 秒内切到另一个也需软回退的频道"
+    // 会被抑制——窗口短、场景少见，属有意取舍。
+    final now = DateTime.now();
+    if (_lastSoftwareFallbackAt != null &&
+        now.difference(_lastSoftwareFallbackAt!).inMilliseconds < 8000) {
+      return;
+    }
+    _lastSoftwareFallbackAt = now;
     // error 回调可能连发，未加保护会并发创建多个播放器实例
     if (_isReinitializingPlayer) return;
     _isReinitializingPlayer = true;
@@ -1531,7 +1580,9 @@ class PlayerProvider extends ChangeNotifier {
               .d('播放请求已过期（open 前），放弃本次播放', tag: 'PlayerProvider');
           return;
         }
-        await _mediaKitPlayer?.open(_createMedia(realUrl));
+        await _openSerialized(() async {
+          await _mediaKitPlayer?.open(_createMedia(realUrl));
+        });
 
         final playTime =
             DateTime.now().difference(playStartTime).inMilliseconds;
@@ -1627,7 +1678,9 @@ class PlayerProvider extends ChangeNotifier {
       await _applyDeinterlaceFilter();
       // FCC 流禁用缓存以加速切台；普通流恢复默认缓冲（须在 open 前设置）
       await _applyBufferConfig(realUrl);
-      await _mediaKitPlayer?.open(_createMedia(realUrl));
+      await _openSerialized(() async {
+          await _mediaKitPlayer?.open(_createMedia(realUrl));
+        });
 
       final playTime = DateTime.now().difference(playStartTime).inMilliseconds;
       final totalTime = DateTime.now().difference(startTime).inMilliseconds;
@@ -1784,17 +1837,21 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   void playNext(List<Channel> channels) {
-    if (_currentChannel == null || channels.isEmpty) return;
+    // 单频道列表无可切换目标：直接返回，避免回绕后重载自身造成无意义重连。
+    if (_currentChannel == null || channels.length <= 1) return;
     final idx = channels.indexWhere((c) => c.id == _currentChannel!.id);
-    if (idx == -1 || idx >= channels.length - 1) return;
-    playChannel(channels[idx + 1]);
+    if (idx == -1) return;
+    // 边界回绕：最后一个频道向下循环到第一个
+    playChannel(channels[(idx + 1) % channels.length]);
   }
 
   void playPrevious(List<Channel> channels) {
-    if (_currentChannel == null || channels.isEmpty) return;
+    // 单频道列表无可切换目标：直接返回，避免回绕后重载自身造成无意义重连。
+    if (_currentChannel == null || channels.length <= 1) return;
     final idx = channels.indexWhere((c) => c.id == _currentChannel!.id);
-    if (idx <= 0) return;
-    playChannel(channels[idx - 1]);
+    if (idx == -1) return;
+    // 边界回绕：第一个频道向上循环到最后一个
+    playChannel(channels[(idx - 1 + channels.length) % channels.length]);
   }
 
   /// Switch to next source for current channel (if has multiple sources)
@@ -1920,7 +1977,9 @@ class PlayerProvider extends ChangeNotifier {
         await _applyDeinterlaceFilter();
         // FCC 流禁用缓存以加速切台；普通流恢复默认缓冲（须在 open 前设置）
         await _applyBufferConfig(realUrl);
-        await _mediaKitPlayer?.open(_createMedia(realUrl));
+        await _openSerialized(() async {
+          await _mediaKitPlayer?.open(_createMedia(realUrl));
+        });
 
         final playTime =
             DateTime.now().difference(playStartTime).inMilliseconds;
@@ -1981,8 +2040,10 @@ class PlayerProvider extends ChangeNotifier {
     _noVideoFallbackAttempted = true;
     Future.delayed(const Duration(seconds: 3), () {
       if (_isDisposed) return;
-      // 若已播放但仍无画面（宽度为0），尝试解码回调
+      // 若已播放但仍无画面（宽度为0）且从未出现过画面，尝试解码回退
+      // （一旦见过画面说明视频链路正常，不再触发，避免切台瞬间宽度为0误判）
       if (_state == PlayerState.playing &&
+          !_hasSeenVideo &&
           _videoWidth == 0 &&
           _videoHeight == 0) {
         ServiceLocator.log

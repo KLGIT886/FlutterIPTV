@@ -66,9 +66,14 @@ class MpvTuner {
 
   /// 根据源是否 FCC 配置 mpv 缓冲参数（须在 open() 之前调用）。
   ///
-  /// FCC 流用于快速切台，缓存会引入额外延迟，因此禁用缓存并把 demuxer 读取
-  /// 上限收紧为 10M、向后回读禁用；普通流则恢复 media_kit 默认的启用缓存，
-  /// demuxer 上限用 [bufferSize]。
+  /// FCC 流用于快速切台，缓存会引入额外延迟，因此禁用缓存（`cache=no`）并禁用
+  /// 向后回读（`demuxer-max-back-bytes=0`）；普通流则恢复 media_kit 默认的启用
+  /// 缓存，demuxer 上限用 [bufferSize]。
+  ///
+  /// 关于 FCC 的 `demuxer-max-bytes`：取 **64MB**（不是更小值）。原因是高码率
+  /// 组播流（如 CCTV 8K ≈ 100Mbps）在 10MB 级上限下 demuxer 队列不足，会出现
+  /// 读取跟不上、花屏/卡顿；64MB 可保证 8K/100Mbps 正常播放。代价是每路最多多占
+  /// 64MB（分屏 4 路合计约 256MB），属有意取舍——请勿按"FCC 应尽量小"改回。
   ///
   /// [includeLavfOpts] 为 true 时额外重写 demuxer-lavf-o（单屏路径使用）；
   /// 分屏路径保持原行为不设置该项。
@@ -91,7 +96,7 @@ class MpvTuner {
       ServiceLocator.log.d(
           '缓冲配置: ${isFcc ? "FCC(禁用缓存)" : "普通流"}, '
           'cache=${isFcc ? "no" : "yes"}, '
-          'demuxer-max-bytes=${isFcc ? "10485760" : bufferSize}, '
+          'demuxer-max-bytes=${isFcc ? "67108864" : bufferSize}, '
           'demuxer-max-back-bytes=${isFcc ? "0" : bufferSize}, '
           'probesize=默认(约495KB)',
           tag: logTag);
@@ -100,14 +105,16 @@ class MpvTuner {
       ServiceLocator.log.d(
           '缓冲配置: ${isFcc ? "FCC(禁用缓存)" : "普通流"}, '
           'cache=${isFcc ? "no" : "yes"}, '
-          'demuxer-max-bytes=${isFcc ? "10485760" : bufferSize}, '
+          'demuxer-max-bytes=${isFcc ? "67108864" : bufferSize}, '
           'demuxer-max-back-bytes=${isFcc ? "0" : bufferSize}',
           tag: logTag);
     }
     await safeSetProperty('cache', isFcc ? 'no' : 'yes', 'cache');
     if (isFcc) {
+      // 64MB：为高码率 FCC 流（CCTV 8K ≈ 100Mbps）预留足够 demuxer 队列，
+      // 10MB 级会导致读取不足、花屏/卡顿。详见方法文档。
       await safeSetProperty(
-          'demuxer-max-bytes', '${10 * 1024 * 1024}', 'demuxer-max-bytes');
+          'demuxer-max-bytes', '${64 * 1024 * 1024}', 'demuxer-max-bytes');
       await safeSetProperty(
           'demuxer-max-back-bytes', '0', 'demuxer-max-back-bytes');
     } else {

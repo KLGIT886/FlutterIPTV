@@ -691,6 +691,9 @@ class MultiScreenProvider extends ChangeNotifier {
           // SDR 源（包括 4K SDR、1080p 等）：清零所有 HDR 残留参数
           await _safeSetProperty(player, 'target-prim', 'auto', 'target-prim');
           await _safeSetProperty(player, 'target-trc', 'auto', 'target-trc');
+          await _safeSetProperty(player, 'tone-mapping', 'auto', 'tone-mapping');
+          await _safeSetProperty(player, 'tone-mapping-param', 'default', 'tone-mapping-param');
+          await _safeSetProperty(player, 'target-peak', 'auto', 'target-peak');
           await _safeSetProperty(player, 'hdr-compute-peak', 'no', 'hdr-compute-peak');
           ServiceLocator.log.i(
               'MultiScreenProvider: SDR 源: 标准输出 (gamma=$srcGamma, primaries=$srcPrimaries)');
