@@ -1,0 +1,34 @@
+# Git 行尾规范化规则
+# 目的：统一所有文本文件以 LF 入库，明确 autocrlf 行为，避免 status 误报"空改动"。
+# Windows 工作区由 core.autocrlf/编辑器自动转换，入库始终为 LF。
+
+# 文本文件默认统一为 LF
+* text=auto eol=lf
+
+# Dart/Flutter 源码：强制 LF
+*.dart text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+
+# 文档/脚本
+*.md text eol=lf
+*.yml text eol=lf
+*.sh text eol=lf
+*.ps1 text eol=lf
+*.xml text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+
+# 二进制文件不作任何行尾转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.mp4 binary
+*.webm binary
