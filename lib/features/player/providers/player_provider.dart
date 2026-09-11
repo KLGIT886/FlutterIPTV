@@ -624,9 +624,15 @@ class PlayerProvider extends ChangeNotifier {
     ServiceLocator.log
         .i('硬件加速: ${!effectiveSoftware}', tag: 'PlayerProvider');
 
+    // 渲染与解码解耦：渲染恒定走 GPU(ANGLE)，解码方式由 hwdec 决定（'no'=软解）。
+    //
+    // 原实现用 `!effectiveSoftware` 把两者绑定 —— 用户选「软解」时会连带切到**软渲染**，
+    // 而软渲染把画面限制到 1920×1080，且色彩链不同（实测偏色/过曝）。解绑后软解同样
+    // 是 4K 原生渲染、色彩与硬解一致。
+    // （若后续验证发现解绑引入伪影，改回 `!effectiveSoftware` 即可，改动仅此一处。
     VideoControllerConfiguration config = VideoControllerConfiguration(
       hwdec: hwdecMode,
-      enableHardwareAcceleration: !effectiveSoftware,
+      enableHardwareAcceleration: true,
     );
 
     // 默认显示为配置值，后续可被实际运行时覆盖

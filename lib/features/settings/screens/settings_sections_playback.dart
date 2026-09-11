@@ -49,27 +49,32 @@ import '../widgets/settings_playback_labels.dart';
             icon: Icons.tune_rounded,
             onTap: () => showDecodingModeDialog(context, settings),
           ),
-          buildDivider(),
-          buildSelectTile(
-            context,
-            title: AppStrings.of(context)?.windowsHwdecMode ??
-                'Windows HW Decoder',
-            subtitle: getWindowsHwdecLabel(context, settings.windowsHwdecMode),
-            icon: Icons.speed_rounded,
-            onTap: () => showWindowsHwdecDialog(context, settings),
-          ),
-          // d3d11vpp 去交错参数：仅 auto-safe 方案下显示并生效
-          if (settings.windowsHwdecMode == 'auto-safe') ...[
+          // 解码模式为「软件」时隐藏硬解方案及其专属 d3d11vpp 去交错：
+          // 软解时 hwdec 被强制为 no，硬解方案选项不生效，隐藏避免误导
+          if (settings.decodingMode != 'software') ...[
             buildDivider(),
             buildSelectTile(
               context,
-              title: AppStrings.of(context)?.d3d11vppMode ??
-                  'D3D11VPP Deinterlace',
-              subtitle: AppStrings.of(context)?.d3d11vppModeDesc ??
-                  'Only applies to Auto (Safe)',
-              icon: Icons.layers_rounded,
-              onTap: () => showD3d11vppDialog(context, settings),
+              title: AppStrings.of(context)?.windowsHwdecMode ??
+                  'Windows HW Decoder',
+              subtitle:
+                  getWindowsHwdecLabel(context, settings.windowsHwdecMode),
+              icon: Icons.speed_rounded,
+              onTap: () => showWindowsHwdecDialog(context, settings),
             ),
+            // d3d11vpp 去交错参数：仅 auto-safe 方案下显示并生效
+            if (settings.windowsHwdecMode == 'auto-safe') ...[
+              buildDivider(),
+              buildSelectTile(
+                context,
+                title: AppStrings.of(context)?.d3d11vppMode ??
+                    'D3D11VPP Deinterlace',
+                subtitle: AppStrings.of(context)?.d3d11vppModeDesc ??
+                    'Only applies to Auto (Safe)',
+                icon: Icons.layers_rounded,
+                onTap: () => showD3d11vppDialog(context, settings),
+              ),
+            ],
           ],
           buildDivider(),
           buildSwitchTile(

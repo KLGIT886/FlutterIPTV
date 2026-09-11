@@ -469,11 +469,13 @@ class MultiScreenProvider extends ChangeNotifier {
 
     screen.hwdecMode = hwdecMode;
 
+    // 与单屏一致：渲染恒定走 GPU，解码方式仅由 hwdec 决定（避免软解连带软渲染
+    // 导致的 4K→1080p 降级与色彩偏差）。
     screen.videoController = VideoController(
       player,
       configuration: VideoControllerConfiguration(
         hwdec: hwdecMode,
-        enableHardwareAcceleration: !effectiveSoftware,
+        enableHardwareAcceleration: true,
       ),
     );
     screen.isSoftwareDecoding = effectiveSoftware;
