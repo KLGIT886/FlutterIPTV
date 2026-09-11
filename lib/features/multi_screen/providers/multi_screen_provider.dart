@@ -670,14 +670,17 @@ class MultiScreenProvider extends ChangeNotifier {
             // HLG 广播源：必须显式指定目标色彩空间，理由同 PlayerProvider。
             // vo=libmpv 下 mpv 探测不到显示器能力，auto 会退化成"不转换"，
             // 导致 bt.2020 + HLG 原样送 SDR 显示器（发灰、欠饱和）。
+            // 仅显式指定色域(bt.709)与目标伽马(bt.1886)；不再强套
+            // tone-mapping=bt.2390 + target-peak=100——HLG 是 scene-referred，
+            // 自带向下兼容 OOTF，过度压缩会把画面整体抬亮（"HLG 偏亮"）。
             await _safeSetProperty(player, 'target-prim', 'bt.709', 'target-prim');
             await _safeSetProperty(player, 'target-trc', 'bt.1886', 'target-trc');
-            await _safeSetProperty(player, 'tone-mapping', 'bt.2390', 'tone-mapping');
+            await _safeSetProperty(player, 'tone-mapping', 'auto', 'tone-mapping');
             await _safeSetProperty(player, 'tone-mapping-param', 'default', 'tone-mapping-param');
-            await _safeSetProperty(player, 'target-peak', '100', 'target-peak');
+            await _safeSetProperty(player, 'target-peak', 'auto', 'target-peak');
             await _safeSetProperty(player, 'hdr-compute-peak', 'no', 'hdr-compute-peak');
             ServiceLocator.log.i(
-                'MultiScreenProvider: HDR 源(HLG): 显式下变换到 SDR (gamma=$srcGamma, primaries=$srcPrimaries)');
+                'MultiScreenProvider: HDR 源(HLG): 显式下变换到 SDR（HLG 自家 OOTF 自然映射）(gamma=$srcGamma, primaries=$srcPrimaries)');
           } else {
             // PQ/HDR10 源：主动色调映射到 SDR
             await _safeSetProperty(player, 'target-prim', 'bt.709', 'target-prim');

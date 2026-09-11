@@ -835,16 +835,22 @@ class PlayerProvider extends ChangeNotifier {
             // 在 vo=libmpv 下帧交给 Flutter 纹理渲染，mpv 探测不到显示器能力，
             // target-prim/trc 为 auto 时会退化成"不转换"（日志表现为
             // [convert] (disabled)），bt.2020 + HLG 被原样送到 SDR 显示器，
-            // 画面发灰、欠饱和。
-            // HLG 没有峰值亮度元数据，故不开 hdr-compute-peak。
+            // 画面发灰、欠饱和。故仅显式指定色域(bt.709)与目标伽马(bt.1886)。
+            //
+            // 注意：不再强套 tone-mapping=bt.2390 + target-peak=100。
+            // HLG 是 scene-referred（场景参考）曲线，自带向下兼容的 OOTF，
+            // 天然适配 SDR 屏（广电 4K/8K 用 HLG 的原因）。对它重复施加 BT.2390
+            // EETF + 固定 100nits 目标，相当于两次不匹配的动态压缩，会把中间调/
+            // 高光整体抬亮（实测"HLG 偏亮"）。tone-mapping/target-peak 走默认，
+            // 让 HLG 自家 OOTF 自然作用；HLG 无峰值亮度元数据，不开 hdr-compute-peak。
             await _safeSetProperty('target-prim', 'bt.709', 'target-prim');
             await _safeSetProperty('target-trc', 'bt.1886', 'target-trc');
-            await _safeSetProperty('tone-mapping', 'bt.2390', 'tone-mapping');
+            await _safeSetProperty('tone-mapping', 'auto', 'tone-mapping');
             await _safeSetProperty('tone-mapping-param', 'default', 'tone-mapping-param');
-            await _safeSetProperty('target-peak', '100', 'target-peak');
+            await _safeSetProperty('target-peak', 'auto', 'target-peak');
             await _safeSetProperty('hdr-compute-peak', 'no', 'hdr-compute-peak');
             ServiceLocator.log.i(
-                'HDR 源(HLG): 显式下变换到 SDR (gamma=$srcGamma, primaries=$srcPrimaries)',
+                'HDR 源(HLG): 显式下变换到 SDR（HLG 自家 OOTF 自然映射）(gamma=$srcGamma, primaries=$srcPrimaries)',
                 tag: 'PlayerProvider');
           } else {
             // PQ/HDR10 源：主动色调映射到 SDR
