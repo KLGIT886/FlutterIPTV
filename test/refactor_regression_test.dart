@@ -149,6 +149,18 @@ void main() {
       );
       expect(RegExp(r'/\d{8}$').hasMatch(longUrl!), isTrue);
     });
+
+    test('回归: {utc:HHmm} 仍按 ICU 时:分（不被误判为短格式 时:月）', () {
+      final url = buildCatchupUrl(
+        baseChannel(catchupSource: 'http://vod/{utc:HHmm}'),
+        program,
+      );
+      final u = program.start.toUtc();
+      final expectHm = '${u.hour.toString().padLeft(2, '0')}'
+          '${u.minute.toString().padLeft(2, '0')}';
+      expect(RegExp(r'/\d{4}$').hasMatch(url!), isTrue);
+      expect(url, endsWith('/$expectHm'));
+    });
   });
 
   // ---------- P2-1: MpvTuner 静态判定 ----------

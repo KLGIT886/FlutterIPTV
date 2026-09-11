@@ -191,7 +191,15 @@ String? buildCatchupUrl(Channel channel, EpgProgram program) {
 final RegExp _shortFormatPattern = RegExp(r'^[YmdHMS]+$');
 
 /// 判断是否为 rtp2httpd 短格式串（如 `YmdHMS`）；否则按 ICU 长格式处理。
-bool _isShortFormat(String fmt) => _shortFormatPattern.hasMatch(fmt);
+///
+/// 注意：短格式的 `m`=月、`M`=分，与 ICU 的 `m`=分、`M`=月 **语义互换**。
+/// 若仅按「全由 YmdHMS 构成」判定，会把 ICU 的 `HHmm`（时:分）误判为 时:月。
+/// 故额外要求包含 `Y` 或 `S`——这两个字母在 ICU 中是 week-year / 亚秒
+/// （几乎不用于回看场景），而在 rtp2httpd 短格式中表示 年 / 秒。
+bool _isShortFormat(String fmt) {
+  if (!_shortFormatPattern.hasMatch(fmt)) return false;
+  return fmt.contains('Y') || fmt.contains('S');
+}
 
 /// 按 rtp2httpd 短格式字母表渲染时间。
 String _renderShortFormat(DateTime dt, String fmt) {
