@@ -1,23 +1,23 @@
 {
-  "version": "1.6.3",
-  "build": 187,
-  "releaseDate": "2026-09-08",
+  "version": "1.6.4",
+  "build": 188,
+  "releaseDate": "2026-09-13",
   "assets": {
-     "windows": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.3/flutteriptv-Windows-x64-Setup.exe",
+     "windows": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.4/flutteriptv-Windows-x64-Setup.exe",
     "android_mobile": {
-      "arm64-v8a": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.3/flutteriptv-Android-Mobile-arm64-v8a.apk",
-      "armeabi-v7a": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.3/flutteriptv-Android-Mobile-armeabi-v7a.apk",
-      "x86_64": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.3/flutteriptv-Android-Mobile-x86_64.apk"
+      "arm64-v8a": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.4/flutteriptv-Android-Mobile-arm64-v8a.apk",
+      "armeabi-v7a": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.4/flutteriptv-Android-Mobile-armeabi-v7a.apk",
+      "x86_64": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.4/flutteriptv-Android-Mobile-x86_64.apk"
     },
     "android_tv": {
-      "arm64-v8a": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.3/flutteriptv-AndroidTV-arm64-v8a.apk",
-      "armeabi-v7a": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.3/flutteriptv-AndroidTV-arm64-v8a.apk",
-      "x86_64": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.3/flutteriptv-AndroidTV-x86_64.apk"
+      "arm64-v8a": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.4/flutteriptv-AndroidTV-arm64-v8a.apk",
+      "armeabi-v7a": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.4/flutteriptv-AndroidTV-arm64-v8a.apk",
+      "x86_64": "https://gh-proxy.org/https://github.com/KLGIT886/FlutterIPTV/releases/download/v1.6.4/flutteriptv-AndroidTV-x86_64.apk"
     }
   },
   "changelog": {
-    "zh": "- 新增：频道实时快照预览 —— 悬停（Windows 鼠标）或聚焦（TV）频道时预览实时画面，离开/失焦自动回退为台标，可在设置中开关；需 rtp2httpd 服务端开启 video-snapshot 才能生效\n- 优化：直播流起播速度与缓冲策略，并收敛非关键日志噪声\n- 重构：将设置页、频道页、首页与播放器页拆分为独立组件，提升可维护性\n- 优化：启动性能，并为 EPG 逻辑补充纯逻辑单元测试\n- 升级：file_picker、wakelock_plus、cached_network_image、material_ui/cupertino_ui、logger 至最新稳定版\n- 修复：台标渲染锯齿、EPG 跨天节目日期窗口多出空页面、EPG 自动定位滚动不准\n- 修复：启动初始化失败仍跳转首页、SQLite 外键级联与脏数据、多处监听器泄漏、全局未捕获异常兜底、小窗渲染溢出、README 语言切换与字体设置不一致",
-    "en": "- New: Channel live snapshot preview - preview the live frame on hover (Windows mouse) or focus (TV), auto-fall back to the logo on leave, toggleable in Settings; requires the video-snapshot option enabled on the rtp2httpd server\n- Optimization: Improved live-stream startup speed & buffering strategy, and reduced non-critical log noise\n- Refactor: Split Settings, Channels, Home and Player pages into standalone components for maintainability\n- Optimization: Improved startup performance; added pure-logic unit tests for EPG\n- Upgraded: file_picker, wakelock_plus, cached_network_image, material_ui/cupertino_ui and logger to latest stable\n- Fixed: logo aliasing, extra empty EPG page caused by overnight programs at the end of the date window, inaccurate EPG auto-scroll\n- Fixed: startup no longer navigating incorrectly after init failure, SQLite FK cascade & orphan-data cleanup, listener leaks, global uncaught-exception fallback, small-window render overflow, README language-switch and font inconsistencies"
+    "zh": "- 修复：快速连续切台起播失败/黑屏（open 串行化 + 会话级无画面守卫 + 回退节流）\n- 修复：HLG 4K/8K 画面偏亮（改为默认映射，让 HLG OOTF 自然适配 SDR）\n- 优化：软解时渲染恒定走 GPU，避免 4K→1080p 降级与色彩偏差\n- 优化：设置界面软解模式下联动隐藏无效的硬解方案选项\n- 优化：频道支持首尾循环换台\n- 优化：8K FCC 缓冲提升（demuxer-max-bytes 10M→64M）\n- 补充：回看占位符按 rtp2httpd 规范补齐（|UTC、短格式、timestamp 等）\n- 升级：file_picker 至 12.3.0",
+    "en": "- Fixed: fast channel switching startup failure/black screen (serialized open + session-level no-video guard + fallback throttle)\n- Fixed: HLG 4K/8K too-bright picture (switch to default mapping, let HLG OOTF adapt to SDR)\n- Optimization: software decode now keeps GPU rendering, avoiding 4K→1080p downgrade & color shifts\n- Optimization: Settings hide invalid HW-decoder options when Software decode is selected\n- Optimization: channel zapping now wraps around at the first/last channel\n- Optimization: 8K FCC buffering raised (demuxer-max-bytes 10M→64M)\n- Added: catchup placeholders per rtp2httpd spec (|UTC, short-form, timestamps)\n- Upgraded: file_picker to 12.3.0"
   },
   "minVersion": "1.0.0"
 }
