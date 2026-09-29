@@ -65,7 +65,7 @@ dependencies:
   uuid: ^4.6.0
   
   # Icons
-  cupertino_icons: ^1.0.9
+  cupertino_icons: ^2.0.0
   material_design_icons_flutter: ^7.0.7296
   screen_brightness: ^2.1.11
   wakelock_plus: ^1.7.0
