@@ -249,21 +249,32 @@ class LogService {
   }
   
   /// 刷新日志缓冲区（强制写入所有缓存的日志）
+  ///
+  /// 必须**先同步摘走待写内容、再 await 写盘**。原实现在 await 之后才 clear，
+  /// 于是同一批内容会被写两遍，造成日志整段重复：
+  ///   1. 并发的 flush()——[_checkAutoFlush] 是不 await 调用，第二次进入时
+  ///      缓冲区尚未清空，会把同一批内容再写一遍；
+  ///   2. 缓冲区满阈值的同步写入（见 [_BatchFileOutput.output]）——await 期间
+  ///      新日志会触发一次 writeAsStringSync，而它看到的是同一批未清空的内容。
   Future<void> flush() async {
-    if (_logBuffer.isEmpty) return;
-    
+    final file = _file;
+    if (file == null || _logBuffer.isEmpty) return;
+
+    // 同步完成「取内容 + 清缓冲 + 记时间」，三者之间不得有 await
+    final pending = _logBuffer.join('\n');
+    _logBuffer.clear();
+    _lastFlushTime = DateTime.now();
+
     try {
-      if (_file != null) {
-        await _file!.writeAsString(
-          '${_logBuffer.join('\n')}\n',
-          mode: FileMode.append,
-          flush: true,
-        );
-        _logBuffer.clear();
-        _lastFlushTime = DateTime.now();
-      }
+      await file.writeAsString(
+        '$pending\n',
+        mode: FileMode.append,
+        flush: true,
+      );
     } catch (e) {
       debugPrint('LogService: 刷新日志缓冲区失败 - $e');
+      // 写失败时放回缓冲区头部，避免静默丢日志
+      _logBuffer.insert(0, pending);
     }
   }
   
