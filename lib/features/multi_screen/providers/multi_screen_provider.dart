@@ -387,6 +387,16 @@ class MultiScreenProvider extends ChangeNotifier {
     player.stream.error.listen((error) async {
       if (error.isNotEmpty) {
         ServiceLocator.log.d('MultiScreenProvider: Screen $screenIndex error=$error');
+
+        // 滤镜/属性配置类错误不是播放故障：由 _applyDeinterlaceFilter 的候选重试
+        // 与硬件回退处理。若不拦下，动态改写 vf 的取值错误会被当成播放失败并触发
+        // 换源（_tryNextSourceOnError），导致该屏平白切到下一个源。
+        if (isConfigError(error)) {
+          ServiceLocator.log.w(
+              'MultiScreenProvider: Screen $screenIndex 忽略配置类错误（非播放故障）: $error');
+          return;
+        }
+
         if (_shouldTrySoftwareFallback(error, screen)) {
           _attemptSoftwareFallback(screenIndex);
           return;
@@ -645,22 +655,44 @@ class MultiScreenProvider extends ChangeNotifier {
 
         final sigPeak = await _safeGetProperty(player, 'video-params/sig-peak', 'sig-peak');
 
-        // 读取 codec 用于预设规则
-        final codec = await _safeGetProperty(player, 'video-params/codec', 'codec');
+        // 读取 codec 用于预设规则。
+        // 注意：属性名是 video-codec，不是 video-params/codec —— 后者不存在，
+        // 实测恒为空串，导致下方「H.264 + 1920×1080」预设规则从未生效过。
+        final codec = await _safeGetProperty(player, 'video-codec', 'codec');
 
         final h = params.h ?? 0;
         final w = params.w ?? 0;
-        final isInterlaced = interlaced == '1';
 
-        // 1080i 判定：标准检测 + 帧率兜底 + 预设规则
-        // 预设规则：H.264 + 1920×1080 的直播源，中国广电通常为 1080i50
-        // 即使首帧 interlaced 字段不稳定，也能正确启用去隔行
-        final is1080i = (h == 1080 && isInterlaced) ||
-                        (h == 1080 && vfFps < 31 && interlaced != '0') ||
-                        (codec == 'h264' && h == 1080 && w == 1920);
+        // 交错状态三态化。理由同 PlayerProvider：原 `interlaced != '0'` 在属性读取
+        // 失败（null）时为真，未知状态被当成「非逐行」放行，逐行 1080p25 频道会被
+        // 误判为 1080i 并强制去交错。此处显式区分已知/未知，并记录判定依据。
+        final bool interlacedProgressive = interlaced == '0';
+        final bool interlacedKnown = interlaced == '1' || interlaced == '0';
+
+        final ruleConfirmed = h == 1080 && interlaced == '1';
+        final ruleFpsGuess = h == 1080 && vfFps < 31 && !interlacedProgressive;
+        final ruleCodecPreset = codec == 'h264' && h == 1080 && w == 1920;
+        final is1080i = ruleConfirmed || ruleFpsGuess || ruleCodecPreset;
+        final judgeBasis = ruleConfirmed
+            ? 'interlaced标记'
+            : ruleFpsGuess
+                ? '帧率兜底(交错状态${interlacedKnown ? '已知' : '未知→按交错假设'})'
+                : ruleCodecPreset
+                    ? 'h264预设'
+                    : '未命中';
         // HDR 判定：BT.2020 色域 + (PQ 或 HLG 伽马曲线)
         final isHDR = srcPrimaries == 'bt.2020' &&
                       (srcGamma == 'pq' || srcGamma == 'hlg');
+
+        // 注意 top-field-first 在场编码(PAFF)源上无意义（实测恒为 0，真实场序需看
+        // SPS field_order / SEI pic_struct），此处仅作留痕，不可用于判断场序。
+        final topFieldFirst =
+            await _safeGetProperty(player, 'video-frame-info/top-field-first', 'top-field-first');
+        ServiceLocator.log.i(
+            'MultiScreenProvider 1080i 判定输入: ${w}x$h codec=${codec ?? 'null'} '
+            'interlaced=${interlaced ?? 'null'} vfFps=${vfFps.toStringAsFixed(2)} '
+            'topFieldFirst=${topFieldFirst ?? 'null'}(场编码下不可靠) '
+            '=> is1080i=$is1080i(依据=$judgeBasis) isHDR=$isHDR');
 
         // ════════════════════════════════════════════
         // 第一步：动态色彩映射 — 先判断 HDR/SDR，再决定色彩参数
@@ -768,7 +800,11 @@ class MultiScreenProvider extends ChangeNotifier {
 
             const filters = [
               'bwdif=mode=1:parity=tff',
-              'lavfi:yadif=mode=1:parity=tff',
+              // lavfi 的参数名是 graph，且 graph 值内含 ':' 与 '='，必须用 [] 括起来。
+              // 原写法 'lavfi:yadif=...' 中的 ':' 会让 mpv 把 yadif 当成 lavfi 的
+              // 参数名，报 "Error parsing option yadif (option not found)" —— 该兜底
+              // 自加入起从未生效过（实测日志确认），故改为文档规定的 [] 形式。
+              'lavfi=[yadif=mode=1:parity=tff]',
             ];
 
             String? workingFilter;

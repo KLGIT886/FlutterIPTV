@@ -809,22 +809,54 @@ class PlayerProvider extends ChangeNotifier {
 
         final sigPeak = await _safeGetProperty('video-params/sig-peak', 'sig-peak');
 
-        // 读取 codec 用于预设规则
-        final codec = await _safeGetProperty('video-params/codec', 'codec');
+        // 读取 codec 用于预设规则。
+        // 注意：属性名是 video-codec，不是 video-params/codec —— 后者不存在，
+        // 实测恒为空串，导致下方「H.264 + 1920×1080」预设规则从未生效过。
+        final codec = await _safeGetProperty('video-codec', 'codec');
 
         final h = params.h ?? 0;
         final w = params.w ?? 0;
-        final isInterlaced = interlaced == '1';
 
-        // 1080i 判定：标准检测 + 帧率兜底 + 预设规则
-        // 预设规则：H.264 + 1920×1080 的直播源，中国广电通常为 1080i50
-        // 即使首帧 interlaced 字段不稳定，也能正确启用去隔行
-        final is1080i = (h == 1080 && isInterlaced) ||
-                        (h == 1080 && vfFps < 31 && interlaced != '0') ||
-                        (codec == 'h264' && h == 1080 && w == 1920);
+        // 交错状态三态化。
+        // 原实现用字符串比较 `interlaced == '1'` / `interlaced != '0'`：当该属性
+        // 读不到时值为 null，而 Dart 里 `null != '0'` 为真 —— 未知状态被当成
+        // 「非逐行」放行，于是 1080p25 的逐行频道也会被判成 1080i 并强制去交错
+        // （实测日志中 interlaced 恒为空，判定完全靠帧率兜底）。
+        // 这里显式区分「已知交错 / 已知逐行 / 未知」，并记录是哪条规则决定的。
+        // 未知时仍按交错假设处理（宁多勿漏，避免真交错源漏去交错），但不会再
+        // 把「未知」伪装成已知。
+        final bool interlacedProgressive = interlaced == '0';
+        final bool interlacedKnown = interlaced == '1' || interlaced == '0';
+
+        final ruleConfirmed = h == 1080 && interlaced == '1';
+        final ruleFpsGuess = h == 1080 && vfFps < 31 && !interlacedProgressive;
+        final ruleCodecPreset = codec == 'h264' && h == 1080 && w == 1920;
+        final is1080i = ruleConfirmed || ruleFpsGuess || ruleCodecPreset;
+        final judgeBasis = ruleConfirmed
+            ? 'interlaced标记'
+            : ruleFpsGuess
+                ? '帧率兜底(交错状态${interlacedKnown ? '已知' : '未知→按交错假设'})'
+                : ruleCodecPreset
+                    ? 'h264预设'
+                    : '未命中';
         // HDR 判定：BT.2020 色域 + (PQ 或 HLG 伽马曲线)
         final isHDR = srcPrimaries == 'bt.2020' &&
                       (srcGamma == 'pq' || srcGamma == 'hlg');
+
+        // 判定输入留痕：台标抖动排查依赖「源是否真交错 / 场序 / 帧率」，
+        // 此前只记录了最终结论，无法回溯判定依据，导致根因只能靠猜。
+        // 注意 top-field-first 在**场编码(PAFF)**源上无意义：实测 CCTV-13(1080i50
+        // PAFF) 逐帧恒为 0，而 SPS field_order 为 tt、SEI pic_struct 交替 1→2
+        // （顶场在前）——即真实场序是 TFF。故该字段只作留痕，**不可用于判断场序**。
+        final topFieldFirst = await _safeGetProperty(
+            'video-frame-info/top-field-first', 'top-field-first');
+        ServiceLocator.log.i(
+            '1080i 判定输入: ${w}x$h codec=${codec ?? 'null'} interlaced=${interlaced ?? 'null'} '
+            'vfFps=${vfFps.toStringAsFixed(2)} '
+            'topFieldFirst=${topFieldFirst ?? 'null'}(场编码下不可靠) '
+            'gamma=$srcGamma primaries=$srcPrimaries '
+            '=> is1080i=$is1080i(依据=$judgeBasis) isHDR=$isHDR',
+            tag: 'PlayerProvider');
 
         // ════════════════════════════════════════════
         // 第一步：动态色彩映射 — 先判断 HDR/SDR，再决定色彩参数
@@ -945,7 +977,11 @@ class PlayerProvider extends ChangeNotifier {
 
             const filters = [
               'bwdif=mode=1:parity=tff',
-              'lavfi:yadif=mode=1:parity=tff',
+              // lavfi 的参数名是 graph，且 graph 值内含 ':' 与 '='，必须用 [] 括起来。
+              // 原写法 'lavfi:yadif=...' 中的 ':' 会让 mpv 把 yadif 当成 lavfi 的
+              // 参数名，报 "Error parsing option yadif (option not found)" —— 该兜底
+              // 自加入起从未生效过（实测日志确认），故改为文档规定的 [] 形式。
+              'lavfi=[yadif=mode=1:parity=tff]',
             ];
 
             String? workingFilter;
@@ -1177,6 +1213,14 @@ class PlayerProvider extends ChangeNotifier {
     _sub(_mediaKitPlayer!.stream.error, (err) {
       if (err.isNotEmpty) {
         ServiceLocator.log.e('播放器错误: $err', tag: 'PlayerProvider');
+
+        // 滤镜/属性配置类错误不是播放故障：由 MpvTuner 的候选重试与硬件回退处理。
+        // 若不拦下，动态改写 vf 时的取值错误会被当成播放失败并触发整路重试
+        // （实测会打断正常播放并让滤镜轮换/探针出现多实例并发）。
+        if (isConfigError(err)) {
+          ServiceLocator.log.w('忽略配置类错误（非播放故障）: $err', tag: 'PlayerProvider');
+          return;
+        }
 
         // 分析错误类型
         if (err.toLowerCase().contains('decode') ||
