@@ -1060,7 +1060,13 @@ class PlayerProvider extends ChangeNotifier {
           // 目标与当前的 copy/direct 类别是否一致（copy-back 语义相同时无需重建）
           final isCopyTarget = targetHwdec == 'auto-copy' || targetHwdec.endsWith('-copy');
           final isCopyActual = currentHwdec.endsWith('-copy') || currentHwdec == 'auto-copy';
-          if (readHwdec == null || readHwdec.isEmpty || isCopyTarget != isCopyActual) {
+          // 实际已是软解（'no'）时不再重写 hwdec：AVS3/AVS2 这类流根本没有硬件
+          // 解码器，重写只会把选项值改回去并触发解码器重建——mpv 要等下一个
+          // IDR 才能继续，实测表现为画面已经出来后缓冲被清空、转圈 1.2s，
+          // 看起来像播放器被重建（日志：Set property: hwdec -> playback restart
+          // -> Enter buffering 100%->9%）。
+          if (readHwdec != 'no' &&
+              (readHwdec == null || readHwdec.isEmpty || isCopyTarget != isCopyActual)) {
             // 类别不一致或未知：显式重置为用户配置的 hwdec
             await _safeSetProperty('hwdec', targetHwdec, 'hwdec_progressive');
             _appliedHwdec = targetHwdec;
@@ -1068,7 +1074,14 @@ class PlayerProvider extends ChangeNotifier {
           await _safeSetProperty('deinterlace', 'no', 'deinterlace');
           await _safeSetProperty('vf', '', 'clear_vf');
           final label = h > 0 ? '${h}p 逐行源' : '源（默认按逐行处理）';
-          ServiceLocator.log.i('$label: $targetHwdec 硬解(当前$currentHwdec), 无去交错', tag: 'PlayerProvider');
+          // 明确区分「配置值」与「实际值」：AVS3 等无硬件解码器的流实际是
+          // 'no'（软解），旧日志写成 "$targetHwdec 硬解" 会误导排查。
+          final actualLabel = currentHwdec.isEmpty
+              ? '未知'
+              : (currentHwdec == 'no' ? '$currentHwdec(软解)' : currentHwdec);
+          ServiceLocator.log.i(
+              '$label: 无去交错, hwdec 配置=$targetHwdec 实际=$actualLabel',
+              tag: 'PlayerProvider');
         }
       });
     }
