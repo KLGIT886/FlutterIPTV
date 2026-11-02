@@ -50,9 +50,19 @@ extension _PlayerScreenLayers on _PlayerScreenState {
         return ExcludeSemantics(
           // Exclude semantics from video texture widget to prevent AXTree update
           // errors when the platform video surface rebuilds.
-          child: Video(
-            controller: provider.videoController!,
-            controls: NoVideoControls,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Video(
+                controller: provider.videoController!,
+                controls: NoVideoControls,
+              ),
+              // 切台过渡期遮罩：mpv 在 open() 内部 stop 后不会主动画黑帧，
+              // 纹理里仍是上一频道的最后一帧。用不透明黑底盖住视频层，
+              // 等当前流视频链就绪（width > 0，provider 会清掉该标记）再移除。
+              if (provider.isVideoSurfaceStale)
+                const ColoredBox(color: Colors.black),
+            ],
           ),
         );
       },

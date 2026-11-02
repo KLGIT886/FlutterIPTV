@@ -58,6 +58,13 @@ class PlayerProvider extends ChangeNotifier {
   // 整个会话永久钉死在软解（4K 卡顿 + HLG 色彩异常），只能重启应用恢复。
   bool _softwareFallbackActive = false;
   int? _fallbackChannelId;
+  /// 本次会话内确认过「硬解起播失败、必须软解」的频道集合。
+  ///
+  /// 软解回退本身靠错误回调触发，而 `_attemptSoftwareFallback` 有 8 秒全局节流：
+  /// 8K 频道 → 普通频道 → 8K 的快速来回切换中，第二次回到 8K 时回退会被节流
+  /// 直接抑制，表现为「切过去还是硬解、一直黑屏」。记住频道身份后，这类频道
+  /// 再次播放时直接以软解重建，不再依赖错误回调。
+  final Set<int> _softwareRequiredChannels = {};
 
   bool _noVideoFallbackAttempted = false;
   bool _allowSoftwareFallback = true;
@@ -74,6 +81,15 @@ class PlayerProvider extends ChangeNotifier {
   /// 上述"切台瞬间 width=0"的误判就会被放回来，起播反而变慢（实测结论）。
   /// 代价：真正"有声音无画面"的源在本会话内不再享受该兜底。
   bool _hasSeenVideo = false;
+  /// 切台期间画面是否仍可能是上一频道的内容。
+  ///
+  /// mpv 在 `open()` 内部先 `stop` 再 `loadfile`，嵌入式渲染在上一个文件被卸载后
+  /// 不会主动画黑帧，纹理里留着上一频道的最后一帧；这段时间（302 解析、滤镜设置、
+  /// 新流解复用/解码）里旧画面会一直挂在屏幕上。
+  ///
+  /// 该标记从发起切台起置 true（此时旧流甚至还在正常渲染），到当前流视频链就绪
+  /// （width > 0）才置 false；期间 UI 用不透明黑底遮住视频层，避免看到旧画面。
+  bool _videoSurfaceStale = false;
   /// 同一 Player 的 open 串行链：快速连续切台时若并发 open，
   /// 会在原生层（先 stop 再 load）争用，导致起播失败与崩溃。
   Future<void>? _openSerial;
@@ -95,6 +111,13 @@ class PlayerProvider extends ChangeNotifier {
 
   bool _deinterlaceConfiguredForCurrentStream = false;
   bool _initialHwdecSet = false;
+  /// 上一次实际写入 mpv 的 hwdec 值（空串表示未知/尚未写入）。
+  ///
+  /// 异步阶段会为 1080i 临时改写 hwdec（如 d3d11va-copy）。这个值会留在 mpv
+  /// 上被下一路流继承，而纠正逻辑在 videoParams 回调里——解码失败的新流
+  /// 根本不会触发该回调，于是旧值一直留着，表现为切台后仍是硬解、黑屏。
+  /// 因此换台时在 open() 之前按本字段判断是否需要把 hwdec 归位。
+  String _appliedHwdec = '';
   int _deinterlaceGeneration = 0; // 代际计数器，用于检测过时的 videoParams 回调
   String _videoOutput = 'auto';
   String _vo = 'unknown';
@@ -137,6 +160,10 @@ class PlayerProvider extends ChangeNotifier {
   bool get isLoading =>
       _state == PlayerState.loading || _state == PlayerState.buffering;
   bool get hasError => _state == PlayerState.error && _error != null;
+
+  /// 切台过渡期内为 true：视频层可能还是上一频道残留的最后一帧，
+  /// UI 应在此置位期间用不透明黑底盖住 [videoController] 的画面。
+  bool get isVideoSurfaceStale => _videoSurfaceStale;
 
   /// Create Media object.
   /// User-Agent 已通过全局 mpv 属性 http-header-fields 统一设置（见 _initMediaKitPlayer），
@@ -656,6 +683,7 @@ class PlayerProvider extends ChangeNotifier {
     // 必须在 open() 之前调用，否则 hwdec=auto 会绕过 vf 滤镜链
     // 重置 _initialHwdecSet 确保新播放器的 hwdec 被正确设置
     _initialHwdecSet = false;
+    _appliedHwdec = '';
     _resetDeinterlaceDetection();
     await _applyDeinterlaceFilter();
 
@@ -740,26 +768,29 @@ class PlayerProvider extends ChangeNotifier {
     // ═══════════════════════════════════════════════
     // 同步阶段（open() 之前）：设置解码器启动参数
     // ═══════════════════════════════════════════════
+    // hwdec 归位：异步阶段会为 1080i 临时改写 hwdec（d3d11va-copy 等），
+    // 该值会被下一路流继承。若上一流改写过后没有在这里归位，新流就会用
+    // 旧模式起播：解码失败时 videoParams 回调永不触发，纠正逻辑等不到，
+    // 表现即「切台后仍是硬解 + 黑屏」。仅在值确实不一致时才写入，避免
+    // 常规换台触发多余的解码器重建（1-2s）。
+    final configuredHwdec = _getConfiguredHwdecMode();
+    if (!_initialHwdecSet || _appliedHwdec != configuredHwdec) {
+      await _safeSetProperty('hwdec', configuredHwdec, 'hwdec');
+      _appliedHwdec = configuredHwdec;
+      _initialHwdecSet = true;
+    }
+
     if (enabled) {
       // 启用去交错：使用用户配置的 hwdec 模式（如 auto-safe、auto-copy 等）
       // - 不使用硬编码 d3d11va-copy：某些 HEVC 4K 流在 d3d11va-copy 下解码失败（PPS id out of range）
       // - 异步 videoParams 回调确认是 1080i 后，才会切换为 d3d11va-copy 以支持软件 vf 滤镜
       // - 对逐行 4K 源：保持用户配置的 hwdec，避免解码器不兼容
-      // hwdec 只在首次设置，避免 open() 后重复设置触发解码器重建
-      if (!_initialHwdecSet) {
-        await _safeSetProperty('hwdec', _getConfiguredHwdecMode(), 'hwdec');
-        _initialHwdecSet = true;
-      }
       await _safeSetProperty('deinterlace', 'no', 'deinterlace');
       await _safeSetProperty('vf', '', 'clear_vf');
     } else {
       // 禁用去交错：使用用户配置的 hwdec
       await _safeSetProperty('deinterlace', 'no', 'deinterlace');
       await _safeSetProperty('vf', '', 'clear_vf');
-      if (!_initialHwdecSet) {
-        await _safeSetProperty('hwdec', _getConfiguredHwdecMode(), 'hwdec');
-        _initialHwdecSet = true;
-      }
       _videoParamsSubscription?.cancel();
       _videoParamsSubscription = null;
       ServiceLocator.log.i('去交错已禁用', tag: 'PlayerProvider');
@@ -973,6 +1004,7 @@ class PlayerProvider extends ChangeNotifier {
             if (needCopyForSoftwareFilter) {
               // 仅在 direct 模式时切换到 d3d11va-copy，使软件滤镜能消费帧
               await _safeSetProperty('hwdec', 'd3d11va-copy', 'hwdec_1080i');
+              _appliedHwdec = 'd3d11va-copy';
             }
 
             const filters = [
@@ -1008,6 +1040,7 @@ class PlayerProvider extends ChangeNotifier {
               // 软件滤镜全部不可用 → 回退到硬件去交错
               await _safeSetProperty('vf', '', 'clear_vf');
               await _safeSetProperty('hwdec', _getConfiguredHwdecMode(), 'hwdec');
+              _appliedHwdec = _getConfiguredHwdecMode();
               await _safeSetProperty('deinterlace', 'yes', 'deinterlace');
               ServiceLocator.log.i(
                   '1080i: 软件滤镜不可用，退回硬件去交错 (deinterlace=yes)',
@@ -1030,6 +1063,7 @@ class PlayerProvider extends ChangeNotifier {
           if (readHwdec == null || readHwdec.isEmpty || isCopyTarget != isCopyActual) {
             // 类别不一致或未知：显式重置为用户配置的 hwdec
             await _safeSetProperty('hwdec', targetHwdec, 'hwdec_progressive');
+            _appliedHwdec = targetHwdec;
           }
           await _safeSetProperty('deinterlace', 'no', 'deinterlace');
           await _safeSetProperty('vf', '', 'clear_vf');
@@ -1248,6 +1282,8 @@ class PlayerProvider extends ChangeNotifier {
     _sub(_mediaKitPlayer!.stream.width, (width) {
       if (width != null && width > 0) {
         _hasSeenVideo = true;
+        // 当前流的视频链已就绪（不再是上一频道的画面），解除切台遮罩
+        _videoSurfaceStale = false;
         ServiceLocator.log.d('视频宽度: $width', tag: 'PlayerProvider');
       }
       notifyListeners();
@@ -1525,6 +1561,10 @@ class PlayerProvider extends ChangeNotifier {
       // 记录这次降级，换频道时由 playChannel 恢复到用户配置的解码模式
       _softwareFallbackActive = true;
       _fallbackChannelId = channelToPlay?.id;
+      final channelId = channelToPlay?.id;
+      if (channelId != null) {
+        _softwareRequiredChannels.add(channelId);
+      }
       if (channelToPlay != null && !_isDisposed) {
         await playChannel(channelToPlay);
       }
@@ -1556,6 +1596,8 @@ class PlayerProvider extends ChangeNotifier {
 
     _currentChannel = channel;
     _state = PlayerState.loading;
+    // 从这一刻起画面已不属于当前频道，先遮住上一频道的残留帧
+    _videoSurfaceStale = true;
     _error = null;
     _lastErrorMessage = null; // 重置错误防抖
     _errorDisplayed = false; // 重置错误显示标记
@@ -1588,9 +1630,26 @@ class PlayerProvider extends ChangeNotifier {
       // Android TV 使用原生播放器，通过 MethodChannel 处理
       // 其他平台（包括 Android 手机）都使用 media_kit
       if (!_useNativePlayer) {
-        // 软解回退只针对当次播放生效：切到别的频道时先重建播放器，
-        // 恢复到用户配置的解码模式（否则整个会话都被钉死在 hwdec=no）。
-        if (_softwareFallbackActive && _fallbackChannelId != channel.id) {
+        // 解码模式按频道决定：
+        // - 该频道此前确认过必须软解（硬解起播失败）：直接以软解重建播放器，
+        //   不再先失败一次再去等错误回调，也绕开 8s 回退节流（快速来回切时
+        //   回退会被直接抑制，表现为「切过去还是硬解 + 黑屏」）。
+        // - 从软解频道切到普通频道：恢复用户配置的解码模式，否则整个会话
+        //   都被钉死在 hwdec=no。
+        final channelNeedsSoftware =
+            channel.id != null && _softwareRequiredChannels.contains(channel.id);
+        if (channelNeedsSoftware && !_isSoftwareDecoding) {
+          ServiceLocator.log.i(
+            '频道 ${channel.name} 此前确认需要软解，直接以软解模式重建播放器',
+            tag: 'PlayerProvider',
+          );
+          await _initMediaKitPlayer(useSoftwareDecoding: true);
+          _softwareFallbackActive = true;
+          _fallbackChannelId = channel.id;
+          if (_isStalePlayback(generation)) return;
+        } else if (!channelNeedsSoftware &&
+            _softwareFallbackActive &&
+            _fallbackChannelId != channel.id) {
           ServiceLocator.log.i(
             '检测到此前触发过软解回退，切换频道时恢复配置的解码模式',
             tag: 'PlayerProvider',
@@ -1703,6 +1762,8 @@ class PlayerProvider extends ChangeNotifier {
     final startTime = DateTime.now();
     _markPlayStart(startTime); // O5: 记录起播起点
     _state = PlayerState.loading;
+    // 从这一刻起画面已不属于当前流，先遮住上一频道的残留帧
+    _videoSurfaceStale = true;
     _error = null;
     _lastErrorMessage = null; // 重置错误防抖
     _errorDisplayed = false; // 重置错误显示标记
