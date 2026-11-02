@@ -15,17 +15,12 @@ dependencies:
   # State Management
   provider: ^6.1.1
   
-  # Video Player（Predidit media-kit 分支：Dart 构建钩子自带 libmpv，无需 media_kit_libs_*）
-  media_kit:
-    git:
-      url: https://github.com/Predidit/media-kit.git
-      ref: 83b7ca63772856e1ea0158916177e136f7b7b0be
-      path: ./media_kit
-  media_kit_video:
-    git:
-      url: https://github.com/Predidit/media-kit.git
-      ref: 83b7ca63772856e1ea0158916177e136f7b7b0be
-      path: ./media_kit_video
+  # Video Player
+  media_kit: ^1.1.11
+  media_kit_video: ^2.0.1
+  media_kit_libs_video: ^1.0.5
+  media_kit_libs_windows_video: ^1.0.10
+  media_kit_libs_android_video: ^1.3.6
   
   # Local Storage
   shared_preferences: ^2.5.5
@@ -54,7 +49,7 @@ dependencies:
   
   # Utilities
   intl: ^0.20.2
-  xml: ^6.5.0
+  xml: ^7.0.1
   
   # Backup & Restore
   archive: ^4.0.9
@@ -72,17 +67,17 @@ dependencies:
   cupertino_icons: ^2.0.0
   material_design_icons_flutter: ^7.0.7296
   screen_brightness: ^2.1.11
-  wakelock_plus: ^1.3.3
+  wakelock_plus: ^1.7.0
   screen_retriever: ^0.3.1
   device_info_plus: ^13.2.0
   material_ui: ^1.1.0
   cupertino_ui: ^1.0.1
 
 dependency_overrides:
-  # media_kit_video（Predidit 分支）精确钉死 wakelock_plus 1.3.3，而该版本要求
-  # package_info_plus <9.0.0，与本项目的 package_info_plus ^10 冲突。
-  # 这里改用当前版本（API 相同：enable/disable/toggle/enabled）。
-  wakelock_plus: ^1.8.2
+  # 使用 zhongfly/mpv-winbuild 的完整版 libmpv（含 libavfilter + msg-level 支持）
+  # 本地 fork 替换官方精简版，路径: packages/media_kit_libs_windows_video_full
+  media_kit_libs_windows_video:
+    path: packages/media_kit_libs_windows_video_full
 
 dev_dependencies:
   flutter_test:
