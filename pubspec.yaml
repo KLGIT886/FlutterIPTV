@@ -15,12 +15,17 @@ dependencies:
   # State Management
   provider: ^6.1.1
   
-  # Video Player
-  media_kit: ^1.1.11
-  media_kit_video: ^2.0.1
-  media_kit_libs_video: ^1.0.5
-  media_kit_libs_windows_video: ^1.0.10
-  media_kit_libs_android_video: ^1.3.6
+  # Video Player（自建 fork：Dart 构建钩子自带 libmpv，AVS3 + 去交错；两个包必须同一 ref）
+  media_kit:
+    git:
+      url: https://github.com/KLGIT886/media-kit.git
+      ref: 189d61147fefb7cf9e32e98a477c2cdc90a0edfd
+      path: ./media_kit
+  media_kit_video:
+    git:
+      url: https://github.com/KLGIT886/media-kit.git
+      ref: 189d61147fefb7cf9e32e98a477c2cdc90a0edfd
+      path: ./media_kit_video
   
   # Local Storage
   shared_preferences: ^2.5.5
@@ -67,17 +72,11 @@ dependencies:
   cupertino_icons: ^2.0.0
   material_design_icons_flutter: ^7.0.7296
   screen_brightness: ^2.1.11
-  wakelock_plus: ^1.7.0
+  wakelock_plus: ^1.8.2
   screen_retriever: ^0.3.1
   device_info_plus: ^13.2.0
   material_ui: ^1.1.0
   cupertino_ui: ^1.0.1
-
-dependency_overrides:
-  # 使用 zhongfly/mpv-winbuild 的完整版 libmpv（含 libavfilter + msg-level 支持）
-  # 本地 fork 替换官方精简版，路径: packages/media_kit_libs_windows_video_full
-  media_kit_libs_windows_video:
-    path: packages/media_kit_libs_windows_video_full
 
 dev_dependencies:
   flutter_test:
