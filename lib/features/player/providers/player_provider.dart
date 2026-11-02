@@ -1109,6 +1109,13 @@ class PlayerProvider extends ChangeNotifier {
           message.contains('reference frames') ||
           message.contains('exceeds max') ||
           message.contains('discarding one') ||
+          // FCC 组播突发从 GOP 中间开始，首个 IDR 之前的切片必然报 PPS/SPS
+          // 越界并持续到探测结束（3~4K 流每次切台 200+ 条）。这些是探测期
+          // 正常现象（isTransientStreamError 已按瞬时错误处理，不触发软解
+          // 回退），只在日志里刷屏并拖慢 IO，故在日志侧过滤掉。
+          message.contains('pps id out of range') ||
+          message.contains('sps id out of range') ||
+          message.contains('skipping invalid undecodable nalu') ||
           message.contains('deprecated pixel format') ||
           message.contains("skip ('#ext") ||
           (message.contains('hls @') && message.contains('skip')) ||
@@ -1439,6 +1446,19 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   void _updateHwdecFromLog(String lowerMessage) {
+    // auto-copy 会先枚举候选 hwdec，打印 "Looking at hwdec hevc-d3d11va"、
+    // "Skipping previously attempted hwdec: hevc-nvdec" 等过程日志；旧正则
+    // 会把它们当成实际 hwdec，HUD 上出现 hevc-nvdec -> d3d11va-copy 的假切换，
+    // 看起来像"切台时换了硬解模式"，实则只是 15ms 级的候选探测。
+    // 只接受最终选择结果（Using hardware decoding (...) / software decoding），
+    // 其余实际值由 hwdec-current 轮询兜底。
+    if (lowerMessage.contains('looking at hwdec') ||
+        lowerMessage.contains('skipping previously attempted hwdec') ||
+        lowerMessage.contains('not using this for auto-copy') ||
+        lowerMessage.contains('set property: hwdec')) {
+      return;
+    }
+
     String? detected;
 
     // e.g. "Using hardware decoding (d3d11va-copy)"
@@ -1446,13 +1466,6 @@ class PlayerProvider extends ChangeNotifier {
         .firstMatch(lowerMessage);
     if (hwdecMatch != null) {
       detected = hwdecMatch.group(1);
-    }
-
-    // e.g. "hwdec=auto", "hwdec: d3d11va"
-    final hwdecKeyMatch = RegExp(r'hwdec(?:-current)?\s*[:=]\s*([\w\-]+)')
-        .firstMatch(lowerMessage);
-    if (detected == null && hwdecKeyMatch != null) {
-      detected = hwdecKeyMatch.group(1);
     }
 
     if (detected == null && lowerMessage.contains('software decoding')) {
