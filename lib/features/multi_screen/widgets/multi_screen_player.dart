@@ -67,7 +67,8 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
       return;
     }
     if (PlatformDetector.isDesktop) {
-      final isFullscreen = await windowManager.isFullScreen();
+      final isFullscreen =
+          WindowManager.instance.getCurrent()?.isFullScreen ?? false;
       if (!mounted) return;
       setState(() => _isWindowFullscreen = isFullscreen);
     }
@@ -95,28 +96,24 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
       } else {
         ServiceLocator.log.d(
             'MultiScreenPlayer: Native fullscreen failed, falling back to window_manager');
-        windowManager
-            .isFullScreen()
-            .then((value) => windowManager.setFullScreen(!value));
+        final window = WindowManager.instance.getCurrent();
+        if (window != null) window.isFullScreen = !window.isFullScreen;
         Future.microtask(() {
           if (mounted) {
-            windowManager.isFullScreen().then((value) {
-              if (mounted) setState(() => _isWindowFullscreen = value);
-            });
+            setState(() => _isWindowFullscreen =
+                WindowManager.instance.getCurrent()?.isFullScreen ?? false);
           }
         });
       }
       return;
     }
 
-    windowManager
-        .isFullScreen()
-        .then((value) => windowManager.setFullScreen(!value));
+    final window = WindowManager.instance.getCurrent();
+    if (window != null) window.isFullScreen = !window.isFullScreen;
     Future.microtask(() {
       if (mounted) {
-        windowManager
-            .isFullScreen()
-            .then((value) => setState(() => _isWindowFullscreen = value));
+        setState(() => _isWindowFullscreen =
+            WindowManager.instance.getCurrent()?.isFullScreen ?? false);
       }
     });
   }
@@ -144,8 +141,9 @@ class _MultiScreenPlayerState extends State<MultiScreenPlayer> {
           },
           child: GestureDetector(
             // Mini模式下整个区域可拖动
-            onPanStart:
-                isMiniMode ? (_) => windowManager.startDragging() : null,
+            onPanStart: isMiniMode
+                ? (_) => WindowManager.instance.getCurrent()?.startDragging()
+                : null,
             onTap: () {
               if (_showChannelSelector) {
                 setState(() => _showChannelSelector = false);

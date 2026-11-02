@@ -20,7 +20,8 @@ class MiniControlsOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       // 整个区域可拖动
-      onPanStart: (_) => windowManager.startDragging(),
+      onPanStart: (_) =>
+          WindowManager.instance.getCurrent()?.startDragging(),
       child: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(

@@ -184,21 +184,17 @@ Future<void> _bootApp() async {
 
     // Initialize window manager for Windows
     if (Platform.isWindows) {
-      await windowManager.ensureInitialized();
-
-      WindowOptions windowOptions = const WindowOptions(
-        size: Size(1280, 720),
-        minimumSize: Size(360, 600),
-        center: true,
-        backgroundColor: Colors.black,
-        titleBarStyle: TitleBarStyle.hidden,
-        windowButtonVisibility: false,
-      );
-
-      await windowManager.waitUntilReadyToShow(windowOptions, () async {
-        await windowManager.show();
-        await windowManager.focus();
-      });
+      final window = WindowManager.instance.getCurrent();
+      if (window != null) {
+        window.titleBarStyle = TitleBarStyle.hidden;
+        window.isWindowControlButtonsVisible = false;
+        window.backgroundColor = Colors.black.toNative();
+        window.minimumSize = const Size(360, 600).toNative();
+        window.setSize(const Size(1280, 720).toNative(), false);
+        window.center();
+        window.show();
+        window.focus();
+      }
     }
 
     // Initialize PlatformDetector for settings page
@@ -315,8 +311,12 @@ class _DlnaAwareApp extends StatefulWidget {
   State<_DlnaAwareApp> createState() => _DlnaAwareAppState();
 }
 
-class _DlnaAwareAppState extends State<_DlnaAwareApp> with WindowListener {
+class _DlnaAwareAppState extends State<_DlnaAwareApp> {
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
+  /// Windows 窗口事件监听句柄
+  ListenerId? _windowListenerId;
+  bool _windowClosing = false;
   String? _currentDlnaUrl; // 记录当前 DLNA 播放的 URL
 
   // 自动刷新服务
@@ -338,7 +338,8 @@ class _DlnaAwareAppState extends State<_DlnaAwareApp> with WindowListener {
 
     // Windows 窗口关闭监听
     if (Platform.isWindows) {
-      windowManager.addListener(this);
+      _windowListenerId =
+          WindowManager.instance.getCurrent()?.addListener(_onWindowEvent);
     }
     // 立即触发 DlnaProvider 的创建（会自动启动 DLNA 服务）
     // 使用 addPostFrameCallback 确保 context 可用
@@ -427,8 +428,8 @@ class _DlnaAwareAppState extends State<_DlnaAwareApp> with WindowListener {
 
   @override
   void dispose() {
-    if (Platform.isWindows) {
-      windowManager.removeListener(this);
+    if (Platform.isWindows && _windowListenerId != null) {
+      WindowManager.instance.getCurrent()?.removeListener(_windowListenerId!);
     }
     _autoRefreshService.stop();
     // 移除设置监听，避免全局单例上累积匿名监听器
@@ -604,9 +605,15 @@ class _DlnaAwareAppState extends State<_DlnaAwareApp> with WindowListener {
     }
   }
 
-  @override
-  void onWindowClose() async {
-    // 窗口关闭时停止 DLNA 服务
+  /// 窗口关闭：先停止 DLNA 服务，再放行关闭
+  Future<void> _onWindowEvent(WindowEvent event) async {
+    if (event is! WindowCloseRequestedEvent) return;
+    if (_windowClosing) return;
+
+    _windowClosing = true;
+    // 先拦下关闭请求，等清理完成后再关闭
+    event.request.cancel();
+
     try {
       final dlnaProvider = context.read<DlnaProvider>();
       await dlnaProvider.setEnabled(false);
@@ -614,7 +621,8 @@ class _DlnaAwareAppState extends State<_DlnaAwareApp> with WindowListener {
     } catch (e) {
       // 忽略错误
     }
-    await windowManager.destroy();
+
+    WindowManager.instance.getCurrent()?.close();
   }
 
   void _setupDlnaCallbacks() {

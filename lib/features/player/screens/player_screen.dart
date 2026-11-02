@@ -638,7 +638,7 @@ class _PlayerScreenState extends State<PlayerScreen>
         if (!success) {
           ServiceLocator.log
               .d('Native exitFullScreen failed, using window_manager');
-          windowManager.setFullScreen(false);
+          WindowManager.instance.getCurrent()?.isFullScreen = false;
         }
       });
     }
@@ -1470,7 +1470,10 @@ class _PlayerScreenState extends State<PlayerScreen>
                               if (PlatformDetector.isWindows) {
                                 await Future.delayed(
                                     const Duration(milliseconds: 300));
-                                _isFullScreen = await windowManager.isFullScreen();
+                                _isFullScreen = WindowManager.instance
+                                        .getCurrent()
+                                        ?.isFullScreen ??
+                                    false;
                               }
                               setState(() {});
                               // 恢复焦点到播放器
@@ -1728,7 +1731,7 @@ PlayerTopBar(
       final success = WindowsFullscreenNative.exitFullScreen();
       if (!success) {
         // 如果原生 API 失败，回退到 window_manager
-        unawaited(windowManager.setFullScreen(false));
+        WindowManager.instance.getCurrent()?.isFullScreen = false;
       }
     }
 
@@ -1790,7 +1793,8 @@ PlayerTopBar(
                 // 延迟同步全屏状态，等待窗口状态稳定
                 if (PlatformDetector.isWindows) {
                   await Future.delayed(const Duration(milliseconds: 300));
-                  _isFullScreen = await windowManager.isFullScreen();
+                  _isFullScreen =
+                      WindowManager.instance.getCurrent()?.isFullScreen ?? false;
                 }
                 setState(() {});
               },
@@ -1967,20 +1971,18 @@ PlayerTopBar(
       // 如果原生 API 失败，回退到 window_manager
       ServiceLocator.log
           .d('Native fullscreen failed, falling back to window_manager');
-      windowManager
-          .isFullScreen()
-          .then((value) => windowManager.setFullScreen(!value));
+      final window = WindowManager.instance.getCurrent();
+      if (window != null) {
+        window.isFullScreen = !window.isFullScreen;
+      }
 
       Future.microtask(() {
         if (mounted) {
-          windowManager.isFullScreen().then((isFullScreen) {
-            if (mounted) {
-              setState(() {
-                _isFullScreen = isFullScreen;
-              });
-              _playerFocusNode.requestFocus();
-            }
+          setState(() {
+            _isFullScreen =
+                WindowManager.instance.getCurrent()?.isFullScreen ?? false;
           });
+          _playerFocusNode.requestFocus();
         }
       });
     }

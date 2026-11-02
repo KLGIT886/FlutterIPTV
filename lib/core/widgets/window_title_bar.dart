@@ -27,6 +27,8 @@ class _WindowTitleBarState extends State<WindowTitleBar> {
   bool _isVisible = false;
   Timer? _hideTimer;
 
+  Window? get _window => WindowManager.instance.getCurrent();
+
   // 触发区域高度（鼠标进入此区域显示标题栏）
   static const double _triggerHeight = 8.0;
   // 标题栏高度
@@ -111,13 +113,11 @@ class _WindowTitleBarState extends State<WindowTitleBar> {
             onEnter: (_) => _cancelHideTimer(),
             onExit: (_) => _startHideTimer(),
             child: GestureDetector(
-              onPanStart: (_) => windowManager.startDragging(),
-              onDoubleTap: () async {
-                if (await windowManager.isMaximized()) {
-                  await windowManager.unmaximize();
-                } else {
-                  await windowManager.maximize();
-                }
+              onPanStart: (_) => _window?.startDragging(),
+              onDoubleTap: () {
+                final window = _window;
+                if (window == null) return;
+                window.isMaximized ? window.unmaximize() : window.maximize();
               },
               child: Container(
                 height: _barHeight,
@@ -178,13 +178,13 @@ class _WindowTitleBarState extends State<WindowTitleBar> {
                     // Window buttons
                     _WindowButton(
                       icon: Icons.remove,
-                      onPressed: () => windowManager.minimize(),
+                      onPressed: () => _window?.minimize(),
                     ),
                     _MaximizeButton(),
                     _WindowButton(
                       icon: Icons.close,
                       hoverColor: Colors.red,
-                      onPressed: () => windowManager.close(),
+                      onPressed: () => _window?.close(),
                     ),
                   ],
                 ),
@@ -246,14 +246,16 @@ class _MaximizeButtonState extends State<_MaximizeButton> {
   bool _isHovered = false;
   bool _isMaximized = false;
 
+  Window? get _window => WindowManager.instance.getCurrent();
+
   @override
   void initState() {
     super.initState();
     _checkMaximized();
   }
 
-  Future<void> _checkMaximized() async {
-    _isMaximized = await windowManager.isMaximized();
+  void _checkMaximized() {
+    _isMaximized = _window?.isMaximized ?? false;
     if (mounted) setState(() {});
   }
 
@@ -263,12 +265,10 @@ class _MaximizeButtonState extends State<_MaximizeButton> {
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(
-        onTap: () async {
-          if (_isMaximized) {
-            await windowManager.unmaximize();
-          } else {
-            await windowManager.maximize();
-          }
+        onTap: () {
+          final window = _window;
+          if (window == null) return;
+          _isMaximized ? window.unmaximize() : window.maximize();
           _checkMaximized();
         },
         child: Container(
