@@ -30,7 +30,9 @@ class _WindowTitleBarState extends State<WindowTitleBar> {
   Window? get _window => WindowManager.instance.getCurrent();
 
   // 触发区域高度（鼠标进入此区域显示标题栏）
-  static const double _triggerHeight = 8.0;
+  // 注意：原生窗口顶部约 8 逻辑像素是缩放热区（hit-test 返回 HTTOP），
+  // Flutter 收不到这块的鼠标事件，所以触发区必须比这更厚，否则几乎无法浮出。
+  static const double _triggerHeight = 26.0;
   // 标题栏高度
   static const double _barHeight = 32.0;
   // 自动隐藏延迟
