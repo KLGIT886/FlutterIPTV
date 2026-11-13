@@ -3,10 +3,10 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  media_kit_video
   restart_app
   screen_brightness_windows
   url_launcher_windows
+  media_kit_video
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST

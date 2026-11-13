@@ -64,7 +64,7 @@ dependencies:
   logger: ^2.7.0
   
   # Window Management (Windows)
-  window_manager: ^0.6.0
+  window_manager: ^0.7.0
   collection: ^1.18.0
   uuid: ^4.6.0
   
@@ -73,7 +73,7 @@ dependencies:
   material_design_icons_flutter: ^7.0.7296
   screen_brightness: ^2.1.11
   wakelock_plus: ^1.8.2
-  screen_retriever: ^0.3.1
+  screen_retriever: ^0.4.0
   device_info_plus: ^13.2.0
   material_ui: ^1.1.0
   cupertino_ui: ^1.0.1
