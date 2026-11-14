@@ -505,8 +505,8 @@ packages:
     dependency: "direct main"
     description:
       path: media_kit
-      ref: "0b381948e73e6fddb398bff9eb1f82125d8289d1"
-      resolved-ref: "0b381948e73e6fddb398bff9eb1f82125d8289d1"
+      ref: d3ff8c79266463d4f437969d9198df57a8e9ce40
+      resolved-ref: d3ff8c79266463d4f437969d9198df57a8e9ce40
       url: "https://github.com/KLGIT886/media-kit.git"
     source: git
     version: "1.1.11"
@@ -514,8 +514,8 @@ packages:
     dependency: "direct main"
     description:
       path: media_kit_video
-      ref: "0b381948e73e6fddb398bff9eb1f82125d8289d1"
-      resolved-ref: "0b381948e73e6fddb398bff9eb1f82125d8289d1"
+      ref: d3ff8c79266463d4f437969d9198df57a8e9ce40
+      resolved-ref: d3ff8c79266463d4f437969d9198df57a8e9ce40
       url: "https://github.com/KLGIT886/media-kit.git"
     source: git
     version: "1.2.5"

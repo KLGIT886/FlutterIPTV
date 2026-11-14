@@ -19,12 +19,12 @@ dependencies:
   media_kit:
     git:
       url: https://github.com/KLGIT886/media-kit.git
-      ref: 0b381948e73e6fddb398bff9eb1f82125d8289d1
+      ref: d3ff8c79266463d4f437969d9198df57a8e9ce40
       path: ./media_kit
   media_kit_video:
     git:
       url: https://github.com/KLGIT886/media-kit.git
-      ref: 0b381948e73e6fddb398bff9eb1f82125d8289d1
+      ref: d3ff8c79266463d4f437969d9198df57a8e9ce40
       path: ./media_kit_video
   
   # Local Storage
